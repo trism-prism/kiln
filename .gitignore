@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+blob-report/
+.wrangler/
+.env
+.env.*
+*.log
+CLAUDE.md
+AGENTS.md
+.claude/
