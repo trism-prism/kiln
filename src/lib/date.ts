@@ -24,3 +24,10 @@ export function addDaysISO(s: string, days: number): string {
   const t = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + days))
   return t.toISOString().slice(0, 10)
 }
+
+/** Weekday of a yyyy-mm-dd date with Monday = 0 ... Sunday = 6. */
+export function weekdayIndex(s: string): number {
+  const m = ISO_DATE.exec(s)
+  if (!m) throw new Error(`not a yyyy-mm-dd date: ${s}`)
+  return (new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))).getUTCDay() + 6) % 7
+}

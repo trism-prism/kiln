@@ -12,7 +12,8 @@
     "test": "vitest run",
     "e2e": "playwright test",
     "schema": "node scripts/write-schema.ts",
-    "templates": "node scripts/write-templates.ts"
+    "templates": "node scripts/write-templates.ts",
+    "neetcode": "node scripts/write-neetcode.ts"
   },
   "dependencies": {
     "dexie": "4.4.7",
