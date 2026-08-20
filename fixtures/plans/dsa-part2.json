@@ -1,0 +1,892 @@
+{
+  "schemaVersion": 1,
+  "id": "dsa-zero-to-hero-python",
+  "title": "DSA Zero to Hero in Python",
+  "description": "Comprehensive 16-week DSA curriculum for Python developers. Part 2 covers Priority Queues/Heaps, Backtracking, Disjoint-Set Union-Find, Graph DFS/BFS, Topological Sort, Shortest Paths, Intervals, and Bit Manipulation.",
+  "goal": "Master heaps, state-space recursion, graph algorithms, and bit manipulation in Python.",
+  "subject": "Data Structures & Algorithms",
+  "level": "beginner",
+  "audience": "Software engineering intern and new-grad candidates learning DSA in Python.",
+  "schedulingMode": "auto",
+  "part": {
+    "index": 2,
+    "total": 3
+  },
+  "modules": [
+    {
+      "id": "heaps-backtracking",
+      "title": "Priority Queues, Binary Heaps & Backtracking",
+      "order": 5,
+      "summary": "Min/max binary heap invariants, heapify O(n), priority queue ADT, and state-space tree backtracking.",
+      "notBeforeDay": 50
+    },
+    {
+      "id": "graphs-dsu",
+      "title": "Disjoint-Set Union-Find & Graph Traversals",
+      "order": 6,
+      "summary": "Union-Find with path compression, graph representations, matrix & adjacency list DFS/BFS.",
+      "notBeforeDay": 64
+    },
+    {
+      "id": "topological-sort-shortest-path",
+      "title": "Topological Sort & Shortest Path Algorithms",
+      "order": 7,
+      "summary": "Directed Acyclic Graphs (DAGs), Kahn's BFS algorithm, Dijkstra's shortest path, and MSTs.",
+      "notBeforeDay": 71
+    },
+    {
+      "id": "intervals-greedy-bits",
+      "title": "Intervals, Greedy & Bit Manipulation",
+      "order": 8,
+      "summary": "Interval merging logic, greedy choice properties, and bitwise manipulation tricks.",
+      "notBeforeDay": 92
+    }
+  ],
+  "tasks": [
+    {
+      "id": "heap-invariants-and-heapify",
+      "moduleId": "heaps-backtracking",
+      "order": 1,
+      "title": "Binary Heap Invariants & Heapify Mechanics",
+      "type": "lesson",
+      "estimatedMinutes": 60,
+      "priority": "core",
+      "topics": [
+        "heap"
+      ],
+      "dependsOn": [
+        "space-complexity-memory"
+      ],
+      "description": "Watch William Fiset's Priority Queue & Heap chapter. Study min-heap and max-heap tree invariants, array indexing formulas (left child 2i+1, right child 2i+2, parent (i-1)//2), sift-up/sift-down operations O(log n), and bottom-up heapify O(n). Implement min-heap operations using Python's heapq module.",
+      "objectives": [
+        "Explain complete binary tree array representation and indexing math",
+        "Differentiate O(n log n) insertion build from linear O(n) Floyd heapify",
+        "Use Python heapq functions heapq.heappush, heapq.heappop, and heapq.heapify"
+      ],
+      "keyConcepts": [
+        "Min-heap / Max-heap property",
+        "Array representation indexing",
+        "Sifting up and down",
+        "O(n) linear heapify",
+        "Python heapq module"
+      ],
+      "tradeoffs": [
+        "Binary heaps allow O(1) peek and O(log n) min/max extraction, but random search or arbitrary key removal requires O(n) time"
+      ],
+      "verificationQuestions": [
+        "Why is bottom-up heap building O(n) instead of O(n log n)?",
+        "How do you simulate a max-heap using Python's built-in min-heap heapq?"
+      ],
+      "resources": [
+        {
+          "title": "Binary Heap & Priority Queue Chapter",
+          "kind": "video",
+          "minutes": 40,
+          "sourceId": "fiset-course",
+          "section": "Heaps & Priority Queues"
+        },
+        {
+          "title": "VisuAlgo Binary Heap Animation",
+          "url": "https://visualgo.net/",
+          "kind": "visualizer",
+          "minutes": 15,
+          "sourceId": "visualgo",
+          "section": "Binary Heap Module"
+        }
+      ]
+    },
+    {
+      "id": "kth-largest-element-in-a-stream",
+      "moduleId": "heaps-backtracking",
+      "order": 2,
+      "title": "Kth Largest Element in a Stream",
+      "type": "practice",
+      "estimatedMinutes": 35,
+      "priority": "core",
+      "topics": [
+        "heap"
+      ],
+      "dependsOn": [
+        "heap-invariants-and-heapify"
+      ],
+      "description": "Maintain a min-heap of size K using Python's heapq to return the K-th largest streaming element in O(log k) per add operation.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "kth-largest-element-in-a-stream",
+        "title": "Kth Largest Element in a Stream",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "id": "kth-largest-element-in-an-array",
+      "moduleId": "heaps-backtracking",
+      "order": 3,
+      "title": "Kth Largest Element in an Array",
+      "type": "practice",
+      "estimatedMinutes": 50,
+      "priority": "core",
+      "topics": [
+        "heap"
+      ],
+      "dependsOn": [
+        "kth-largest-element-in-a-stream"
+      ],
+      "description": "Find the K-th largest element using a min-heap of size K or QuickSelect algorithm in Python.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "kth-largest-element-in-an-array",
+        "title": "Kth Largest Element in an Array",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "k-closest-points-to-origin",
+      "moduleId": "heaps-backtracking",
+      "order": 4,
+      "title": "K Closest Points to Origin",
+      "type": "practice",
+      "estimatedMinutes": 45,
+      "priority": "recommended",
+      "topics": [
+        "heap"
+      ],
+      "dependsOn": [
+        "kth-largest-element-in-an-array"
+      ],
+      "description": "Compute Euclidean distances and maintain a max-heap of size K or use heapq.nsmallest in Python.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "k-closest-points-to-origin",
+        "title": "K Closest Points to Origin",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "backtracking-fundamentals",
+      "moduleId": "heaps-backtracking",
+      "order": 5,
+      "title": "Backtracking & State-Space Tree Search",
+      "type": "lesson",
+      "estimatedMinutes": 60,
+      "priority": "core",
+      "topics": [
+        "backtracking"
+      ],
+      "dependsOn": [
+        "binary-trees-and-dfs"
+      ],
+      "description": "Study recursive backtracking fundamentals. Understand state-space tree traversal, choice making, recursive branching, state undoing (backtracking), and search tree pruning.",
+      "objectives": [
+        "Explain choice-recursion-undo backtracking template pattern",
+        "Differentiate subset inclusion decision trees from permutation ordering trees",
+        "Apply constraint checking to prune non-viable solution branches early"
+      ],
+      "keyConcepts": [
+        "State-space tree",
+        "Choice & Undo pattern",
+        "Branch pruning",
+        "Combinatorial explosion"
+      ],
+      "tradeoffs": [
+        "Backtracking explores all potential configurations with exponential worst-case time, but intelligent pruning cuts down runtime dramatically"
+      ],
+      "verificationQuestions": [
+        "What three key actions define the core recursive backtracking loop?",
+        "How does a subset decision tree differ from a permutation decision tree?"
+      ],
+      "resources": [
+        {
+          "title": "NeetCode Backtracking Guide",
+          "kind": "course",
+          "minutes": 30,
+          "sourceId": "neetcode-roadmap",
+          "section": "Backtracking Module"
+        }
+      ]
+    },
+    {
+      "id": "subsets",
+      "moduleId": "heaps-backtracking",
+      "order": 6,
+      "title": "Subsets",
+      "type": "practice",
+      "estimatedMinutes": 45,
+      "priority": "core",
+      "topics": [
+        "backtracking"
+      ],
+      "dependsOn": [
+        "backtracking-fundamentals"
+      ],
+      "description": "Generate all subsets (power set) of a unique integer array using binary inclusion/exclusion recursion branches in Python.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "subsets",
+        "title": "Subsets",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "combination-sum",
+      "moduleId": "heaps-backtracking",
+      "order": 7,
+      "title": "Combination Sum",
+      "type": "practice",
+      "estimatedMinutes": 50,
+      "priority": "core",
+      "topics": [
+        "backtracking"
+      ],
+      "dependsOn": [
+        "subsets"
+      ],
+      "description": "Find unique combinations summing to target with reusable elements by controlling candidate choice indexing during recursion.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "combination-sum",
+        "title": "Combination Sum",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "permutations",
+      "moduleId": "heaps-backtracking",
+      "order": 8,
+      "title": "Permutations",
+      "type": "practice",
+      "estimatedMinutes": 45,
+      "priority": "core",
+      "topics": [
+        "backtracking"
+      ],
+      "dependsOn": [
+        "subsets"
+      ],
+      "description": "Generate all ordering permutations of an array by tracking used elements with a visited set or boolean array in Python.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "permutations",
+        "title": "Permutations",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "word-search",
+      "moduleId": "heaps-backtracking",
+      "order": 9,
+      "title": "Word Search",
+      "type": "practice",
+      "estimatedMinutes": 60,
+      "priority": "recommended",
+      "topics": [
+        "backtracking"
+      ],
+      "dependsOn": [
+        "permutations"
+      ],
+      "description": "Perform 2D grid matrix DFS backtracking to match string characters, marking visited cells temporarily during exploration.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "word-search",
+        "title": "Word Search",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "disjoint-set-union-find",
+      "moduleId": "graphs-dsu",
+      "order": 1,
+      "title": "Disjoint-Set Union-Find (DSU) & Path Compression",
+      "type": "lesson",
+      "estimatedMinutes": 65,
+      "priority": "core",
+      "topics": [
+        "graphs"
+      ],
+      "dependsOn": [
+        "space-complexity-memory"
+      ],
+      "description": "Watch William Fiset's Disjoint Set Union Find chapter. Learn parent array representation, find operations, union by rank/size, and path compression optimization for amortized O(alpha(n)) near-constant time operations.",
+      "objectives": [
+        "Implement a complete DSU class with path compression and union by rank",
+        "Explain how path compression flattens tree height during find queries",
+        "Analyze amortized inverse Ackermann function time bounds O(alpha(n))"
+      ],
+      "keyConcepts": [
+        "Disjoint sets",
+        "Representative root",
+        "Path compression",
+        "Union by rank",
+        "Inverse Ackermann complexity"
+      ],
+      "tradeoffs": [
+        "Union-Find provides optimal near-O(1) connectivity queries for dynamic edge additions, but does not support efficient edge deletions"
+      ],
+      "verificationQuestions": [
+        "How does path compression modify the parent pointers during a `find` call?",
+        "Why is Union by Rank combined with Path Compression faster than naive union?"
+      ],
+      "resources": [
+        {
+          "title": "Union Find Data Structure Chapter",
+          "kind": "video",
+          "minutes": 40,
+          "sourceId": "fiset-course",
+          "section": "Union Find"
+        },
+        {
+          "title": "VisuAlgo Union-Find Animation",
+          "url": "https://visualgo.net/",
+          "kind": "visualizer",
+          "minutes": 15,
+          "sourceId": "visualgo",
+          "section": "Disjoint Sets Module"
+        }
+      ]
+    },
+    {
+      "id": "redundant-connection",
+      "moduleId": "graphs-dsu",
+      "order": 2,
+      "title": "Redundant Connection",
+      "type": "practice",
+      "estimatedMinutes": 50,
+      "priority": "core",
+      "topics": [
+        "graphs"
+      ],
+      "dependsOn": [
+        "disjoint-set-union-find"
+      ],
+      "description": "Detect cycle-forming edge in an undirected graph using Union-Find in Python.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "redundant-connection",
+        "title": "Redundant Connection",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "graph-representations-and-traversals",
+      "moduleId": "graphs-dsu",
+      "order": 3,
+      "title": "Graph Representations & Matrix/Adjacency DFS & BFS",
+      "type": "lesson",
+      "estimatedMinutes": 65,
+      "priority": "core",
+      "topics": [
+        "graphs"
+      ],
+      "dependsOn": [
+        "bfs-level-order-traversal",
+        "disjoint-set-union-find"
+      ],
+      "description": "Study graph terminology (vertices, edges, directed vs undirected, weighted, cyclic). Compare Adjacency Matrix O(V^2) space vs Adjacency List O(V + E) space. Master graph DFS (recursive stack) and BFS (queue) with visited tracking sets.",
+      "objectives": [
+        "Build adjacency list dictionaries from edge lists in Python",
+        "Implement Graph DFS and BFS handling cycles using visited sets",
+        "Contrast adjacency matrix vs list space and lookup trade-offs"
+      ],
+      "keyConcepts": [
+        "Adjacency List vs Matrix",
+        "Directed vs Undirected",
+        "Visited set cycle tracking",
+        "Connected components"
+      ],
+      "tradeoffs": [
+        "Adjacency list uses O(V + E) memory suitable for sparse graphs, whereas Adjacency matrix uses O(V^2) memory but enables O(1) edge lookups"
+      ],
+      "verificationQuestions": [
+        "Why must graph traversals track visited nodes unlike binary tree traversals?",
+        "What are the space complexities of adjacency lists vs adjacency matrices?"
+      ],
+      "resources": [
+        {
+          "title": "Graph Theory Introduction",
+          "kind": "video",
+          "minutes": 40,
+          "sourceId": "fiset-course",
+          "section": "Graph Theory Basics"
+        },
+        {
+          "title": "VisuAlgo Graph Traversal Animation",
+          "url": "https://visualgo.net/",
+          "kind": "visualizer",
+          "minutes": 15,
+          "sourceId": "visualgo",
+          "section": "DFS & BFS Graph Module"
+        }
+      ]
+    },
+    {
+      "id": "number-of-islands",
+      "moduleId": "graphs-dsu",
+      "order": 4,
+      "title": "Number of Islands",
+      "type": "practice",
+      "estimatedMinutes": 50,
+      "priority": "core",
+      "topics": [
+        "graphs"
+      ],
+      "dependsOn": [
+        "graph-representations-and-traversals"
+      ],
+      "description": "Count 4-directionally connected land components in a 2D grid matrix using DFS or BFS in Python.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "number-of-islands",
+        "title": "Number of Islands",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "clone-graph",
+      "moduleId": "graphs-dsu",
+      "order": 5,
+      "title": "Clone Graph",
+      "type": "practice",
+      "estimatedMinutes": 50,
+      "priority": "core",
+      "topics": [
+        "graphs"
+      ],
+      "dependsOn": [
+        "graph-representations-and-traversals"
+      ],
+      "description": "Deep copy an undirected graph using a hash map mapping old nodes to new cloned nodes during BFS or DFS traversal.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "clone-graph",
+        "title": "Clone Graph",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "pacific-atlantic-water-flow",
+      "moduleId": "graphs-dsu",
+      "order": 6,
+      "title": "Pacific Atlantic Water Flow",
+      "type": "practice",
+      "estimatedMinutes": 60,
+      "priority": "recommended",
+      "topics": [
+        "graphs"
+      ],
+      "dependsOn": [
+        "number-of-islands"
+      ],
+      "description": "Perform multi-source ocean boundary DFS reachability searches inwards to find grid cells reaching both Pacific and Atlantic oceans.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "pacific-atlantic-water-flow",
+        "title": "Pacific Atlantic Water Flow",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "topological-sort-dags",
+      "moduleId": "topological-sort-shortest-path",
+      "order": 1,
+      "title": "Topological Sort & Kahn's BFS Algorithm",
+      "type": "lesson",
+      "estimatedMinutes": 60,
+      "priority": "core",
+      "topics": [
+        "advanced-graphs"
+      ],
+      "dependsOn": [
+        "graph-representations-and-traversals"
+      ],
+      "description": "Study Directed Acyclic Graphs (DAGs) and linear node ordering based on dependencies. Learn Kahn's BFS Algorithm using in-degree arrays and zero-indegree queues, as well as DFS post-order topological sorting.",
+      "objectives": [
+        "Identify prerequisite dependency problems suited for Topological Sort",
+        "Implement Kahn's BFS algorithm using in-degree counts and queue",
+        "Detect cycles in directed graphs when topological order length < V"
+      ],
+      "keyConcepts": [
+        "DAG (Directed Acyclic Graph)",
+        "Topological ordering",
+        "In-degree array",
+        "Kahn's algorithm",
+        "Cycle detection"
+      ],
+      "tradeoffs": [
+        "Kahn's BFS algorithms cleanly detect cycles via remaining in-degree check, whereas DFS topological sort requires tracking active recursion call stack states"
+      ],
+      "verificationQuestions": [
+        "What property must a directed graph satisfy to have a valid topological ordering?",
+        "How does Kahn's algorithm detect directed cycles?"
+      ],
+      "resources": [
+        {
+          "title": "Topological Sort Chapter",
+          "kind": "video",
+          "minutes": 35,
+          "sourceId": "fiset-course",
+          "section": "Topological Sort"
+        }
+      ]
+    },
+    {
+      "id": "course-schedule",
+      "moduleId": "topological-sort-shortest-path",
+      "order": 2,
+      "title": "Course Schedule",
+      "type": "practice",
+      "estimatedMinutes": 50,
+      "priority": "core",
+      "topics": [
+        "advanced-graphs"
+      ],
+      "dependsOn": [
+        "topological-sort-dags"
+      ],
+      "description": "Detect directed cycles in course prerequisite graphs using Kahn's algorithm or DFS visit states in Python.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "course-schedule",
+        "title": "Course Schedule",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "course-schedule-ii",
+      "moduleId": "topological-sort-shortest-path",
+      "order": 3,
+      "title": "Course Schedule II",
+      "type": "practice",
+      "estimatedMinutes": 55,
+      "priority": "core",
+      "topics": [
+        "advanced-graphs"
+      ],
+      "dependsOn": [
+        "course-schedule"
+      ],
+      "description": "Return a valid course completion topological order array using Kahn's BFS algorithm in Python.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "course-schedule-ii",
+        "title": "Course Schedule II",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "dijkstra-shortest-path",
+      "moduleId": "topological-sort-shortest-path",
+      "order": 4,
+      "title": "Dijkstra's Algorithm & Single-Source Shortest Path",
+      "type": "lesson",
+      "estimatedMinutes": 65,
+      "priority": "core",
+      "topics": [
+        "advanced-graphs"
+      ],
+      "dependsOn": [
+        "heap-invariants-and-heapify",
+        "graph-representations-and-traversals"
+      ],
+      "description": "Watch William Fiset's Dijkstra Algorithm chapter. Learn greedy single-source shortest path traversal on non-negative weighted graphs using a min-priority queue achieving O((V + E) log V) time complexity.",
+      "objectives": [
+        "Explain Dijkstra greedy edge relaxation property",
+        "Implement Dijkstra using distance arrays and min-priority queue (heapq) in Python",
+        "Understand why negative edge weights cause Dijkstra to fail"
+      ],
+      "keyConcepts": [
+        "Single-Source Shortest Path",
+        "Min-priority queue",
+        "Edge relaxation",
+        "Non-negative weights constraint"
+      ],
+      "tradeoffs": [
+        "Dijkstra algorithm guarantees optimal shortest paths efficiently O((V+E) log V) for non-negative weights, but fails with negative cycles where Bellman-Ford O(VE) is required"
+      ],
+      "verificationQuestions": [
+        "Why does Dijkstra algorithm fail on graphs with negative edge weights?",
+        "What is edge relaxation in shortest path algorithms?"
+      ],
+      "resources": [
+        {
+          "title": "Dijkstra's Shortest Path Chapter",
+          "kind": "video",
+          "minutes": 40,
+          "sourceId": "fiset-course",
+          "section": "Dijkstra Shortest Path"
+        },
+        {
+          "title": "VisuAlgo SSSP Shortest Path Animation",
+          "url": "https://visualgo.net/",
+          "kind": "visualizer",
+          "minutes": 15,
+          "sourceId": "visualgo",
+          "section": "Single-Source Shortest Path"
+        }
+      ]
+    },
+    {
+      "id": "network-delay-time",
+      "moduleId": "topological-sort-shortest-path",
+      "order": 5,
+      "title": "Network Delay Time",
+      "type": "practice",
+      "estimatedMinutes": 55,
+      "priority": "recommended",
+      "topics": [
+        "advanced-graphs"
+      ],
+      "dependsOn": [
+        "dijkstra-shortest-path"
+      ],
+      "description": "Calculate minimum signal broadcast time to reach all network nodes using Dijkstra's algorithm in Python.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "network-delay-time",
+        "title": "Network Delay Time",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "intervals-and-greedy-strategy",
+      "moduleId": "intervals-greedy-bits",
+      "order": 1,
+      "title": "Interval Scheduling & Greedy Choice Property",
+      "type": "lesson",
+      "estimatedMinutes": 55,
+      "priority": "core",
+      "topics": [
+        "intervals",
+        "greedy"
+      ],
+      "dependsOn": [
+        "space-complexity-memory"
+      ],
+      "description": "Study interval sorting by start and end boundaries. Understand greedy choices where making locally optimal picks at each step yields global optimal solutions.",
+      "objectives": [
+        "Sort intervals by start time and end time to handle overlaps",
+        "Identify overlapping conditions start_A < end_B",
+        "Prove greedy choice optimal substructure for interval scheduling"
+      ],
+      "keyConcepts": [
+        "Interval overlap condition",
+        "Sorting by start / end boundaries",
+        "Greedy choice property",
+        "Locally optimal choice"
+      ],
+      "tradeoffs": [
+        "Greedy interval solutions run in O(n log n) due to initial sorting, but require mathematical proof of correctness to ensure local choices don't fail globally"
+      ],
+      "verificationQuestions": [
+        "How do you determine if two intervals [a, b] and [c, d] overlap?",
+        "Why is sorting intervals by start or end time essential for greedy processing?"
+      ],
+      "resources": [
+        {
+          "title": "NeetCode Intervals & Greedy Guide",
+          "kind": "course",
+          "minutes": 30,
+          "sourceId": "neetcode-roadmap",
+          "section": "Intervals & Greedy"
+        }
+      ]
+    },
+    {
+      "id": "insert-interval",
+      "moduleId": "intervals-greedy-bits",
+      "order": 2,
+      "title": "Insert Interval",
+      "type": "practice",
+      "estimatedMinutes": 45,
+      "priority": "core",
+      "topics": [
+        "intervals"
+      ],
+      "dependsOn": [
+        "intervals-and-greedy-strategy"
+      ],
+      "description": "Insert new interval into a sorted non-overlapping list and merge overlapping sub-intervals in linear O(n) time.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "insert-interval",
+        "title": "Insert Interval",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "merge-intervals",
+      "moduleId": "intervals-greedy-bits",
+      "order": 3,
+      "title": "Merge Intervals",
+      "type": "practice",
+      "estimatedMinutes": 45,
+      "priority": "core",
+      "topics": [
+        "intervals"
+      ],
+      "dependsOn": [
+        "insert-interval"
+      ],
+      "description": "Sort interval array by start boundary and merge overlapping ranges into a contiguous output list in Python.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "merge-intervals",
+        "title": "Merge Intervals",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "non-overlapping-intervals",
+      "moduleId": "intervals-greedy-bits",
+      "order": 4,
+      "title": "Non-overlapping Intervals",
+      "type": "practice",
+      "estimatedMinutes": 50,
+      "priority": "recommended",
+      "topics": [
+        "intervals",
+        "greedy"
+      ],
+      "dependsOn": [
+        "merge-intervals"
+      ],
+      "description": "Find minimum number of intervals to remove to eliminate overlaps using greedy sorting by end times.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "non-overlapping-intervals",
+        "title": "Non-overlapping Intervals",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "jump-game",
+      "moduleId": "intervals-greedy-bits",
+      "order": 5,
+      "title": "Jump Game",
+      "type": "practice",
+      "estimatedMinutes": 45,
+      "priority": "recommended",
+      "topics": [
+        "greedy"
+      ],
+      "dependsOn": [
+        "intervals-and-greedy-strategy"
+      ],
+      "description": "Track the maximum reachable index dynamically across array iterations in O(n) time and O(1) space.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "jump-game",
+        "title": "Jump Game",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "bit-manipulation-fundamentals",
+      "moduleId": "intervals-greedy-bits",
+      "order": 6,
+      "title": "Bitwise Operations & Masking Techniques",
+      "type": "lesson",
+      "estimatedMinutes": 50,
+      "priority": "core",
+      "topics": [
+        "bit-manipulation"
+      ],
+      "dependsOn": [
+        "space-complexity-memory"
+      ],
+      "description": "Study bitwise operators (AND &, OR |, XOR ^, NOT ~, left shift <<, right shift >>). Learn bitmasking, checking set bits, XOR properties (x ^ x = 0, x ^ 0 = x), and Brian Kernighan's n & (n - 1) bit counting algorithm.",
+      "objectives": [
+        "Explain bitwise operations and binary representations",
+        "Use XOR self-cancellation property for O(1) space single number lookups",
+        "Apply bit clearing trick n & (n - 1) to count 1-bits in O(set bits) time"
+      ],
+      "keyConcepts": [
+        "Bitwise AND / OR / XOR",
+        "XOR self-cancellation",
+        "Bit shift arithmetic",
+        "Brian Kernighan algorithm"
+      ],
+      "tradeoffs": [
+        "Bitwise operations perform low-level hardware-speed O(1) bit math, but obscure code readability if overused"
+      ],
+      "verificationQuestions": [
+        "What is the result of x ^ x and x ^ 0?",
+        "How does the operation n & (n - 1) clear the lowest set bit of an integer?"
+      ],
+      "resources": [
+        {
+          "title": "NeetCode Bit Manipulation Guide",
+          "kind": "course",
+          "minutes": 25,
+          "sourceId": "neetcode-roadmap",
+          "section": "Bit Manipulation"
+        }
+      ]
+    },
+    {
+      "id": "single-number",
+      "moduleId": "intervals-greedy-bits",
+      "order": 7,
+      "title": "Single Number",
+      "type": "practice",
+      "estimatedMinutes": 30,
+      "priority": "core",
+      "topics": [
+        "bit-manipulation"
+      ],
+      "dependsOn": [
+        "bit-manipulation-fundamentals"
+      ],
+      "description": "Find the element appearing once in an array where every other element appears twice, using XOR bitwise reduction in O(n) time and O(1) space.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "single-number",
+        "title": "Single Number",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "id": "number-of-1-bits",
+      "moduleId": "intervals-greedy-bits",
+      "order": 8,
+      "title": "Number of 1 Bits",
+      "type": "practice",
+      "estimatedMinutes": 30,
+      "priority": "core",
+      "topics": [
+        "bit-manipulation"
+      ],
+      "dependsOn": [
+        "bit-manipulation-fundamentals"
+      ],
+      "description": "Count set bits of an unsigned integer using Brian Kernighan's n & (n - 1) bit manipulation trick in Python.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "number-of-1-bits",
+        "title": "Number of 1 Bits",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "id": "counting-bits",
+      "moduleId": "intervals-greedy-bits",
+      "order": 9,
+      "title": "Counting Bits",
+      "type": "practice",
+      "estimatedMinutes": 40,
+      "priority": "recommended",
+      "topics": [
+        "bit-manipulation"
+      ],
+      "dependsOn": [
+        "number-of-1-bits"
+      ],
+      "description": "Compute set bit counts for numbers 0 through n using dynamic programming bit transitions dp[i] = dp[i >> 1] + (i & 1).",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "counting-bits",
+        "title": "Counting Bits",
+        "difficulty": "easy"
+      }
+    }
+  ]
+}

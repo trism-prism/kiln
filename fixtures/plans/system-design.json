@@ -1,0 +1,1020 @@
+{
+  "schemaVersion": 1,
+  "id": "system-design-intern-roadmap",
+  "title": "System Design Interview Study Plan for Interns & New-Grads",
+  "description": "A structured, ground-up System Design curriculum tailored for internship and new-grad candidates. Focuses on core building blocks, trade-offs, horizontal scaling, and end-to-end design practice.",
+  "goal": "Master distributed system fundamentals and trade-off analysis to pass Internship and New-Grad System Design technical interviews.",
+  "subject": "System Design & Distributed Systems",
+  "level": "beginner",
+  "audience": "CS student or intern with basic SQL, REST APIs, OS, networking, and Python knowledge",
+  "schedulingMode": "auto",
+  "sources": [
+    {
+      "id": "src-sd-primer",
+      "title": "System Design Primer (Donne Martin)",
+      "kind": "article"
+    },
+    {
+      "id": "src-sd-101",
+      "title": "System Design 101 (ByteByteGo)",
+      "kind": "article"
+    },
+    {
+      "id": "src-hello-interview",
+      "title": "Core Concepts for System Design Interviews (Hello Interview)",
+      "kind": "article"
+    },
+    {
+      "id": "src-techinterview-net",
+      "title": "System Design Interview Blueprint (techinterview.net)",
+      "kind": "article"
+    },
+    {
+      "id": "src-algomaster",
+      "title": "Core Building Blocks (AlgoMaster.io)",
+      "kind": "article"
+    },
+    {
+      "id": "src-dev-lb",
+      "title": "Load Balancing for System Design Interviews Explained (DEV Community)",
+      "kind": "article"
+    }
+  ],
+  "modules": [
+    {
+      "id": "mod-networking",
+      "title": "Module 1: Foundations of Networking & Single-Server Request Flow",
+      "order": 1,
+      "summary": "Understand how client requests travel across DNS, TCP/UDP, HTTP protocols, and Layer 4 vs Layer 7 load balancers before entering distributed complexity."
+    },
+    {
+      "id": "mod-horizontal-scaling",
+      "title": "Module 2: Core Building Blocks & Horizontal Scaling",
+      "order": 2,
+      "summary": "Learn to scale out a web application from 1k to 1M users using stateless web tiers, load balancing algorithms, Redis caching, and database read replicas.",
+      "notBeforeDay": 6
+    },
+    {
+      "id": "mod-distributed-data",
+      "title": "Module 3: Advanced Distributed Systems & Data Tier Scaling",
+      "order": 3,
+      "summary": "Master database sharding, consistent hashing with virtual nodes, asynchronous message queues (Kafka/SQS), and CAP/PACELC consistency trade-offs.",
+      "notBeforeDay": 18
+    },
+    {
+      "id": "mod-interview-framework",
+      "title": "Module 4: The 6-Step Interview Execution Framework",
+      "order": 4,
+      "summary": "Learn the 45-minute technical interview framework: requirement scoping, back-of-the-envelope calculations, API design, high-level blueprinting, and bottleneck defense.",
+      "notBeforeDay": 30
+    },
+    {
+      "id": "mod-case-studies",
+      "title": "Module 5: Applied System Design Case Studies & Mock Practice",
+      "order": 5,
+      "summary": "Hands-on, worked-example practice designing classic architectures: URL Shorteners, News Feeds, Video Streaming (YouTube), and High-Concurrency Event Booking (Ticketmaster).",
+      "notBeforeDay": 40
+    }
+  ],
+  "tasks": [
+    {
+      "id": "task-net-request-lifecycle",
+      "moduleId": "mod-networking",
+      "order": 1,
+      "title": "DNS Resolution & Single-Server Request Flow",
+      "type": "lesson",
+      "estimatedMinutes": 50,
+      "priority": "core",
+      "topics": ["networking", "system-design"],
+      "description": "Trace the step-by-step journey of a URL request from browser local cache to ISP recursive resolvers, TLD/Root DNS, and A/CNAME records, down to single-server execution limits.",
+      "objectives": [
+        "Explain recursive vs authoritative DNS resolution steps",
+        "Identify hardware bottlenecks in single-server architectures"
+      ],
+      "keyConcepts": ["A record", "CNAME record", "TTL caching", "SPOF"],
+      "tradeoffs": ["High TTL: maximum DNS cache hits vs Low TTL: rapid IP failover"],
+      "verificationQuestions": [
+        "What happens when a browser DNS cache misses?",
+        "Why is a single server both a capacity bottleneck and SPOF?"
+      ],
+      "resources": [
+        {
+          "title": "DNS Lookup and Request Journey",
+          "kind": "article",
+          "minutes": 30,
+          "sourceId": "src-sd-primer",
+          "section": "Domain Name System (DNS)"
+        }
+      ]
+    },
+    {
+      "id": "task-net-protocols",
+      "moduleId": "mod-networking",
+      "order": 2,
+      "title": "Transport & Application Protocols: TCP, UDP, REST, gRPC",
+      "type": "lesson",
+      "estimatedMinutes": 60,
+      "priority": "core",
+      "topics": ["networking", "system-design"],
+      "dependsOn": ["task-net-request-lifecycle"],
+      "description": "Compare transport reliability (TCP 3-way handshake vs UDP) and client-server API protocols (REST JSON vs gRPC Protocol Buffers over HTTP/2).",
+      "objectives": [
+        "Select appropriate protocols for web APIs vs internal microservices",
+        "Explain gRPC efficiency over JSON over REST"
+      ],
+      "keyConcepts": ["TCP 3-way handshake", "UDP connectionless transport", "gRPC Protobuf", "REST JSON"],
+      "tradeoffs": ["REST: human-readable and standard vs gRPC: ultra-low binary payload and high throughput"],
+      "verificationQuestions": [
+        "When would you choose UDP over TCP?",
+        "Why is gRPC preferred for internal microservice communication?"
+      ],
+      "resources": [
+        {
+          "title": "Network Protocols & Communication Styles",
+          "kind": "article",
+          "minutes": 35,
+          "sourceId": "src-hello-interview",
+          "section": "Networking & Protocols"
+        }
+      ]
+    },
+    {
+      "id": "task-net-realtime-protocols",
+      "moduleId": "mod-networking",
+      "order": 3,
+      "title": "Real-Time Communication: WebSockets vs SSE vs Polling",
+      "type": "lesson",
+      "estimatedMinutes": 55,
+      "priority": "core",
+      "topics": ["networking", "system-design"],
+      "dependsOn": ["task-net-protocols"],
+      "description": "Examine real-time pushing mechanics: Short/Long Polling overhead, Server-Sent Events (SSE) unidirectional streaming, and WebSockets full-duplex persistent connections.",
+      "objectives": [
+        "Choose between SSE and WebSockets based on traffic directionality",
+        "Explain HTTP Upgrade header mechanics for WebSockets"
+      ],
+      "keyConcepts": ["full-duplex persistent connection", "unidirectional event stream", "polling overhead"],
+      "tradeoffs": ["SSE: simple HTTP unidirectional push vs WebSockets: bidirectional full-duplex stateful overhead"],
+      "verificationQuestions": [
+        "Why are WebSockets ideal for collaborative editing like Google Docs?",
+        "When is SSE preferred over WebSockets?"
+      ],
+      "resources": [
+        {
+          "title": "WebSockets vs Server-Sent Events",
+          "kind": "article",
+          "minutes": 30,
+          "sourceId": "src-sd-101",
+          "section": "Communication Protocols"
+        }
+      ]
+    },
+    {
+      "id": "task-net-load-balancing-layers",
+      "moduleId": "mod-networking",
+      "order": 4,
+      "title": "Layer 4 vs Layer 7 Load Balancing Breakdown",
+      "type": "lesson",
+      "estimatedMinutes": 60,
+      "priority": "core",
+      "topics": ["load-balancing", "networking"],
+      "dependsOn": ["task-net-protocols"],
+      "description": "Analyze transport-layer (L4 TCP/UDP 4-tuple) vs application-layer (L7 HTTP payload) load balancing, TLS termination, and path-based routing.",
+      "objectives": [
+        "Differentiate L4 packet NAT forwarding from L7 content inspection",
+        "Design path-based routing rules for microservices"
+      ],
+      "keyConcepts": ["L4 4-tuple IP/Port", "L7 URL path routing", "TLS termination", "reverse proxy"],
+      "tradeoffs": ["L4: high throughput and low CPU cost vs L7: intelligent path routing and TLS termination at higher CPU cost"],
+      "verificationQuestions": [
+        "What packet details does an L4 load balancer inspect?",
+        "Why is L7 required for routing requests based on HTTP cookies or paths?"
+      ],
+      "resources": [
+        {
+          "title": "Load Balancing for System Design Interviews Explained",
+          "kind": "article",
+          "minutes": 35,
+          "sourceId": "src-dev-lb"
+        }
+      ]
+    },
+    {
+      "id": "task-scale-tier-separation",
+      "moduleId": "mod-horizontal-scaling",
+      "order": 1,
+      "title": "Web & Data Tier Separation and Database Paradigm Selection",
+      "type": "lesson",
+      "estimatedMinutes": 60,
+      "priority": "core",
+      "topics": ["system-design", "databases"],
+      "dependsOn": ["task-net-request-lifecycle"],
+      "description": "Separate web application logic from persistent database storage. Compare Relational SQL (ACID, normalized joins) vs NoSQL paradigms (Key-Value, Document, Wide-Column).",
+      "objectives": [
+        "Decouple application execution from persistent storage",
+        "Select SQL vs NoSQL based on ACID and schema flexibility needs"
+      ],
+      "keyConcepts": ["SQL ACID compliance", "NoSQL horizontal scaling", "normalized vs denormalized data"],
+      "tradeoffs": ["SQL: strict consistency and complex joins vs NoSQL: flexible schema, fast key lookups, and easy horizontal scaling"],
+      "verificationQuestions": [
+        "Why split web servers and database servers onto distinct machines?",
+        "When is a NoSQL Key-Value store preferred over a SQL database?"
+      ],
+      "resources": [
+        {
+          "title": "SQL vs NoSQL and Web/Data Separation",
+          "kind": "article",
+          "minutes": 35,
+          "sourceId": "src-algomaster",
+          "section": "Databases & Storage"
+        }
+      ]
+    },
+    {
+      "id": "task-scale-lb-algorithms",
+      "moduleId": "mod-horizontal-scaling",
+      "order": 2,
+      "title": "Load Balancer Algorithms & Health Checking",
+      "type": "lesson",
+      "estimatedMinutes": 60,
+      "priority": "core",
+      "topics": ["load-balancing", "system-design"],
+      "dependsOn": ["task-net-load-balancing-layers"],
+      "description": "Evaluate Round Robin, Weighted Round Robin, Least Connections, and Power of Two Choices algorithms. Configure active HTTP health checks and active-passive failover pairs.",
+      "objectives": [
+        "Match load balancing algorithms to variable vs uniform request costs",
+        "Eliminate load balancer single points of failure using virtual IP failover"
+      ],
+      "keyConcepts": ["Least Connections", "Power of Two Choices", "active/passive health checks", "virtual IP failover"],
+      "tradeoffs": ["Round Robin: simple but fails under non-uniform workloads vs Least Connections: optimal load tracking at higher state tracking cost"],
+      "verificationQuestions": [
+        "Why does Round Robin fail when request processing times vary significantly?",
+        "How do active health checks prevent routing traffic to dead backends?"
+      ],
+      "resources": [
+        {
+          "title": "Load Balancing Algorithms and Health Probes",
+          "kind": "article",
+          "minutes": 35,
+          "sourceId": "src-dev-lb"
+        }
+      ]
+    },
+    {
+      "id": "task-scale-stateless-web-tier",
+      "moduleId": "mod-horizontal-scaling",
+      "order": 3,
+      "title": "Stateless Web Tier Architecture & Shared Session Stores",
+      "type": "lesson",
+      "estimatedMinutes": 55,
+      "priority": "core",
+      "topics": ["system-design"],
+      "dependsOn": ["task-scale-tier-separation", "task-scale-lb-algorithms"],
+      "description": "Eliminate sticky session dependencies by moving user session state out of local web server RAM into a shared in-memory Redis cluster, enabling elastic auto-scaling.",
+      "objectives": [
+        "Design a stateless web tier capable of auto-scaling",
+        "Store user session state in shared key-value stores"
+      ],
+      "keyConcepts": ["stateless web server", "session affinity / sticky sessions", "shared session cache"],
+      "tradeoffs": ["Sticky sessions: simple local memory lookups but uneven load distribution vs Stateless: elastic auto-scaling with network call overhead to session store"],
+      "verificationQuestions": [
+        "Why do sticky sessions break elastic auto-scaling?",
+        "How does storing session state in Redis allow any web server to handle any request?"
+      ],
+      "resources": [
+        {
+          "title": "Stateless Architecture in ByteByteGo",
+          "kind": "article",
+          "minutes": 30,
+          "sourceId": "src-sd-101",
+          "section": "Stateless Web Tier"
+        }
+      ]
+    },
+    {
+      "id": "task-scale-caching-redis",
+      "moduleId": "mod-horizontal-scaling",
+      "order": 4,
+      "title": "In-Memory Caching (Redis) & Cache-Aside Pattern",
+      "type": "lesson",
+      "estimatedMinutes": 65,
+      "priority": "core",
+      "topics": ["caching", "system-design"],
+      "dependsOn": ["task-scale-stateless-web-tier"],
+      "description": "Implement in-memory caching to achieve sub-10ms database reads. Master Cache-Aside, Write-Through, Write-Back patterns, TTL expiration, and LRU eviction policies.",
+      "objectives": [
+        "Implement Cache-Aside read/write logic in Python pseudocode",
+        "Select LRU vs LFU eviction policies based on access patterns"
+      ],
+      "keyConcepts": ["Cache-Aside", "Write-Through", "Write-Back", "TTL", "LRU eviction"],
+      "tradeoffs": ["Cache-Aside: lazy loading and stale data risk vs Write-Through: strict write consistency at higher write latency"],
+      "verificationQuestions": [
+        "Walk through the step-by-step logic of a Cache-Aside read request.",
+        "What is the risk of setting no TTL on cached keys?"
+      ],
+      "resources": [
+        {
+          "title": "Caching Strategies & Eviction Policies",
+          "kind": "article",
+          "minutes": 35,
+          "sourceId": "src-algomaster",
+          "section": "Caching"
+        }
+      ]
+    },
+    {
+      "id": "task-scale-cache-stampede-cdn",
+      "moduleId": "mod-horizontal-scaling",
+      "order": 5,
+      "title": "Cache Stampede Mitigation & CDN Media Acceleration",
+      "type": "lesson",
+      "estimatedMinutes": 60,
+      "priority": "core",
+      "topics": ["caching", "system-design"],
+      "dependsOn": ["task-scale-caching-redis"],
+      "description": "Prevent cache stampede (thundering herd) failures using distributed mutex locks and probabilistic early expiration. Offloading static assets (images, JS, CSS) to CDN edge nodes.",
+      "objectives": [
+        "Mitigate cache stampedes when hot keys expire",
+        "Leverage CDNs to offload static bandwidth from web servers"
+      ],
+      "keyConcepts": ["cache stampede / thundering herd", "mutex locking", "CDN edge server", "static asset offloading"],
+      "tradeoffs": ["Direct server assets: origin server bandwidth bottleneck vs CDN edge caching: global low latency with edge cache invalidation complexity"],
+      "verificationQuestions": [
+        "How does a hot key expiration trigger a cache stampede on the database?",
+        "Why should static images and scripts be served from a CDN instead of app servers?"
+      ],
+      "resources": [
+        {
+          "title": "Content Delivery Networks & Cache Protection",
+          "kind": "article",
+          "minutes": 30,
+          "sourceId": "src-sd-primer",
+          "section": "CDN & Caching"
+        }
+      ]
+    },
+    {
+      "id": "task-scale-db-replication",
+      "moduleId": "mod-horizontal-scaling",
+      "order": 6,
+      "title": "Database Replication: Leader-Follower (Master-Slave)",
+      "type": "lesson",
+      "estimatedMinutes": 60,
+      "priority": "core",
+      "topics": ["databases", "system-design"],
+      "dependsOn": ["task-scale-tier-separation"],
+      "description": "Scale database read capacity by implementing Leader-Follower replication. Master handles all writes, while multiple Read Replicas serve read queries via async binary logs.",
+      "objectives": [
+        "Configure read replicas to scale read-heavy workloads",
+        "Analyze replication lag and read-after-write consistency issues"
+      ],
+      "keyConcepts": ["Master-Slave / Leader-Follower", "Read Replicas", "replication lag", "read-after-write consistency"],
+      "tradeoffs": ["Synchronous replication: zero data loss at high write latency vs Asynchronous replication: low write latency with replication lag and stale reads"],
+      "verificationQuestions": [
+        "Why can asynchronous read replicas return stale data immediately after a write?",
+        "How do you ensure a user sees their own updated profile image immediately after uploading?"
+      ],
+      "resources": [
+        {
+          "title": "Database Replication & Read Scaling",
+          "kind": "article",
+          "minutes": 35,
+          "sourceId": "src-hello-interview",
+          "section": "Database Replication"
+        }
+      ]
+    },
+    {
+      "id": "task-scale-checkpoint-review",
+      "moduleId": "mod-horizontal-scaling",
+      "order": 7,
+      "title": "Scaling Progression Review & System Architecture Map",
+      "type": "review",
+      "estimatedMinutes": 45,
+      "priority": "core",
+      "topics": ["system-design"],
+      "dependsOn": [
+        "task-scale-lb-algorithms",
+        "task-scale-stateless-web-tier",
+        "task-scale-caching-redis",
+        "task-scale-db-replication"
+      ],
+      "description": "Synthesize the 1k to 1M user architectural progression. Review how DNS, Load Balancers, Stateless Web Servers, Redis Caches, CDNs, and Read Replicas assemble into a cohesive system.",
+      "objectives": [
+        "Draw the complete multi-tier system architecture diagram",
+        "Identify bottlenecks at each scale threshold"
+      ],
+      "keyConcepts": ["system scaling progression", "architectural synthesis", "SPOF elimination"],
+      "verificationQuestions": [
+        "Walk through the exact request path for a cached vs uncached user request in a scaled system.",
+        "At what user traffic scale do read replicas become necessary?"
+      ],
+      "resources": [
+        {
+          "title": "ByteByteGo System Scaling Blueprint",
+          "kind": "article",
+          "minutes": 30,
+          "sourceId": "src-sd-101",
+          "section": "Single Server to Millions of Users"
+        }
+      ]
+    },
+    {
+      "id": "task-dist-db-sharding",
+      "moduleId": "mod-distributed-data",
+      "order": 1,
+      "title": "Database Sharding & Horizontal Partitioning",
+      "type": "lesson",
+      "estimatedMinutes": 65,
+      "priority": "core",
+      "topics": ["sharding", "databases"],
+      "dependsOn": ["task-scale-db-replication"],
+      "description": "Partition large database tables horizontally across multiple database nodes when write volume or dataset size exceeds a single machine capacity. Select shard keys and mitigate hotspots.",
+      "objectives": [
+        "Design a database sharding scheme using a specific shard key",
+        "Identify risks of cross-shard joins and celebrity hotspot keys"
+      ],
+      "keyConcepts": ["horizontal partitioning / sharding", "shard key selection", "hotspot / celebrity key", "cross-shard join"],
+      "tradeoffs": ["Single DB: simple queries and joins vs Sharded DB: massive write throughput and storage capacity at the cost of complex cross-shard queries"],
+      "verificationQuestions": [
+        "Why does selecting an ill-fitted shard key (like country code) create hotspot shards?",
+        "How do you handle queries that need data spanning multiple shards?"
+      ],
+      "resources": [
+        {
+          "title": "Database Sharding & Partitioning",
+          "kind": "article",
+          "minutes": 40,
+          "sourceId": "src-algomaster",
+          "section": "Database Sharding"
+        }
+      ]
+    },
+    {
+      "id": "task-dist-consistent-hashing",
+      "moduleId": "mod-distributed-data",
+      "order": 2,
+      "title": "Consistent Hashing & Virtual Nodes (vnodes)",
+      "type": "lesson",
+      "estimatedMinutes": 65,
+      "priority": "core",
+      "topics": ["system-design", "sharding"],
+      "dependsOn": ["task-dist-db-sharding"],
+      "description": "Master consistent hash rings to assign keys to dynamic server nodes without re-mapping the entire cluster when nodes scale or crash. Utilize Virtual Nodes (vnodes) for uniform distribution.",
+      "objectives": [
+        "Explain why modulo hashing (hash(key) % N) breaks during cluster resizing",
+        "Trace key assignment and node addition on a consistent hash ring with vnodes"
+      ],
+      "keyConcepts": ["modulo hashing limitation", "hash ring", "clockwise key lookup", "virtual nodes (vnodes)"],
+      "tradeoffs": ["Modulo hashing: 90%+ key remapping on node change vs Consistent hashing: only 1/N keys remapped on node change"],
+      "verificationQuestions": [
+        "Why does adding 1 node to a modulo-hashed cache cluster cause a cache stampede?",
+        "How do virtual nodes prevent a single neighbor node from taking 100% of a failed node traffic?"
+      ],
+      "resources": [
+        {
+          "title": "Consistent Hashing Deep Dive",
+          "kind": "article",
+          "minutes": 40,
+          "sourceId": "src-hello-interview",
+          "section": "Consistent Hashing"
+        }
+      ]
+    },
+    {
+      "id": "task-dist-message-queues",
+      "moduleId": "mod-distributed-data",
+      "order": 3,
+      "title": "Asynchronous Processing & Distributed Message Queues",
+      "type": "lesson",
+      "estimatedMinutes": 65,
+      "priority": "core",
+      "topics": ["system-design"],
+      "dependsOn": ["task-scale-stateless-web-tier"],
+      "description": "Decouple synchronous HTTP response flows from long-running background tasks (video encoding, email delivery, payments) using durable Message Queues (Kafka, RabbitMQ, AWS SQS).",
+      "objectives": [
+        "Architect Producer/Consumer message queue workflows",
+        "Buffer high write traffic spikes to protect downstream databases"
+      ],
+      "keyConcepts": ["producer/consumer model", "message queue (MQ)", "asynchronous worker fleet", "write buffering / spike leveling"],
+      "tradeoffs": ["Synchronous processing: immediate confirmation at high request latency vs Asynchronous MQ: instant HTTP response with eventual background task completion"],
+      "verificationQuestions": [
+        "Why should heavy image processing be handled asynchronously via a queue?",
+        "How does a message queue level out a 10x traffic write spike?"
+      ],
+      "resources": [
+        {
+          "title": "Asynchronous Processing & Queues",
+          "kind": "article",
+          "minutes": 35,
+          "sourceId": "src-sd-primer",
+          "section": "Asynchronous Workflows"
+        }
+      ]
+    },
+    {
+      "id": "task-dist-cap-pacelc",
+      "moduleId": "mod-distributed-data",
+      "order": 4,
+      "title": "Distributed Consistency: CAP & PACELC Theorems",
+      "type": "lesson",
+      "estimatedMinutes": 60,
+      "priority": "core",
+      "topics": ["system-design"],
+      "dependsOn": ["task-scale-db-replication", "task-dist-db-sharding"],
+      "description": "Analyze fundamental distributed trade-offs. CAP Theorem (Consistency vs Availability during Partitions) and PACELC Extension (Latency vs Consistency during normal state).",
+      "objectives": [
+        "Classify systems as CP (Strong Consistency) or AP (High Availability)",
+        "Apply PACELC trade-offs to databases like DynamoDB vs PostgreSQL"
+      ],
+      "keyConcepts": ["CAP Theorem", "CP vs AP", "PACELC Theorem", "network partition", "eventual consistency"],
+      "tradeoffs": ["CP: return error during partition to guarantee accuracy vs AP: return stale data during partition to guarantee availability"],
+      "verificationQuestions": [
+        "Why is a banking ledger classified as a CP system?",
+        "What does the PACELC theorem evaluate that CAP ignores during normal non-partitioned operation?"
+      ],
+      "resources": [
+        {
+          "title": "CAP and PACELC Theorems Explained",
+          "kind": "article",
+          "minutes": 35,
+          "sourceId": "src-hello-interview",
+          "section": "CAP & PACELC"
+        }
+      ]
+    },
+    {
+      "id": "task-dist-blob-storage",
+      "moduleId": "mod-distributed-data",
+      "order": 5,
+      "title": "Blob / Object Storage (AWS S3) & Direct Client Uploads",
+      "type": "lesson",
+      "estimatedMinutes": 55,
+      "priority": "core",
+      "topics": ["system-design"],
+      "dependsOn": ["task-dist-message-queues"],
+      "description": "Store unstructured media files (images, videos, PDFs) using Object Storage (S3) instead of relational databases. Implement pre-signed URLs for direct client uploads.",
+      "objectives": [
+        "Architect S3 object storage integration for large media assets",
+        "Utilize pre-signed URLs to bypass app server bandwidth bottlenecks"
+      ],
+      "keyConcepts": ["Object / Blob Storage (S3)", "pre-signed URL", "direct client upload", "unstructured data"],
+      "tradeoffs": ["App server file proxying: server CPU/bandwidth bottleneck vs Pre-signed S3 upload: direct low-cost client upload with short-lived token security"],
+      "verificationQuestions": [
+        "Why should not video files be stored directly in a SQL database table?",
+        "How does a pre-signed URL work to allow a client to upload directly to S3?"
+      ],
+      "resources": [
+        {
+          "title": "Blob Storage and S3 Design Patterns",
+          "kind": "article",
+          "minutes": 30,
+          "sourceId": "src-sd-primer",
+          "section": "Object Storage"
+        }
+      ]
+    },
+    {
+      "id": "task-dist-rate-limiting",
+      "moduleId": "mod-distributed-data",
+      "order": 6,
+      "title": "API Rate Limiting Algorithms & Distributed Redis Enforcers",
+      "type": "lesson",
+      "estimatedMinutes": 60,
+      "priority": "core",
+      "topics": ["system-design"],
+      "dependsOn": ["task-scale-caching-redis"],
+      "description": "Protect downstream microservices from abuse and DDoS using Rate Limiters. Compare Token Bucket, Leaky Bucket, and Sliding Window Counter algorithms enforced via Redis.",
+      "objectives": [
+        "Select rate limiting algorithms based on burst traffic tolerance",
+        "Implement atomic distributed rate limiting counters in Redis"
+      ],
+      "keyConcepts": ["Token Bucket", "Leaky Bucket", "Sliding Window Counter", "Redis atomic Lua script"],
+      "tradeoffs": ["Token Bucket: allows short traffic bursts vs Leaky Bucket: enforces strictly smooth constant output rate"],
+      "verificationQuestions": [
+        "Which rate limiting algorithm allows short bursty traffic while enforcing an average rate?",
+        "Why are atomic Lua scripts required when updating Redis rate limit counters?"
+      ],
+      "resources": [
+        {
+          "title": "Designing an API Rate Limiter",
+          "kind": "article",
+          "minutes": 35,
+          "sourceId": "src-sd-101",
+          "section": "Rate Limiter"
+        }
+      ]
+    },
+    {
+      "id": "task-dist-concurrency-locks",
+      "moduleId": "mod-distributed-data",
+      "order": 7,
+      "title": "Distributed Concurrency: Optimistic Locking & Atomic Redis Holds",
+      "type": "lesson",
+      "estimatedMinutes": 65,
+      "priority": "core",
+      "topics": ["system-design"],
+      "dependsOn": ["task-dist-rate-limiting"],
+      "description": "Prevent race conditions and double-booking under extreme write contention. Compare Pessimistic locking (DB row locks), Optimistic locking (version numbers), and atomic Redis SETNX holds.",
+      "objectives": [
+        "Prevent race conditions in high-concurrency write systems",
+        "Apply atomic Redis SETNX keys for temporary reservation holds"
+      ],
+      "keyConcepts": ["race condition", "Pessimistic locking", "Optimistic locking (version column)", "Redis SETNX / Lua lock"],
+      "tradeoffs": ["Pessimistic DB lock: guarantees safety but destroys DB throughput under high contention vs Redis atomic hold: sub-ms fast failure rejection"],
+      "verificationQuestions": [
+        "Why does SELECT FOR UPDATE fail under 10,000 requests/sec seat reservation spikes?",
+        "How does Optimistic Locking with a version column detect concurrent updates?"
+      ],
+      "resources": [
+        {
+          "title": "Concurrency & Distributed Locking Patterns",
+          "kind": "article",
+          "minutes": 35,
+          "sourceId": "src-hello-interview",
+          "section": "Distributed Locking"
+        }
+      ]
+    },
+    {
+      "id": "task-dist-architecture-review",
+      "moduleId": "mod-distributed-data",
+      "order": 8,
+      "title": "Distributed Data Systems Architecture Milestone",
+      "type": "milestone",
+      "estimatedMinutes": 0,
+      "priority": "core",
+      "topics": ["system-design"],
+      "dependsOn": [
+        "task-dist-db-sharding",
+        "task-dist-consistent-hashing",
+        "task-dist-message-queues",
+        "task-dist-cap-pacelc",
+        "task-dist-concurrency-locks"
+      ],
+      "description": "Milestone: You have mastered distributed data tier building blocks including sharding, consistent hashing, queues, rate limiting, and distributed concurrency control.",
+      "objectives": [
+        "Verify mastery across all core distributed building blocks"
+      ]
+    },
+    {
+      "id": "task-framework-step1-reqs",
+      "moduleId": "mod-interview-framework",
+      "order": 1,
+      "title": "Step 1: Requirement Scoping & Functional vs Non-Functional Bounds",
+      "type": "lesson",
+      "estimatedMinutes": 55,
+      "priority": "core",
+      "topics": ["system-design"],
+      "dependsOn": ["task-scale-checkpoint-review"],
+      "description": "Lead the first 5 minutes of a System Design interview. Frame clear Functional Requirements (user actions) and Non-Functional Constraints (DAU, latency SLAs, availability 9s).",
+      "objectives": [
+        "Structure requirement clarifying questions in minute 1 to 5 of an interview",
+        "Define non-functional availability (99.9% vs 99.99%) and latency SLAs"
+      ],
+      "keyConcepts": ["Functional Requirements", "Non-Functional Requirements", "SLAs / SLOs", "Availability 9s"],
+      "tradeoffs": ["Over-scoping: running out of time during interview vs Under-scoping: building the wrong architecture"],
+      "verificationQuestions": [
+        "What are 3 essential non-functional questions to ask for an event booking system?",
+        "What is the difference between functional and non-functional requirements?"
+      ],
+      "resources": [
+        {
+          "title": "System Design Interview Blueprint: 6-Step Framework",
+          "kind": "article",
+          "minutes": 35,
+          "sourceId": "src-techinterview-net"
+        }
+      ]
+    },
+    {
+      "id": "task-framework-step2-boe",
+      "moduleId": "mod-interview-framework",
+      "order": 2,
+      "title": "Step 2: Back-of-the-Envelope Capacity Estimations",
+      "type": "lesson",
+      "estimatedMinutes": 60,
+      "priority": "core",
+      "topics": ["system-design"],
+      "dependsOn": ["task-framework-step1-reqs"],
+      "description": "Perform rapid mental math calculations for Read/Write QPS, Peak QPS (2x-5x average), Storage Growth over 5 years, and Network Bandwidth bounds.",
+      "objectives": [
+        "Calculate Average and Peak QPS from Daily Active Users (DAU)",
+        "Estimate 5-year data storage capacity in Terabytes"
+      ],
+      "keyConcepts": ["Average vs Peak QPS", "storage capacity math", "bandwidth throughput Bps", "power of 2 / 10 approximations"],
+      "tradeoffs": ["Exact precision calculation: wastes valuable time vs Order-of-magnitude estimation: fast decision-making benchmark"],
+      "verificationQuestions": [
+        "If a system handles 10 Million DAU and each user makes 10 reads/day, what is the average Read QPS?",
+        "Why is Peak QPS critical for sizing load balancers and database capacity?"
+      ],
+      "resources": [
+        {
+          "title": "Back-of-the-Envelope Calculation Guide",
+          "kind": "article",
+          "minutes": 30,
+          "sourceId": "src-sd-primer",
+          "section": "Capacity Estimations"
+        }
+      ]
+    },
+    {
+      "id": "task-framework-step3-api-data",
+      "moduleId": "mod-interview-framework",
+      "order": 3,
+      "title": "Step 3: API Contracts & High-Level Database Schema Design",
+      "type": "lesson",
+      "estimatedMinutes": 60,
+      "priority": "core",
+      "topics": ["system-design"],
+      "dependsOn": ["task-framework-step2-boe"],
+      "description": "Design RESTful API endpoint signatures (HTTP verbs, paths, payload parameters, idempotency keys) and define core database table schemas and primary keys.",
+      "objectives": [
+        "Write clean REST API contracts with Idempotency-Key headers",
+        "Define core relational/NoSQL schemas with primary and foreign keys"
+      ],
+      "keyConcepts": ["REST API contract", "Idempotency Key", "Primary Key", "Foreign Key", "Schema mapping"],
+      "tradeoffs": ["Generic endpoints: over-fetching data vs Focused REST resource endpoints: clean contract enforcement"],
+      "verificationQuestions": [
+        "Why should payment endpoints always require an Idempotency-Key header?",
+        "What fields belong in a User table vs a Reservation table?"
+      ],
+      "resources": [
+        {
+          "title": "API Design and Data Modeling in Interviews",
+          "kind": "article",
+          "minutes": 30,
+          "sourceId": "src-hello-interview",
+          "section": "API & Schema Design"
+        }
+      ]
+    },
+    {
+      "id": "task-framework-step456-deepdive",
+      "moduleId": "mod-interview-framework",
+      "order": 4,
+      "title": "Step 4-6: High-Level Architecture, Deep Dives & Defense",
+      "type": "lesson",
+      "estimatedMinutes": 65,
+      "priority": "core",
+      "topics": ["system-design"],
+      "dependsOn": ["task-framework-step3-api-data"],
+      "description": "Draw end-to-end architecture diagrams (Client -> Load Balancer -> API Gateway -> Services -> Redis -> DB), lead deep-dive bottleneck discussions, and defend trade-offs.",
+      "objectives": [
+        "Construct high-level architecture diagrams seamlessly",
+        "Proactively identify bottlenecks and defend trade-off choices to interviewers"
+      ],
+      "keyConcepts": ["happy-path architecture flow", "bottleneck identification", "trade-off defense", "observability & failover"],
+      "tradeoffs": ["Passive waiting for interviewer prompts vs Proactive driving of deep dives and trade-off defense"],
+      "verificationQuestions": [
+        "How do you pivot an interview smoothly from high-level diagram to deep-dive bottleneck?",
+        "What are 3 areas to cover during the final 3-minute wrap-up phase?"
+      ],
+      "resources": [
+        {
+          "title": "ByteByteGo Technical Interview Framework",
+          "kind": "article",
+          "minutes": 35,
+          "sourceId": "src-techinterview-net"
+        }
+      ]
+    },
+    {
+      "id": "task-framework-mock-prep",
+      "moduleId": "mod-interview-framework",
+      "order": 5,
+      "title": "6-Step Framework Mastery Self-Assessment",
+      "type": "assessment",
+      "estimatedMinutes": 60,
+      "priority": "core",
+      "topics": ["system-design"],
+      "dependsOn": ["task-framework-step456-deepdive"],
+      "description": "Execute a full verbal 45-minute walkthrough of the 6-step framework against a sample problem prompt, timing each phase strictly.",
+      "objectives": [
+        "Validate strict adherence to the 45-minute interview time management framework"
+      ]
+    },
+    {
+      "id": "task-case-url-shortener",
+      "moduleId": "mod-case-studies",
+      "order": 1,
+      "title": "Case Study 1: Design a TinyURL / Bitly URL Shortener",
+      "type": "project",
+      "estimatedMinutes": 75,
+      "priority": "core",
+      "topics": ["system-design"],
+      "dependsOn": ["task-framework-mock-prep", "task-dist-consistent-hashing"],
+      "description": "Design a high-throughput key-value lookup service. Implement Base62 encoding, unique ID generation (Snowflake / pre-allocated ranges), Redis caching, and 301 vs 302 redirects.",
+      "objectives": [
+        "Architect a scalable URL encoding service supporting 100M URLs/day",
+        "Compare 301 Permanent Redirect vs 302 Temporary Redirect HTTP codes"
+      ],
+      "keyConcepts": ["Base62 encoding", "distributed ID generator", "Redis key lookup", "301 vs 302 redirect"],
+      "tradeoffs": ["301 Redirect: browser caches redirect reducing server load but losing analytics vs 302 Redirect: server intercepts every click for full analytics"],
+      "verificationQuestions": [
+        "Why is Base62 (a-z, A-Z, 0-9) used for short URL hashes instead of Base64?",
+        "How does a pre-allocated ID range generator prevent duplicate short keys across nodes?"
+      ],
+      "resources": [
+        {
+          "title": "System Design Primer: URL Shortener Solution",
+          "kind": "article",
+          "minutes": 40,
+          "sourceId": "src-sd-primer",
+          "section": "Design Pastebin / Bitly"
+        }
+      ]
+    },
+    {
+      "id": "task-case-url-shortener-practice",
+      "moduleId": "mod-case-studies",
+      "order": 2,
+      "title": "Worked Example & Diagram: URL Shortener Architecture",
+      "type": "practice",
+      "estimatedMinutes": 50,
+      "priority": "core",
+      "topics": ["system-design"],
+      "dependsOn": ["task-case-url-shortener"],
+      "description": "Draft the full architecture diagram and Python Base62 encoder/decoder pseudocode for the URL Shortener design.",
+      "objectives": [
+        "Write clean Python pseudocode for Base62 encoding/decoding",
+        "Sketch the end-to-end data flow from short link click to long URL redirect"
+      ]
+    },
+    {
+      "id": "task-case-newsfeed",
+      "moduleId": "mod-case-studies",
+      "order": 3,
+      "title": "Case Study 2: Design Twitter / Facebook News Feed",
+      "type": "project",
+      "estimatedMinutes": 80,
+      "priority": "core",
+      "topics": ["system-design"],
+      "dependsOn": ["task-case-url-shortener-practice", "task-dist-message-queues"],
+      "description": "Design a social newsfeed with high write fan-out. Master Fan-out on Write (Push model) vs Fan-out on Read (Pull model) and Hybrid approaches for celebrity accounts.",
+      "objectives": [
+        "Architect hybrid Push/Pull news feed timeline generation",
+        "Solve celebrity user fan-out write bottlenecks"
+      ],
+      "keyConcepts": ["Push model (fan-out on write)", "Pull model (fan-out on read)", "celebrity account hybrid model", "timeline cache in Redis"],
+      "tradeoffs": ["Push model: sub-10ms fast read latency but high write cost on tweet posting vs Pull model: cheap write cost but high read query aggregation cost"],
+      "verificationQuestions": [
+        "Why does a pure Push model crash when an account with 80 million followers posts a tweet?",
+        "How does a Hybrid model treat regular users vs celebrity users differently?"
+      ],
+      "resources": [
+        {
+          "title": "Designing Twitter / Social News Feed",
+          "kind": "article",
+          "minutes": 45,
+          "sourceId": "src-sd-101",
+          "section": "News Feed Architecture"
+        }
+      ]
+    },
+    {
+      "id": "task-case-newsfeed-practice",
+      "moduleId": "mod-case-studies",
+      "order": 4,
+      "title": "Worked Example & Trade-off Practice: Social News Feed",
+      "type": "practice",
+      "estimatedMinutes": 55,
+      "priority": "core",
+      "topics": ["system-design"],
+      "dependsOn": ["task-case-newsfeed"],
+      "description": "Perform back-of-the-envelope calculations for 500M DAU newsfeed storage/bandwidth and sketch the Redis timeline cache data structures.",
+      "objectives": [
+        "Calculate storage needed for 500M daily newsfeed users",
+        "Model Redis Sorted Sets (ZSET) for user timelines"
+      ]
+    },
+    {
+      "id": "task-case-youtube-video",
+      "moduleId": "mod-case-studies",
+      "order": 5,
+      "title": "Case Study 3: Design YouTube / Netflix Video Streaming",
+      "type": "project",
+      "estimatedMinutes": 85,
+      "priority": "core",
+      "topics": ["system-design"],
+      "dependsOn": ["task-case-newsfeed-practice", "task-dist-blob-storage"],
+      "description": "Architect a global video streaming platform. Master chunked video uploads, asynchronous transcoding pipeline workers, Blob storage (S3), and CDN adaptive bitrate streaming (HLS/DASH).",
+      "objectives": [
+        "Design asynchronous video transcoding pipelines with message queues",
+        "Deliver adaptive bitrate video streaming via global CDN edge nodes"
+      ],
+      "keyConcepts": ["chunked video upload", "video transcoding pipeline", "adaptive bitrate streaming (HLS/DASH)", "CDN video delivery"],
+      "tradeoffs": ["Monolithic video storage: high buffering latency vs Adaptive chunked streaming: multi-resolution segment encoding for seamless playback on any device"],
+      "verificationQuestions": [
+        "Why are raw uploaded videos transcoded into multiple resolutions and chunked into 10-second segments?",
+        "How does adaptive bitrate streaming adjust video quality dynamically based on network speed?"
+      ],
+      "resources": [
+        {
+          "title": "Designing a Video Streaming Platform",
+          "kind": "article",
+          "minutes": 45,
+          "sourceId": "src-hello-interview",
+          "section": "YouTube Architecture"
+        }
+      ]
+    },
+    {
+      "id": "task-case-youtube-practice",
+      "moduleId": "mod-case-studies",
+      "order": 6,
+      "title": "Worked Example & Diagram: Video Streaming Platform",
+      "type": "practice",
+      "estimatedMinutes": 55,
+      "priority": "core",
+      "topics": ["system-design"],
+      "dependsOn": ["task-case-youtube-video"],
+      "description": "Construct the end-to-end architecture diagram showing S3 pre-signed upload, SQS queue, transcoding worker pool, and CDN playback flow.",
+      "objectives": [
+        "Diagram the asynchronous video ingestion and distribution pipeline"
+      ]
+    },
+    {
+      "id": "task-case-ticketmaster",
+      "moduleId": "mod-case-studies",
+      "order": 7,
+      "title": "Case Study 4: Design Ticketmaster Event Booking System",
+      "type": "project",
+      "estimatedMinutes": 85,
+      "priority": "core",
+      "topics": ["system-design"],
+      "dependsOn": ["task-case-youtube-practice", "task-dist-concurrency-locks"],
+      "description": "Design a high-concurrency event booking system with extreme write contention. Implement a Virtual Waiting Room, 10-minute temporary seat holds in Redis (SETNX), and Zero Double-Booking guarantees.",
+      "objectives": [
+        "Eliminate double-booking during 100k QPS ticket drops",
+        "Implement 3-layer defense: Virtual Waiting Room -> Atomic Redis Hold -> Database Transaction"
+      ],
+      "keyConcepts": ["Virtual Waiting Room", "atomic Redis reservation hold", "10-minute hold TTL", "Zero Double-Booking guarantee"],
+      "tradeoffs": ["Database row locking: DB crash under 100k QPS contention vs Atomic Redis Lua holds: instant sub-ms rejection for losing requests"],
+      "verificationQuestions": [
+        "How does an atomic Redis Lua script prevent two users from holding the same seat simultaneously?",
+        "What happens when a 10-minute temporary seat hold timer expires without payment?"
+      ],
+      "resources": [
+        {
+          "title": "Designing a Ticketmaster Booking System",
+          "kind": "article",
+          "minutes": 45,
+          "sourceId": "src-techinterview-net",
+          "section": "Ticketmaster System Design"
+        }
+      ]
+    },
+    {
+      "id": "task-case-ticketmaster-practice",
+      "moduleId": "mod-case-studies",
+      "order": 8,
+      "title": "Worked Example & Redis Lua Script: Ticketmaster Booking",
+      "type": "practice",
+      "estimatedMinutes": 60,
+      "priority": "core",
+      "topics": ["system-design"],
+      "dependsOn": ["task-case-ticketmaster"],
+      "description": "Write the atomic Redis Lua reservation script and detail the database transaction logic with expiration sweeper background workers.",
+      "objectives": [
+        "Write atomic seat reservation Redis Lua pseudocode",
+        "Design background expired reservation cleanup processes"
+      ]
+    },
+    {
+      "id": "task-case-mock-interview-1",
+      "moduleId": "mod-case-studies",
+      "order": 9,
+      "title": "Mock Practice 1: Complete 45-Min End-to-End System Design Run",
+      "type": "assessment",
+      "estimatedMinutes": 75,
+      "priority": "core",
+      "topics": ["system-design"],
+      "dependsOn": [
+        "task-case-ticketmaster-practice",
+        "task-case-url-shortener-practice",
+        "task-case-newsfeed-practice",
+        "task-case-youtube-practice"
+      ],
+      "description": "Execute a full 45-minute timed mock interview walkthrough of an unannounced scenario (e.g. Rate Limiter or Distributed Cache). Document requirements, estimations, API, architecture, and trade-off defense.",
+      "objectives": [
+        "Demonstrate complete 45-minute system design interview execution fluency"
+      ]
+    },
+    {
+      "id": "task-case-final-milestone",
+      "moduleId": "mod-case-studies",
+      "order": 10,
+      "title": "System Design Interview Readiness Final Milestone",
+      "type": "milestone",
+      "estimatedMinutes": 0,
+      "priority": "core",
+      "topics": ["system-design"],
+      "dependsOn": ["task-case-mock-interview-1"],
+      "description": "Final Milestone: You are fully prepared to lead 45-minute Internship and New-Grad System Design technical interviews with structured confidence and clear trade-off defense.",
+      "objectives": [
+        "Achieve full System Design technical interview readiness for Internship and New-Grad positions"
+      ]
+    }
+  ]
+}
