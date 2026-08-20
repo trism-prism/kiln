@@ -1,0 +1,484 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "number",
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+      "description": "stable plan id"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "goal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "subject": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "level": {
+      "type": "string",
+      "enum": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ]
+    },
+    "audience": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300
+    },
+    "schedulingMode": {
+      "type": "string",
+      "enum": [
+        "auto",
+        "fixed"
+      ],
+      "description": "auto: the file has no dates; fixed: startDate and at least one date are required"
+    },
+    "startDate": {
+      "description": "fixed mode only (required there); day 1 of the plan",
+      "type": "string",
+      "format": "date",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+    },
+    "deadline": {
+      "description": "fixed mode only; not before startDate",
+      "type": "string",
+      "format": "date",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+    },
+    "sources": {
+      "default": [],
+      "maxItems": 50,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+            "description": "unique across modules, tasks and sources"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "url": {
+            "type": "string",
+            "maxLength": 2000,
+            "format": "uri"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "video",
+              "article",
+              "book",
+              "course",
+              "docs",
+              "tool",
+              "visualizer",
+              "problem",
+              "other"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "kind"
+        ],
+        "description": "A whole work the plan draws on, such as a course or a book."
+      }
+    },
+    "dailyPractice": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": [
+            "neetcode",
+            "plan"
+          ],
+          "description": "neetcode tops up from the NeetCode list; plan uses only problems in the plan"
+        },
+        "perDay": {
+          "default": 1,
+          "description": "problems per study day",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "language": {
+          "description": "e.g. python",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 30
+        },
+        "startDifficulty": {
+          "default": "easy",
+          "type": "string",
+          "enum": [
+            "easy",
+            "medium",
+            "hard"
+          ]
+        },
+        "topicFollowsLessons": {
+          "default": true,
+          "description": "true: generated problems match the most recent lesson topics",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "description": "The daily problem slot."
+    },
+    "part": {
+      "type": "object",
+      "properties": {
+        "index": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20,
+          "description": "at least index"
+        }
+      },
+      "required": [
+        "index",
+        "total"
+      ],
+      "description": "Present only when the plan is split across several files."
+    },
+    "modules": {
+      "minItems": 1,
+      "maxItems": 100,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+            "description": "unique across modules, tasks and sources"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "order": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000,
+            "description": "unique among modules; gaps allowed"
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "notBeforeDay": {
+            "description": "plan day (day 1 is the start date); never earlier than a previous module has",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3650
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "order"
+        ]
+      }
+    },
+    "tasks": {
+      "minItems": 1,
+      "maxItems": 2000,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+            "description": "unique across modules, tasks and sources"
+          },
+          "moduleId": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+            "description": "id of a module"
+          },
+          "order": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000,
+            "description": "unique within the module"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "description": "for a problem, its name"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "lesson",
+              "practice",
+              "review",
+              "project",
+              "assessment",
+              "milestone"
+            ]
+          },
+          "estimatedMinutes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 180,
+            "description": "all time for the session; every type except milestone needs at least 5; keep at most 90 except for assessments"
+          },
+          "priority": {
+            "default": "core",
+            "description": "what may be deferred when time runs short",
+            "type": "string",
+            "enum": [
+              "core",
+              "recommended",
+              "optional"
+            ]
+          },
+          "topics": {
+            "default": [],
+            "description": "kebab-case tags, reused exactly across tasks",
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            }
+          },
+          "description": {
+            "description": "exactly what to do in this session",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "objectives": {
+            "default": [],
+            "maxItems": 12,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            }
+          },
+          "keyConcepts": {
+            "default": [],
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            }
+          },
+          "tradeoffs": {
+            "default": [],
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            }
+          },
+          "verificationQuestions": {
+            "default": [],
+            "maxItems": 12,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            }
+          },
+          "resources": {
+            "default": [],
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "url": {
+                  "description": "only if you are certain the page exists; never guess",
+                  "type": "string",
+                  "maxLength": 2000,
+                  "format": "uri"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "video",
+                    "article",
+                    "book",
+                    "course",
+                    "docs",
+                    "tool",
+                    "visualizer",
+                    "problem",
+                    "other"
+                  ]
+                },
+                "minutes": {
+                  "description": "time this resource alone takes",
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 600
+                },
+                "required": {
+                  "default": true,
+                  "description": "false marks extra reading",
+                  "type": "boolean"
+                },
+                "section": {
+                  "description": "which part, e.g. \"Chapter 5\" or \"1:02:00-1:30:00\"",
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "sourceId": {
+                  "description": "id of an entry in sources",
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+                }
+              },
+              "required": [
+                "title",
+                "kind"
+              ]
+            }
+          },
+          "practice": {
+            "description": "practice and assessment tasks only",
+            "type": "object",
+            "properties": {
+              "provider": {
+                "type": "string",
+                "enum": [
+                  "leetcode",
+                  "other"
+                ]
+              },
+              "slug": {
+                "description": "required for leetcode; the official slug from the problem URL",
+                "type": "string",
+                "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+              },
+              "url": {
+                "description": "required for provider other",
+                "type": "string",
+                "maxLength": 2000,
+                "format": "uri"
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120,
+                "description": "the problem's name"
+              },
+              "difficulty": {
+                "type": "string",
+                "enum": [
+                  "easy",
+                  "medium",
+                  "hard"
+                ]
+              }
+            },
+            "required": [
+              "provider",
+              "title",
+              "difficulty"
+            ]
+          },
+          "dependsOn": {
+            "default": [],
+            "description": "task ids of the same or higher priority; no cycles",
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+            }
+          },
+          "notBeforeDay": {
+            "description": "plan day; not with fixedDate; not before its module has",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3650
+          },
+          "fixedDate": {
+            "description": "fixed mode only",
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "deadline": {
+            "description": "fixed mode only",
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          }
+        },
+        "required": [
+          "id",
+          "moduleId",
+          "order",
+          "title",
+          "type",
+          "estimatedMinutes"
+        ]
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "id",
+    "title",
+    "schedulingMode",
+    "modules",
+    "tasks"
+  ]
+}

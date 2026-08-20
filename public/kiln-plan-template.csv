@@ -1,0 +1,4 @@
+moduleId,moduleTitle,moduleOrder,id,title,type,estimatedMinutes,priority,topics,objectives,verificationQuestions,resources,practiceProvider,practiceSlug,practiceDifficulty,dependsOn
+arrays,Arrays and hashing,1,hash-map-basics,Hash maps and lookups,lesson,60,core,arrays-hashing,Explain average O(1) lookup | Describe one collision strategy,Why does a high load factor slow lookups?,Hash table introduction ;  ; video ; 35 ; Hash table chapter,,,,
+arrays,,,two-sum,Two Sum,practice,40,core,arrays-hashing,,,,leetcode,two-sum,easy,hash-map-basics
+arrays,,,contains-duplicate,Contains Duplicate,practice,30,recommended,arrays-hashing,,,,leetcode,contains-duplicate,easy,hash-map-basics
