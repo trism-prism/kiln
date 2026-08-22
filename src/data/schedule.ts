@@ -1,15 +1,19 @@
 // Adapter between the database and the pure scheduler (src/domain/scheduler).
 import { normalizeTopic } from '../domain/plan-format'
 import { schedule, BACKLOG, type SchedPlan, type SchedTask, type ScheduleInput, type ScheduleOutput } from '../domain/scheduler'
+import { addDaysISO } from '../lib/date'
 import type { KilnDB } from './db'
+import { reviewsDue } from './mastery'
 import { getDeviceId, getSettings, isPlanComplete, listModules, listPlans, listTasks } from './repo'
 import type { TaskRecord } from './types'
+
+const REVIEW_HORIZON_DAYS = 3 * 365 // the scheduler's own horizon
 
 export interface ScheduleAllOptions {
   /** 'initial' places every open task without a date; 'reschedule' also moves overdue ones. Default 'initial'. */
   mode?: ScheduleInput['mode']
   skipOptional?: boolean
-  /** Spaced reviews due per date (supplied by the mastery module). */
+  /** Spaced reviews due per date. Default: the stored review cards (mastery.reviewsDue) from today for three years. */
   reviewsDue?: ScheduleInput['reviewsDue']
 }
 
@@ -21,6 +25,8 @@ export interface ScheduleAllOptions {
  */
 export async function scheduleAll(db: KilnDB, today: string, opts: ScheduleAllOptions = {}): Promise<ScheduleOutput> {
   const deviceId = await getDeviceId(db)
+  // Read outside the transaction: it only touches review cards and tasks, which the transaction does not lock.
+  opts = { ...opts, reviewsDue: opts.reviewsDue ?? (await reviewsDue(db, today, addDaysISO(today, REVIEW_HORIZON_DAYS))) }
   // The callback must itself be an async function: Dexie only keeps the transaction alive across native
   // awaits when it can see that, and an arrow returning run()'s promise commits after the first await.
   return db.transaction('rw', [db.plans, db.modules, db.tasks, db.practiceLog, db.settings], async () => run(db, deviceId, today, opts))

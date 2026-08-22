@@ -2,6 +2,7 @@
 export { db, KilnDB } from './db'
 export { exportBackup, importBackup } from './backup'
 export type { BackupResult } from './backup'
+export * from './mastery'
 export * from './repo'
 export { scheduleAll } from './schedule'
 export type { ScheduleAllOptions } from './schedule'

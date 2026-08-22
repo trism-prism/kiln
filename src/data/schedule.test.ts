@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { NEETCODE_SLUGS } from '../domain/practice'
 import { validatePlan } from '../domain/plan-format'
 import { fixtureTexts, validateParts } from './fixtures'
+import { completeTask } from './mastery'
 import { importPlan, listPlans, listTasks, setTaskStatus } from './repo'
 import { scheduleAll } from './schedule'
+import { localDate } from '../domain/mastery'
 import { newDb } from './test-db'
 
 const TODAY = '2026-11-09' // a Monday
@@ -85,5 +87,19 @@ describe('known slugs', () => {
     const real = validatePlan(text, { knownSlugs: NEETCODE_SLUGS })
     const unknown = real.issues.filter((i) => /not in Kiln's problem list/.test(i.message)).length
     console.log('fixture dsa-part1 slugs missing from the bundled list:', unknown)
+  })
+})
+
+describe('scheduleAll with review cards', () => {
+  it('reserves the minutes of stored reviews on the day they are due', async () => {
+    const db = await loadFixtures()
+    const lesson = (await listTasks(db, (await listPlans(db))[0]!.id)).find((t) => t.type === 'lesson')!
+    const { card } = await completeTask(db, lesson.id, 'again', new Date(2026, 10, 9, 9).getTime(), { fuzz: false })
+    const out = await scheduleAll(db, TODAY)
+    const day = out.days.find((d) => d.date === localDate(card!.due))
+    expect(day?.reviewMinutes).toBe(card!.minutes)
+    // an explicit input still wins
+    const none = await scheduleAll(db, TODAY, { mode: 'reschedule', reviewsDue: {} })
+    expect(none.days.every((d) => d.reviewMinutes === 0)).toBe(true)
   })
 })

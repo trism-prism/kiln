@@ -79,12 +79,15 @@ function backupSchema(now: number) {
         due: num,
         stability: num,
         difficulty: num,
-        elapsedDays: num,
         scheduledDays: num,
+        // Added in schema 2; older backups lack them.
+        learningSteps: int.default(0),
         reps: int,
         lapses: int,
         state: fsrsState,
         lastReview: num.optional(),
+        minutes: num.default(10),
+        suspended: z.boolean().optional(),
       }),
       reviewLogs: rows({
         cardId: str,
@@ -93,8 +96,8 @@ function backupSchema(now: number) {
         due: num,
         stability: num,
         difficulty: num,
-        elapsedDays: num,
         scheduledDays: num,
+        learningSteps: int.default(0),
         reviewedAt: num,
       }),
       practiceLog: rows({
