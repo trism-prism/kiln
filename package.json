@@ -11,6 +11,7 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "e2e": "playwright test",
+    "test:worker": "npm --prefix worker run typecheck && npm --prefix worker test",
     "schema": "node scripts/write-schema.ts",
     "templates": "node scripts/write-templates.ts",
     "neetcode": "node scripts/write-neetcode.ts"

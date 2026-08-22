@@ -11,3 +11,4 @@ blob-report/
 CLAUDE.md
 AGENTS.md
 .claude/
+.dev.vars
