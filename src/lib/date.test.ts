@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addDaysISO, isRealISODate, toLocalISODate } from './date'
+import { addDaysISO, isRealISODate, toLocalISODate, weekdayIndex } from './date'
 
 describe('toLocalISODate', () => {
   it('uses local calendar fields and zero-pads', () => {
@@ -32,5 +32,16 @@ describe('addDaysISO', () => {
     ['2026-11-09', -9, '2026-10-31'],
   ])('%s + %i days = %s', (start, days, expected) => {
     expect(addDaysISO(start, days)).toBe(expected)
+  })
+})
+
+describe('weekdayIndex', () => {
+  it.each([
+    ['2026-11-02', 0],
+    ['2026-11-05', 3],
+    ['2026-11-08', 6],
+    ['2028-02-29', 1],
+  ])('%s -> %s (Monday is 0)', (input, expected) => {
+    expect(weekdayIndex(input)).toBe(expected)
   })
 })
