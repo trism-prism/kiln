@@ -1,0 +1,526 @@
+{
+  "schemaVersion": 1,
+  "id": "dsa-zero-to-hero-python",
+  "title": "DSA Zero to Hero in Python",
+  "description": "Comprehensive 16-week DSA curriculum for Python developers. Part 3 covers 1D Dynamic Programming, 2D Grid & String DP, and Grind 75 Timed Mock Interviews.",
+  "goal": "Master dynamic programming and pass timed technical interview simulations.",
+  "subject": "Data Structures & Algorithms",
+  "level": "beginner",
+  "audience": "Software engineering intern and new-grad candidates learning DSA in Python.",
+  "schedulingMode": "auto",
+  "part": {
+    "index": 3,
+    "total": 3
+  },
+  "modules": [
+    {
+      "id": "dp-1d",
+      "title": "1D Dynamic Programming & State Transitions",
+      "order": 9,
+      "summary": "Overlapping subproblems, optimal substructure, 1D memoization vs tabulation.",
+      "notBeforeDay": 78
+    },
+    {
+      "id": "dp-2d",
+      "title": "2D Dynamic Programming & Grid Paths",
+      "order": 10,
+      "summary": "Grid path DP, 0/1 Knapsack state matrices, string LCS/Edit Distance.",
+      "notBeforeDay": 85
+    },
+    {
+      "id": "grind75-mock-prep",
+      "title": "Grind 75 Timed Mocks & Interview Readiness",
+      "order": 11,
+      "summary": "Timed mock interview practice, strategy review, and complex edge case validation.",
+      "notBeforeDay": 99
+    }
+  ],
+  "tasks": [
+    {
+      "id": "dp-1d-fundamentals",
+      "moduleId": "dp-1d",
+      "order": 1,
+      "title": "Dynamic Programming Principles & Memoization",
+      "type": "lesson",
+      "estimatedMinutes": 65,
+      "priority": "core",
+      "topics": [
+        "dp-1d"
+      ],
+      "dependsOn": [
+        "binary-trees-and-dfs"
+      ],
+      "description": "Study Dynamic Programming core principles: overlapping subproblems and optimal substructure. Compare top-down recursion with memoization (lru_cache) against bottom-up iterative tabulation. Derive subproblem DAG state transitions.",
+      "objectives": [
+        "Identify overlapping subproblems in recursive decision trees",
+        "Implement top-down memoization using Python functools.lru_cache",
+        "Build bottom-up 1D DP tabulation arrays with optimal space complexity"
+      ],
+      "keyConcepts": [
+        "Overlapping subproblems",
+        "Optimal substructure",
+        "Top-down memoization",
+        "Bottom-up tabulation",
+        "Subproblem DAG"
+      ],
+      "tradeoffs": [
+        "Top-down memoization only computes required states but incurs call stack overhead; bottom-up tabulation computes all table states iteratively with fast array indexing"
+      ],
+      "verificationQuestions": [
+        "What two conditions must a problem satisfy for Dynamic Programming to apply?",
+        "How does bottom-up tabulation eliminate recursion call stack space?"
+      ],
+      "resources": [
+        {
+          "title": "NeetCode 1D DP Module",
+          "kind": "course",
+          "minutes": 35,
+          "sourceId": "neetcode-roadmap",
+          "section": "1D Dynamic Programming"
+        }
+      ]
+    },
+    {
+      "id": "climbing-stairs",
+      "moduleId": "dp-1d",
+      "order": 2,
+      "title": "Climbing Stairs",
+      "type": "practice",
+      "estimatedMinutes": 35,
+      "priority": "core",
+      "topics": [
+        "dp-1d"
+      ],
+      "dependsOn": [
+        "dp-1d-fundamentals"
+      ],
+      "description": "Solve Climbing Stairs in Python using Fibonacci state transitions dp[i] = dp[i-1] + dp[i-2] optimized to O(1) space.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "climbing-stairs",
+        "title": "Climbing Stairs",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "id": "min-cost-climbing-stairs",
+      "moduleId": "dp-1d",
+      "order": 3,
+      "title": "Min Cost Climbing Stairs",
+      "type": "practice",
+      "estimatedMinutes": 35,
+      "priority": "core",
+      "topics": [
+        "dp-1d"
+      ],
+      "dependsOn": [
+        "climbing-stairs"
+      ],
+      "description": "Compute minimum step costs using DP transition cost[i] += min(cost[i+1], cost[i+2]) in Python.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "min-cost-climbing-stairs",
+        "title": "Min Cost Climbing Stairs",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "id": "house-robber",
+      "moduleId": "dp-1d",
+      "order": 4,
+      "title": "House Robber",
+      "type": "practice",
+      "estimatedMinutes": 45,
+      "priority": "core",
+      "topics": [
+        "dp-1d"
+      ],
+      "dependsOn": [
+        "climbing-stairs"
+      ],
+      "description": "Solve House Robber using state decision rob = max(dont_rob_prev + num, rob_prev) in Python.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "house-robber",
+        "title": "House Robber",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "coin-change",
+      "moduleId": "dp-1d",
+      "order": 5,
+      "title": "Coin Change",
+      "type": "practice",
+      "estimatedMinutes": 55,
+      "priority": "core",
+      "topics": [
+        "dp-1d"
+      ],
+      "dependsOn": [
+        "house-robber"
+      ],
+      "description": "Solve Unbounded Knapsack Coin Change using bottom-up tabulation array dp[i] = min(dp[i], 1 + dp[i - coin]) in Python.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "coin-change",
+        "title": "Coin Change",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "longest-increasing-subsequence",
+      "moduleId": "dp-1d",
+      "order": 6,
+      "title": "Longest Increasing Subsequence",
+      "type": "practice",
+      "estimatedMinutes": 60,
+      "priority": "recommended",
+      "topics": [
+        "dp-1d"
+      ],
+      "dependsOn": [
+        "coin-change"
+      ],
+      "description": "Find LIS using O(n^2) DP tabulation or optimize to O(n log n) using binary search (bisect_left) patience sorting in Python.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "longest-increasing-subsequence",
+        "title": "Longest Increasing Subsequence",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "word-break",
+      "moduleId": "dp-1d",
+      "order": 7,
+      "title": "Word Break",
+      "type": "practice",
+      "estimatedMinutes": 55,
+      "priority": "recommended",
+      "topics": [
+        "dp-1d"
+      ],
+      "dependsOn": [
+        "coin-change"
+      ],
+      "description": "Determine if string can be segmented into dictionary words using boolean DP array dp[i] checking valid word substrings.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "word-break",
+        "title": "Word Break",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "dp-2d-grid-and-strings",
+      "moduleId": "dp-2d",
+      "order": 1,
+      "title": "2D Grid DP & String Subsequence Matrices",
+      "type": "lesson",
+      "estimatedMinutes": 65,
+      "priority": "core",
+      "topics": [
+        "dp-2d"
+      ],
+      "dependsOn": [
+        "dp-1d-fundamentals"
+      ],
+      "description": "Study 2D Dynamic Programming matrix formulations. Master grid path counting dp[r][c] = dp[r-1][c] + dp[r][c-1], 0/1 Knapsack matrix states, and string subsequence alignment tables (LCS).",
+      "objectives": [
+        "Formulate 2D state matrices for grid traversal and string matching",
+        "Differentiate 0/1 Knapsack (bounded) from Unbounded Knapsack transitions",
+        "Optimize 2D matrix space to 1D rolling rows"
+      ],
+      "keyConcepts": [
+        "2D State matrix",
+        "Grid traversal DP",
+        "0/1 Knapsack",
+        "Longest Common Subsequence",
+        "Space optimization rolling row"
+      ],
+      "tradeoffs": [
+        "2D DP matrices provide clean visual state transitions, but storing full m x n tables requires O(m*n) space which can often be reduced to O(n) using 1D rolling rows"
+      ],
+      "verificationQuestions": [
+        "How do you transition state in a grid DP when moving only right and down?",
+        "Why does 0/1 Knapsack require iterating backwards when space-optimized to 1D?"
+      ],
+      "resources": [
+        {
+          "title": "NeetCode 2D DP Guide",
+          "kind": "course",
+          "minutes": 35,
+          "sourceId": "neetcode-roadmap",
+          "section": "2D Dynamic Programming"
+        }
+      ]
+    },
+    {
+      "id": "unique-paths",
+      "moduleId": "dp-2d",
+      "order": 2,
+      "title": "Unique Paths",
+      "type": "practice",
+      "estimatedMinutes": 45,
+      "priority": "core",
+      "topics": [
+        "dp-2d"
+      ],
+      "dependsOn": [
+        "dp-2d-grid-and-strings"
+      ],
+      "description": "Calculate unique grid paths from top-left to bottom-right using 2D DP tabulation or space-optimized 1D row in Python.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "unique-paths",
+        "title": "Unique Paths",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "longest-common-subsequence",
+      "moduleId": "dp-2d",
+      "order": 3,
+      "title": "Longest Common Subsequence",
+      "type": "practice",
+      "estimatedMinutes": 55,
+      "priority": "core",
+      "topics": [
+        "dp-2d"
+      ],
+      "dependsOn": [
+        "dp-2d-grid-and-strings"
+      ],
+      "description": "Compute LCS length of two strings using 2D matrix state transitions dp[i][j] = 1 + dp[i+1][j+1] if match else max(dp[i+1][j], dp[i][j+1]).",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "longest-common-subsequence",
+        "title": "Longest Common Subsequence",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "best-time-to-buy-and-sell-stock-with-cooldown",
+      "moduleId": "dp-2d",
+      "order": 4,
+      "title": "Best Time to Buy and Sell Stock with Cooldown",
+      "type": "practice",
+      "estimatedMinutes": 60,
+      "priority": "recommended",
+      "topics": [
+        "dp-2d"
+      ],
+      "dependsOn": [
+        "best-time-to-buy-and-sell-stock",
+        "dp-2d-grid-and-strings"
+      ],
+      "description": "Model stock trading state transitions (Buying, Selling, Cooldown) using state machine DP in Python.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "best-time-to-buy-and-sell-stock-with-cooldown",
+        "title": "Best Time to Buy and Sell Stock with Cooldown",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "target-sum",
+      "moduleId": "dp-2d",
+      "order": 5,
+      "title": "Target Sum",
+      "type": "practice",
+      "estimatedMinutes": 60,
+      "priority": "recommended",
+      "topics": [
+        "dp-2d"
+      ],
+      "dependsOn": [
+        "dp-2d-grid-and-strings"
+      ],
+      "description": "Transform Target Sum into 0/1 Subset Sum DP partition problem solved via 2D memoization or 1D hash map state counting.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "target-sum",
+        "title": "Target Sum",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "edit-distance",
+      "moduleId": "dp-2d",
+      "order": 6,
+      "title": "Edit Distance",
+      "type": "practice",
+      "estimatedMinutes": 75,
+      "priority": "optional",
+      "topics": [
+        "dp-2d"
+      ],
+      "dependsOn": [
+        "longest-common-subsequence"
+      ],
+      "description": "Compute minimum Levenshtein edit operations (insert, delete, replace) to convert word1 to word2 using 2D DP matrix.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "edit-distance",
+        "title": "Edit Distance",
+        "difficulty": "hard"
+      }
+    },
+    {
+      "id": "grind75-timed-mock-session-1",
+      "moduleId": "grind75-mock-prep",
+      "order": 1,
+      "title": "Grind 75 Timed Mock Session 1 (Arrays & Strings)",
+      "type": "practice",
+      "estimatedMinutes": 75,
+      "priority": "core",
+      "topics": [
+        "arrays-hashing",
+        "two-pointers"
+      ],
+      "notBeforeDay": 99,
+      "dependsOn": [
+        "valid-palindrome",
+        "group-anagrams"
+      ],
+      "description": "Solve 2 Medium problems under 45-minute timed constraints using the Grind 75 tool interface. Speak thought process aloud, state Big-O bounds before coding, and test edge cases.",
+      "resources": [
+        {
+          "title": "Grind 75 Tool",
+          "url": "https://www.techinterviewhandbook.org/grind75/",
+          "kind": "tool",
+          "minutes": 45,
+          "sourceId": "tech-interview-handbook"
+        }
+      ]
+    },
+    {
+      "id": "grind75-timed-mock-session-2",
+      "moduleId": "grind75-mock-prep",
+      "order": 2,
+      "title": "Grind 75 Timed Mock Session 2 (Trees & BFS/DFS)",
+      "type": "practice",
+      "estimatedMinutes": 75,
+      "priority": "core",
+      "topics": [
+        "trees",
+        "graphs"
+      ],
+      "notBeforeDay": 101,
+      "dependsOn": [
+        "binary-tree-level-order-traversal",
+        "number-of-islands"
+      ],
+      "description": "Solve 2 Medium Tree/Graph problems under timed constraints. Focus on clean recursion syntax, handling null root nodes, and graph visited set edge checks.",
+      "resources": [
+        {
+          "title": "Grind 75 Tool",
+          "url": "https://www.techinterviewhandbook.org/grind75/",
+          "kind": "tool",
+          "minutes": 45,
+          "sourceId": "tech-interview-handbook"
+        }
+      ]
+    },
+    {
+      "id": "grind75-timed-mock-session-3",
+      "moduleId": "grind75-mock-prep",
+      "order": 3,
+      "title": "Grind 75 Timed Mock Session 3 (Heap & Backtracking)",
+      "type": "practice",
+      "estimatedMinutes": 75,
+      "priority": "core",
+      "topics": [
+        "heap",
+        "backtracking"
+      ],
+      "notBeforeDay": 103,
+      "dependsOn": [
+        "kth-largest-element-in-an-array",
+        "combination-sum"
+      ],
+      "description": "Solve 2 Medium Heap/Backtracking problems under 45-minute timed simulation. Verify state undoing and time complexity explanations.",
+      "resources": [
+        {
+          "title": "Grind 75 Tool",
+          "url": "https://www.techinterviewhandbook.org/grind75/",
+          "kind": "tool",
+          "minutes": 45,
+          "sourceId": "tech-interview-handbook"
+        }
+      ]
+    },
+    {
+      "id": "grind75-timed-mock-session-4",
+      "moduleId": "grind75-mock-prep",
+      "order": 4,
+      "title": "Grind 75 Timed Mock Session 4 (Dynamic Programming)",
+      "type": "practice",
+      "estimatedMinutes": 75,
+      "priority": "core",
+      "topics": [
+        "dp-1d",
+        "dp-2d"
+      ],
+      "notBeforeDay": 105,
+      "dependsOn": [
+        "coin-change",
+        "unique-paths"
+      ],
+      "description": "Solve 2 Medium Dynamic Programming problems under timed conditions. Write out state definitions and base cases on paper prior to writing code.",
+      "resources": [
+        {
+          "title": "Grind 75 Tool",
+          "url": "https://www.techinterviewhandbook.org/grind75/",
+          "kind": "tool",
+          "minutes": 45,
+          "sourceId": "tech-interview-handbook"
+        }
+      ]
+    },
+    {
+      "id": "interview-cheatsheet-and-edge-case-review",
+      "moduleId": "grind75-mock-prep",
+      "order": 5,
+      "title": "Tech Interview Cheatsheets & Edge Case Audit",
+      "type": "review",
+      "estimatedMinutes": 60,
+      "priority": "core",
+      "topics": [
+        "arrays-hashing",
+        "trees",
+        "graphs",
+        "dp-1d"
+      ],
+      "dependsOn": [
+        "grind75-timed-mock-session-4"
+      ],
+      "description": "Review Tech Interview Handbook algorithms cheatsheet. Memorize standard edge cases: empty array, single element, negative numbers, integer overflow bounds, duplicate keys, cyclic graphs, and disjoint components.",
+      "objectives": [
+        "Audit universal coding interview edge cases",
+        "Review time and space complexity summary tables",
+        "Master STAR methodology for behavioral interview questions"
+      ],
+      "keyConcepts": [
+        "Edge case audit",
+        "Complexity lookup table",
+        "Whiteboard code formatting",
+        "STAR behavioral framework"
+      ],
+      "verificationQuestions": [
+        "What edge cases should you always test before declaring your code complete?",
+        "How do you explain trade-offs if an interviewer asks for better space complexity?"
+      ],
+      "resources": [
+        {
+          "title": "Tech Interview Cheatsheets & Strategy",
+          "url": "https://www.techinterviewhandbook.org/",
+          "kind": "article",
+          "minutes": 40,
+          "sourceId": "tech-interview-handbook"
+        }
+      ]
+    }
+  ]
+}

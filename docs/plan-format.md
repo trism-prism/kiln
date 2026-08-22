@@ -277,6 +277,8 @@ The scheduler is a pure, deterministic function (stage 4). It runs on import and
 3. The daily practice slot (see dailyPractice).
 4. Ready tasks in plan order: dependencies completed or already scheduled, `notBeforeDay` reached. Tasks are never split. Several plans are interleaved by the per-plan weight set in the app.
 
+The first task of a day always fits, however long, so a day can run over its budget when that task is larger than the room reviews and practice left.
+
 Then deadlines are checked and priority-based deferral runs (see Priority). Budget, start date, blackout days, the plan weight and the auto-mode deadline are app settings, never file fields.
 
 ## Validation
