@@ -1,0 +1,21 @@
+name = "kiln-worker"
+main = "src/index.ts"
+compatibility_date = "2026-11-01"
+
+[triggers]
+crons = ["*/15 * * * *"]
+
+[vars]
+# Browsers allowed to call the Worker (comma separated). Add the production origin at deploy time.
+ALLOWED_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173"
+# Public VAPID key (base64url, 65 bytes). Generate a pair with `npm run vapid`; the private half is a secret.
+VAPID_PUBLIC_KEY = "REPLACE_WITH_OUTPUT_OF_npm_run_vapid"
+VAPID_SUBJECT = "mailto:REPLACE_ME@example.com"
+# Secret (not stored here): `npx wrangler secret put VAPID_PRIVATE_KEY`
+
+[[d1_databases]]
+binding = "DB"
+database_name = "kiln"
+# Placeholder: set after `npx wrangler d1 create kiln` prints the real id.
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
