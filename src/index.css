@@ -1,1 +1,132 @@
 @import "tailwindcss";
+@import "@fontsource-variable/instrument-sans/wght.css";
+
+/*
+  Kiln design tokens. This file is the source of truth: src/styles/contrast.test.ts
+  parses the light-dark() pairs below and checks WCAG AA for every text/background pair.
+  Each color is light-dark(<light>, <dark>) and resolves from the element's color-scheme,
+  so [data-theme] on any element (html, or a preview panel on /design) flips it.
+*/
+:root,
+[data-theme] {
+  /* Surfaces: warm neutrals, charcoal in dark */
+  --kiln-surface: light-dark(#f7f4ee, #161513);
+  --kiln-surface-raised: light-dark(#fdfbf7, #1e1c19);
+  --kiln-surface-muted: light-dark(#efe9df, #2a2723);
+  --kiln-border: light-dark(#e2dbcf, #34302b);
+  --kiln-border-strong: light-dark(#8c8377, #7d7569);
+
+  /* Text */
+  --kiln-text: light-dark(#1f1b16, #efe9de);
+  --kiln-text-muted: light-dark(#665d52, #a69e92);
+
+  /* Fired clay accent */
+  --kiln-accent: light-dark(#a8481c, #e58a5c);
+  --kiln-accent-contrast: light-dark(#fffaf5, #1c0f08);
+
+  /* Meaning */
+  --kiln-danger: light-dark(#b3202f, #f2737c);
+  --kiln-danger-contrast: light-dark(#fffafa, #1f0a0c);
+  --kiln-success: light-dark(#3d6b2c, #8cc276);
+  --kiln-warning: light-dark(#85570a, #e2b45a);
+  --kiln-focus: light-dark(#a8481c, #e58a5c);
+  --kiln-scrim: light-dark(rgb(20 16 12 / 0.45), rgb(0 0 0 / 0.6));
+  --kiln-shadow-color: light-dark(rgb(31 27 22 / 0.08), rgb(0 0 0 / 0.4));
+}
+
+@theme inline {
+  --color-*: initial;
+  --color-surface: var(--kiln-surface);
+  --color-surface-raised: var(--kiln-surface-raised);
+  --color-surface-muted: var(--kiln-surface-muted);
+  --color-border: var(--kiln-border);
+  --color-border-strong: var(--kiln-border-strong);
+  --color-text: var(--kiln-text);
+  --color-text-muted: var(--kiln-text-muted);
+  --color-accent: var(--kiln-accent);
+  --color-accent-contrast: var(--kiln-accent-contrast);
+  --color-danger: var(--kiln-danger);
+  --color-danger-contrast: var(--kiln-danger-contrast);
+  --color-success: var(--kiln-success);
+  --color-warning: var(--kiln-warning);
+  --color-focus: var(--kiln-focus);
+}
+
+@theme {
+  --font-sans: "Instrument Sans Variable", ui-sans-serif, system-ui, sans-serif;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  --shadow-sm: 0 1px 2px var(--kiln-shadow-color);
+  --shadow-lg: 0 8px 24px var(--kiln-shadow-color);
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+  --default-transition-duration: 150ms;
+  --default-transition-timing-function: var(--ease-out);
+
+  /* Entrances only: popovers rise a few pixels, sheets slide up, overlays fade */
+  --animate-rise: kiln-rise var(--duration-base) var(--ease-out);
+  --animate-sheet: kiln-sheet var(--duration-slow) var(--ease-out);
+  --animate-fade: kiln-fade var(--duration-base) var(--ease-out);
+
+  @keyframes kiln-rise {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
+  @keyframes kiln-sheet {
+    from {
+      transform: translateY(24px);
+      opacity: 0;
+    }
+  }
+  @keyframes kiln-fade {
+    from {
+      opacity: 0;
+    }
+  }
+}
+
+:root {
+  color-scheme: light dark;
+}
+[data-theme="light"] {
+  color-scheme: light;
+}
+[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+@layer base {
+  body {
+    background-color: var(--kiln-surface);
+    color: var(--kiln-text);
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible {
+    outline: 2px solid var(--kiln-focus);
+    outline-offset: 2px;
+  }
+  /* React Aria sets data-focus-visible on its components; mirror the native ring */
+  [data-focus-visible] {
+    outline: 2px solid var(--kiln-focus);
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
