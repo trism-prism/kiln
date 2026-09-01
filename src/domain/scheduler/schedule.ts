@@ -62,11 +62,12 @@ function buildCtx(input: ScheduleInput): Ctx {
 
   const fixed = new Map<string, string>()
   const baseBacklog = new Set<string>()
+  const skipPlans = new Set(input.plans.filter((p) => p.skipOptional).map((p) => p.id))
   const pending: SchedTask[] = []
   for (const t of tasks) {
     if (t.status !== 'open') continue
     const overdue = input.mode === 'reschedule' && t.scheduledDate !== undefined && t.scheduledDate < input.today
-    if (input.skipOptional && t.priority === 'optional' && !t.pinnedDate) baseBacklog.add(t.id)
+    if ((input.skipOptional || skipPlans.has(t.planId)) && t.priority === 'optional' && !t.pinnedDate) baseBacklog.add(t.id)
     else if (t.pinnedDate) fixed.set(t.id, t.pinnedDate)
     else if (t.inBacklog && input.mode === 'reschedule') baseBacklog.add(t.id)
     else if (t.scheduledDate && !overdue) fixed.set(t.id, t.scheduledDate)

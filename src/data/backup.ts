@@ -49,6 +49,7 @@ export function rowSchemas(now: number) {
         weight: int.min(1).max(5),
         startDate: day,
         deadline: day.optional(),
+        skipOptional: z.boolean().optional(),
         partTotal: int.min(1).max(20),
         partsIn: z.array(int.min(1).max(20)),
       }),
@@ -111,6 +112,19 @@ export function rowSchemas(now: number) {
         rating: rating.optional(),
         completedAt: num,
       }),
+      // Added in schema 3; older backups have none.
+      practiceItems: rows({
+        planId: str,
+        date: day,
+        slug: str,
+        title: str,
+        difficulty: z.enum(['easy', 'medium', 'hard']),
+        topic: str.optional(),
+        minutes: num,
+        status: z.enum(['open', 'done']),
+        rating: rating.optional(),
+        completedAt: num.optional(),
+      }),
       settings: rows({
         minutesPerWeekday: z.array(int.min(0).max(1440)).length(7),
         weekStartsOn: z.enum(['monday', 'sunday']),
@@ -138,6 +152,7 @@ function backupSchema(now: number) {
       reviewCards: list(r.reviewCards),
       reviewLogs: list(r.reviewLogs),
       practiceLog: list(r.practiceLog),
+      practiceItems: list(r.practiceItems),
       settings: list(r.settings),
     }),
   })
