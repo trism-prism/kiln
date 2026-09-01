@@ -14,7 +14,7 @@ The layout follows a familiar course-site pattern: left nav rail with a red coun
 | To Do | [light](todo-desktop-light.png), [dark](todo-desktop-dark.png) | [light](todo-phone-light.png), [dark](todo-phone-dark.png) |
 | Design system (full page) | [light](design-desktop-light.png), [dark](design-desktop-dark.png) | [light](design-phone-light.png), [dark](design-phone-dark.png) |
 
-The /design page shows every token and component twice, light and dark side by side, whatever the system theme. Regenerate with `SCREENSHOTS=1 npx playwright test screenshots`.
+The /design page shows every token and component twice, light and dark side by side, whatever the system theme. Dashboard and To Do are shot with the sample plans three days in (one lesson done, the rest overdue); the design page has no data. Regenerate with `SCREENSHOTS=1 npx playwright test screenshots`.
 
 ## Tokens
 
@@ -57,7 +57,7 @@ All in `src/ui/`, built on react-aria-components:
 
 ## What to look at
 
-- The To Do badge: the shell shows none until stage 7 wires the real count; /design shows it at 1, 3, 42 and 99+.
+- The To Do badge: live count of open work today, overdue work and reviews due; /design shows it at 1, 3, 42 and 99+.
 - Whether the terracotta accent and the crimson overdue red read as different things.
 - Dark mode: charcoal surfaces and the ember accent on the primary button.
 - The phone tab bar: Dashboard, To Do, Calendar, Plans, More (Brush up, Import, Settings).
@@ -71,3 +71,13 @@ Each route is a lazily loaded file in `src/app/pages/` that renders `<Page title
 ## Accessibility baseline
 
 Skip link, `nav` and `main` landmarks, focus moves to the page heading after each in-app navigation (not on first load), `lang="en"`, a document title per route (`To Do · Kiln`), visible focus rings in the accent, keyboard navigation through the rail (Tab) and tabs (arrow keys), reduced motion. Playwright runs axe on /, /todo and /design in light and dark and fails on any serious or critical violation.
+
+## Screens (stage 7)
+
+- To Do (`/todo`): five ranges as a segmented control; overdue pinned on top in the danger color; day headers (Today, Tomorrow, weekday); each row has a checkbox, title, plan, type, minutes, a LeetCode badge and a Solve in Python link. Done rows stay in place in the muted color and still open. Checking an item that gets a review card opens the rating sheet (Again, Hard, Good, Easy; keys 1 to 4), others complete at once; an Undo toast follows.
+- Task (`/task/:taskId`): breadcrumb, due date, time, priority, type, description, objectives, key concepts, tradeoffs, check-yourself questions, resources, practice link, dependencies; actions Mark done / Rate again, Skip, Pin to date, Reschedule.
+- Dashboard: one card per plan; Reschedule overdue in the top bar when anything is overdue.
+- Plans and plan page: collapsible modules, backlog with Schedule again, plan settings (weight, skip optional work, deadline), delete with a confirm sheet.
+- Brush up: weakest first with a recall bar and Review now (opens the rating sheet), then mastery by topic.
+
+Sample data: `npm run dev` shows a Load sample plans button on the empty dashboard, and `?seed=1` or `window.kilnSeed()` loads the same plans. The e2e build (`npm run build:e2e`, `vite build --mode e2e`) has the hook too; the production build does not.
