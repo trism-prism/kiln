@@ -2,10 +2,11 @@ import { Button, Link } from '../../ui/button'
 import { Badge, Card, EmptyState, Meter, ProgressBar, Skeleton } from '../../ui/surface'
 import { formatDay } from '../../lib/date'
 import { rescheduleOverdue } from '../actions'
+import { StreakChip } from '../calendar/Streak'
 import { canSeed, loadSamplePlans } from '../devSeed'
 import { Page } from '../Page'
 import { percent } from '../parts'
-import { usePlanSummaries, useToday, type PlanSummary } from '../queries'
+import { usePlanSummaries, useStudy, useToday, type PlanSummary } from '../queries'
 
 const pct = (n: number, of: number) => (of > 0 ? Math.round((n / of) * 100) : 0)
 
@@ -48,6 +49,7 @@ function PlanCard({ s }: { s: PlanSummary }) {
 export default function DashboardPage() {
   const today = useToday()
   const plans = usePlanSummaries(today)
+  const study = useStudy(today)
   const overdue = plans?.reduce((n, s) => n + s.overdue, 0) ?? 0
 
   return (
@@ -74,10 +76,17 @@ export default function DashboardPage() {
           Import a study plan and Kiln turns it into a daily list with due dates, reviews and one LeetCode problem a day.
         </EmptyState>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {plans.map((s) => (
-            <PlanCard key={s.plan.id} s={s} />
-          ))}
+        <div className="grid gap-4">
+          {study && (
+            <div>
+              <StreakChip stats={study.stats} />
+            </div>
+          )}
+          <div className="grid gap-4 md:grid-cols-2">
+            {plans.map((s) => (
+              <PlanCard key={s.plan.id} s={s} />
+            ))}
+          </div>
         </div>
       )}
     </Page>
