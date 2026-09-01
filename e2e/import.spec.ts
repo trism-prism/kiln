@@ -18,6 +18,9 @@ async function importIt(page: Page, button: string | RegExp = /^Import "/) {
   await go.click()
   await expect(page).toHaveURL(/\/plans\/.+/)
   await expect(page.getByText(/^Imported "/)).toBeVisible()
+  // The plan page lists the imported plan's modules.
+  await expect(page.getByRole('heading', { level: 2, name: 'Modules' })).toBeVisible()
+  await expect(page.locator('details').first()).toBeVisible()
 }
 
 test('imports the DSA plan in three parts, then system design', async ({ page }) => {

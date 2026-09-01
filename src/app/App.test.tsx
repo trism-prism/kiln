@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import 'fake-indexeddb/auto'
 import { cleanup, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -32,7 +33,7 @@ describe('shell routes', () => {
     expect(screen.getAllByRole('navigation', { name: 'Main' }).length).toBeGreaterThan(0)
     expect(screen.getByRole('main')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Skip to content' })).toBeTruthy()
-    // No badge until stage 7 wires the count, so the link name is just the label.
+    // An empty database has no badge, so the link name is just the label.
     expect(screen.getAllByRole('link', { name: 'To Do' }).length).toBeGreaterThan(0)
   })
 })

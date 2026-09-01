@@ -356,6 +356,16 @@ describe('deadlines and deferral', () => {
   })
 })
 
+describe('skipOptional per plan', () => {
+  it('sends only the flagged plan optional tasks to the backlog', () => {
+    const out = run({
+      plans: [plan('p', { skipOptional: true }), plan('q')],
+      tasks: [...tasks('p', [['a', 30, { priority: 'optional' }]]), ...tasks('q', [['b', 30, { priority: 'optional' }]])],
+    })
+    expect(out.assignments).toEqual({ 'p-a': 'backlog', 'q-b': '2026-11-02' })
+  })
+})
+
 describe('unplaceable work', () => {
   it('a core task behind a backlog task is blocked', () => {
     const ts = tasks('p', [['o', 10, { priority: 'optional' }], ['c', 10, { dependsOn: ['o'] }]])
