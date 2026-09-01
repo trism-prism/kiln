@@ -19,8 +19,11 @@ const day = z.iso.date()
 const fsrsState = int.min(0).max(3)
 const rating = int.min(1).max(4)
 
-/** The schema of a backup. Built per import so "not in the future" is measured at parse time. */
-function backupSchema(now: number) {
+/**
+ * One Zod object per synced table (a single row). Built per call so "not in the future" is
+ * measured at parse time. Shared by backup import and sync.
+ */
+export function rowSchemas(now: number) {
   const base = {
     id: str.min(1),
     // A far-future updatedAt would win every later merge, so it is bounded (one day of clock skew).
@@ -29,13 +32,9 @@ function backupSchema(now: number) {
     deviceId: str,
   }
   // z.object strips unknown fields, so only checked fields are ever written.
-  const rows = <T extends z.ZodRawShape>(shape: T) => z.array(z.object({ ...base, ...shape })).default([])
+  const rows = <T extends z.ZodRawShape>(shape: T) => z.object({ ...base, ...shape })
 
-  return z.object({
-    app: z.literal(BACKUP_APP),
-    schemaVersion: int.min(1),
-    exportedAt: str,
-    tables: z.object({
+  return {
       plans: rows({
         key: str,
         title: ps.title,
@@ -70,6 +69,7 @@ function backupSchema(now: number) {
         pinnedDate: day.optional(),
         status: z.enum(['open', 'done', 'skipped']),
         completedAt: num.optional(),
+        backlog: z.boolean().optional(),
       }),
       reviewCards: rows({
         planId: str,
@@ -121,8 +121,60 @@ function backupSchema(now: number) {
         reviewCapPercent: num.min(0).max(100),
         blackoutDates: z.array(day),
       }),
+  } satisfies Record<TableName, z.ZodType>
+}
+
+function backupSchema(now: number) {
+  const r = rowSchemas(now)
+  const list = <T extends z.ZodType>(row: T) => z.array(row).default([])
+  return z.object({
+    app: z.literal(BACKUP_APP),
+    schemaVersion: int.min(1),
+    exportedAt: str,
+    tables: z.object({
+      plans: list(r.plans),
+      modules: list(r.modules),
+      tasks: list(r.tasks),
+      reviewCards: list(r.reviewCards),
+      reviewLogs: list(r.reviewLogs),
+      practiceLog: list(r.practiceLog),
+      settings: list(r.settings),
     }),
   })
+}
+
+/**
+ * Last-write-wins merge of rows into one table, by id: a row is taken when it is new or its
+ * updatedAt is larger than the stored one (ties keep the stored row). If an id appears twice, the
+ * copy with the larger updatedAt counts. With `takeTies` (sync: the incoming row comes from the
+ * server, which settles ties), an equal updatedAt from another device also replaces the stored
+ * row, so devices that wrote at the same millisecond end up identical. Call inside a read-write
+ * transaction on the table.
+ */
+export async function mergeRows(
+  t: Table<Base, string>,
+  rows: Base[],
+  opts: { takeTies?: boolean } = {},
+): Promise<{ added: number; replaced: number; kept: number }> {
+  const byId = new Map<string, Base>()
+  for (const r of rows) {
+    const dup = byId.get(r.id)
+    if (!dup || r.updatedAt > dup.updatedAt) byId.set(r.id, r)
+  }
+  const incoming = [...byId.values()]
+  const stored = await t.bulkGet(incoming.map((r) => r.id))
+  const take: Base[] = []
+  let added = 0
+  let replaced = 0
+  incoming.forEach((r, i) => {
+    const old = stored[i]
+    if (!old) added++
+    else if (r.updatedAt > old.updatedAt || (opts.takeTies && r.updatedAt === old.updatedAt && r.deviceId !== old.deviceId)) replaced++
+    else return
+    take.push(r)
+  })
+  await t.bulkPut(take)
+  return { added, replaced, kept: incoming.length - added - replaced }
 }
 
 export async function exportBackup(db: KilnDB): Promise<string> {
@@ -164,26 +216,7 @@ export async function importBackup(db: KilnDB, text: string): Promise<BackupResu
   const result: BackupResult = {}
   await db.transaction('rw', TABLE_NAMES.map((n) => db.table(n)), async () => {
     for (const name of TABLE_NAMES) {
-      const t = db.table(name) as Table<Base, string>
-      const byId = new Map<string, Base>()
-      for (const r of backup.tables[name as TableName] as Base[]) {
-        const dup = byId.get(r.id)
-        if (!dup || r.updatedAt > dup.updatedAt) byId.set(r.id, r)
-      }
-      const incoming = [...byId.values()]
-      const stored = await t.bulkGet(incoming.map((r) => r.id))
-      const take: Base[] = []
-      let added = 0
-      let replaced = 0
-      incoming.forEach((r, i) => {
-        const old = stored[i]
-        if (!old) added++
-        else if (r.updatedAt > old.updatedAt) replaced++
-        else return
-        take.push(r)
-      })
-      await t.bulkPut(take)
-      result[name] = { added, replaced, kept: incoming.length - added - replaced }
+      result[name] = await mergeRows(db.table(name) as Table<Base, string>, backup.tables[name as TableName] as Base[])
     }
   })
   return result

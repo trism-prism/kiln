@@ -13,7 +13,7 @@ Dexie (IndexedDB) database `kiln`, a small repository API, and JSON backup. No R
 | `reviewLogs` | one row per review | `cardId`, `reviewedAt` |
 | `practiceLog` | daily LeetCode problems done | `date`, `slug` |
 | `settings` | singleton, id `settings`: minutes per weekday (Mon first), week start, reminder 08:00, optional 20:00 nudge, theme, review cap 25%, blackout dates | |
-| `meta` | device-local (`deviceId`); never exported or synced | |
+| `meta` | device-local (`deviceId`, sync key and state); never exported or synced | |
 
 ## Record shape
 
@@ -24,6 +24,10 @@ Ids from a plan file (slugs) are stored as `key`, scoped by `planId`; look them 
 ## Writes
 
 Use `insertRecord`, `updateRecord`, `softDelete`, `softDeletePlan`, `setTaskStatus`, `updateSettings` and `importPlan` so `updatedAt` and `deviceId` are always set. Do not write to the tables directly. `getSettings` returns defaults (with `updatedAt` 0) until the user saves.
+
+## Sync
+
+Every table except `meta` syncs (`src/sync/README.md`). It reuses `rowSchemas` and `mergeRows` from `backup.ts`, so a new field must be added to the row schema there or it is dropped by backup import and by sync.
 
 ## Scheduling
 
