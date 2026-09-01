@@ -22,7 +22,7 @@ const tones = {
 /** A short status tag, like "Overdue" or "Done". Color carries meaning only; the word says it too. */
 export function Badge({ tone = 'neutral', children }: { tone?: keyof typeof tones; children: ReactNode }) {
   return (
-    <span className={`inline-flex h-6 items-center rounded-sm px-2 text-xs font-medium ${tones[tone]}`}>
+    <span className={`inline-flex h-6 shrink-0 items-center rounded-sm px-2 text-xs font-medium whitespace-nowrap ${tones[tone]}`}>
       {children}
     </span>
   )
