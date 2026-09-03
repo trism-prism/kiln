@@ -1,4 +1,4 @@
-Pure TypeScript domain modules (no React): plan-format, import, scheduler, practice, mastery, badge. Added from stage 2 on.
+Pure TypeScript domain modules (no React): plan-format, import, scheduler, practice, mastery, badge, todo. Added from stage 2 on.
 
 ## scheduler
 
@@ -9,7 +9,7 @@ Pure TypeScript domain modules (no React): plan-format, import, scheduler, pract
 - Plans take turns by fewest placed minutes per weight, ties to the lower plan id. A task that does not fit waits; later ready tasks of the same module may fill the room, tasks of later modules never jump past it.
 - The first task of a day always fits, however long. The budget is a target: a day can run over when that first task is larger than the room reviews and practice left. Without this a long assessment could wait forever.
 - Reviews take at most `reviewCapPercent` of the budget (default 25), and never more than is left after pinned and dated work. The caller supplies the minutes due per date.
-- Daily problems: plan problems first (ready, fit), then generated NeetCode ones at 25 / 40 / 60 minutes. The ramp assumes every problem scheduled in the run is rated Good. The topic is the NeetCode topic of the latest lesson placed, else roadmap order. Generated problems are returned, not stored.
+- Daily problems: plan problems first (ready, fit), then generated NeetCode ones at 25 / 40 / 60 minutes. The ramp assumes every problem scheduled in the run is rated Good. The topic is the NeetCode topic of the latest lesson placed, else roadmap order. Generated problems are returned; `scheduleAll` stores them (see src/data/README.md, daily problems).
 - Deadlines: for a plan that misses its deadline, the fewest tasks that fix it are sent to the backlog (optional before recommended, latest in plan order first, never core, dependents of a deferred task go with it). If deferring everything allowed still misses, nothing is deferred and the miss is reported.
 - The practice slot obeys the same module block as ordinary tasks. Generated problems stop after the plan's deadline and once the plan has nothing left to place.
 - Violations: `plan-deadline`, `task-deadline`, and `dependency` (a pinned or already dated task whose open dependency is in the backlog, undated, or not dated earlier).
@@ -18,3 +18,7 @@ Pure TypeScript domain modules (no React): plan-format, import, scheduler, pract
 ## practice
 
 `practice/ramp.ts`: `targetDifficulty` (easy until 5 Good/Easy easy problems with at least 2 in the topic, then medium; after 10 mediums or in the final 14 days every third problem is hard) and `pickProblem` (topic first, then difficulty, NeetCode 150 first). `neetcode-problems.json` is a reduced snapshot of NeetCode's MIT problem list (title, slug, difficulty, topic); regenerate with `npm run neetcode`. `NEETCODE_SLUGS` is the `knownSlugs` set for `validatePlan`.
+
+## todo
+
+`todo/index.ts`: `buildTodoItems` turns scheduled tasks, stored daily problems and live review cards into dated items (a review due today or earlier is listed today, like the badge counts it; reviews are never overdue; skipped and undated tasks are left out), and `todoView(items, range, today)` cuts them into a range (`today`, `next7` = today..+6, `next28`, `past7`, `past28`) grouped by day. Forward ranges pin every open overdue item in an `overdue` list; past ranges list what was dated in the window, done or still open, newest day first.

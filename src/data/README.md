@@ -12,6 +12,7 @@ Dexie (IndexedDB) database `kiln`, a small repository API, and JSON backup. No R
 | `reviewCards` | FSRS card state as plain data (due, stability, difficulty, reps, lapses, state, learningSteps) plus `minutes` per review | `taskId`, `planId`, `due` |
 | `reviewLogs` | one row per review | `cardId`, `reviewedAt` |
 | `practiceLog` | daily LeetCode problems done | `date`, `slug` |
+| `practiceItems` | generated daily LeetCode problems placed on a date, open or done (added in schema 3) | `[planId+date+slug]`, `date`, `planId` |
 | `settings` | singleton, id `settings`: minutes per weekday (Mon first), week start, reminder 08:00, optional 20:00 nudge, theme, review cap 25%, blackout dates | |
 | `meta` | device-local (`deviceId`, sync key and state); never exported or synced | |
 
@@ -31,7 +32,15 @@ Every table except `meta` syncs (`src/sync/README.md`). It reuses `rowSchemas` a
 
 ## Scheduling
 
-`scheduleAll(db, today, { mode, skipOptional, reviewsDue })` (`schedule.ts`) runs the scheduler (src/domain/scheduler) over all complete plans and writes `scheduledDate` or `backlog` in one transaction.
+`scheduleAll(db, today, { mode, skipOptional, reviewsDue })` (`schedule.ts`) runs the scheduler (src/domain/scheduler) over all complete plans and writes `scheduledDate` or `backlog` in one transaction. A plan's own `skipOptional` flag sends only that plan's optional work to the backlog.
+
+## Daily problems (`practice.ts`)
+
+The scheduler returns generated LeetCode problems; `scheduleAll` stores them in `practiceItems` (`persistPractice`) so they stay the same and can be checked off. Done items and items before today are never touched; today's stored items stay; open items after today follow the new output but only as far as the output reaches (the scheduler generates problems only while it still has tasks to place, so a run with nothing to place leaves the stored ones alone). A `reschedule` run also drops open items before today (it generates fresh ones from today). `completePractice(db, itemId, rating, now)` marks one done, writes the `practiceLog` row (first time only) and creates or rates its re-solve card (a card with `slug` and no `taskId`).
+
+`completeTask`, `reviewCard` and `completePractice` return an `undo()` that puts every record they touched back (`revertWrite` in `repo.ts`).
+
+`seed.ts` (`seedFixtures(db, today)`) loads the fixture plans for local testing and e2e; the app reaches it only through `src/app/devSeed.ts`, which is compiled out of production builds.
 
 ## Mastery (`mastery.ts`)
 

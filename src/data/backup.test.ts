@@ -21,7 +21,7 @@ describe('backup', () => {
     const { db } = await seeded()
     const text = await exportBackup(db)
     const parsed = JSON.parse(text)
-    expect(parsed).toMatchObject({ app: 'kiln', schemaVersion: 2 })
+    expect(parsed).toMatchObject({ app: 'kiln', schemaVersion: 3 })
     expect(parsed.tables.meta).toBeUndefined()
 
     const other = newDb()

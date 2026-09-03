@@ -1,0 +1,147 @@
+import { expect, test, type Page } from '@playwright/test'
+import { advanceDays, openSeeded } from './seed'
+
+const badgeCount = async (page: Page) => {
+  const name = (await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /^To Do/ }).first().getAttribute('aria-label')) ?? ''
+  return Number(/, (\d+) items? due/.exec(name)?.[1] ?? 0)
+}
+
+test('seed, To Do matches the badge, complete a lesson, review comes back and shows in brush up', async ({ page }) => {
+  await openSeeded(page, '/todo')
+  await expect(page.getByRole('heading', { level: 1, name: 'To Do' })).toBeVisible()
+  const today = page.getByRole('region', { name: 'Today' })
+  await expect(today).toBeVisible()
+
+  // Today's open items = the badge.
+  const open = today.getByRole('checkbox', { checked: false })
+  await expect.poll(async () => open.count()).toBeGreaterThan(1)
+  const before = await open.count()
+  await expect.poll(() => badgeCount(page)).toBe(before)
+
+  // A daily LeetCode problem is listed with a link and a difficulty.
+  const daily = today.getByRole('listitem').filter({ hasText: 'Daily problem' }).first()
+  await expect(daily.getByRole('link', { name: /Solve in Python/ })).toHaveAttribute('href', /^https:\/\/leetcode\.com\/problems\/[a-z0-9-]+\/$/)
+  await expect(daily.getByText(/^LeetCode (Easy|Medium|Hard)$/)).toBeVisible()
+
+  // Complete a lesson with "Good" (key 3).
+  const lesson = today.getByRole('listitem').filter({ hasText: '· Lesson ·' }).first()
+  const title = (await lesson.getByRole('link').first().innerText()).trim()
+  await lesson.getByRole('checkbox').click({ force: true })
+  const sheet = page.getByRole('dialog', { name: 'How did it go?' })
+  await expect(sheet).toBeVisible()
+  await expect(sheet.getByRole('button', { name: /^Again/ })).toBeVisible()
+  await page.keyboard.press('3')
+  await expect(sheet).toBeHidden()
+  await expect(lesson.getByRole('checkbox')).toBeChecked()
+  await expect(lesson.getByText('Done', { exact: true })).toBeVisible()
+  await expect.poll(() => badgeCount(page)).toBe(before - 1)
+
+  // Greyed but still in place and openable.
+  await lesson.getByRole('link').first().click()
+  await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible()
+  await expect(page.getByText(/^Completed /)).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Rate again' })).toBeVisible()
+  await page.goBack()
+
+  // Three days later the first review is due, listed as its own item.
+  await advanceDays(page, 3)
+  await expect(page.getByRole('listitem').filter({ hasText: `Review: ${title}` })).toBeVisible()
+  await expect.poll(() => badgeCount(page)).toBeGreaterThan(0)
+
+  // Brush up lists it as due, with a recall bar, and Review now rates it.
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Brush up' }).click()
+  const entry = page.getByRole('listitem').filter({ hasText: title })
+  await expect(entry).toBeVisible()
+  await expect(entry.getByText('Due', { exact: true })).toBeVisible()
+  await expect(entry.getByRole('meter', { name: 'Recall' })).toBeVisible()
+  await entry.getByRole('button', { name: /^Review now/ }).click()
+  await page.getByRole('button', { name: /^Easy/ }).click()
+  await expect(page.getByText(`Reviewed: ${title}`)).toBeVisible()
+  await expect(entry.getByText('Due', { exact: true })).toBeHidden()
+})
+
+test('undo from the toast puts a completion back', async ({ page }) => {
+  await openSeeded(page, '/todo')
+  const today = page.getByRole('region', { name: 'Today' })
+  const lesson = today.getByRole('listitem').filter({ hasText: '· Lesson ·' }).first()
+  await expect(lesson).toBeVisible()
+  const before = await today.getByRole('checkbox', { checked: false }).count()
+  await lesson.getByRole('checkbox').click({ force: true })
+  await page.getByRole('button', { name: /^Hard/ }).click()
+  await expect(lesson.getByRole('checkbox')).toBeChecked()
+  await page.getByRole('button', { name: 'Undo' }).click()
+  await expect(lesson.getByRole('checkbox')).not.toBeChecked()
+  await expect.poll(() => today.getByRole('checkbox', { checked: false }).count()).toBe(before)
+})
+
+test('overdue work is pinned on top and can be rescheduled', async ({ page }) => {
+  await openSeeded(page, '/todo')
+  await advanceDays(page, 2)
+  const overdue = page.getByRole('region', { name: /^Overdue/ })
+  await expect(overdue).toBeVisible()
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Dashboard' }).click()
+  await page.getByRole('button', { name: /^Reschedule overdue/ }).click()
+  await expect(page.getByText('Overdue work rescheduled')).toBeVisible()
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /^To Do/ }).click()
+  await expect(page.getByRole('region', { name: /^Overdue/ })).toBeHidden()
+})
+
+test('range tabs: keyboard, forward lists group by day, past is empty on day one', async ({ page }) => {
+  await openSeeded(page, '/todo')
+  await page.getByRole('tab', { name: 'Today' }).focus()
+  await page.keyboard.press('ArrowRight')
+  await expect(page.getByRole('tab', { name: 'Next 7' })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('heading', { level: 2, name: 'Today' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 2, name: 'Tomorrow' })).toBeVisible()
+  await page.getByRole('tab', { name: 'Past 7' }).click()
+  await expect(page.getByRole('heading', { name: 'Nothing was due in the past 7 days' })).toBeVisible()
+})
+
+test('dashboard shows one card per plan', async ({ page }) => {
+  await openSeeded(page, '/')
+  const cards = page.getByRole('heading', { level: 2 })
+  await expect(cards).toHaveCount(2)
+  await expect(page.getByText('Core tasks')).toHaveCount(2)
+  await expect(page.getByText('Mastery')).toHaveCount(2)
+  await expect(page.getByText(/Projected finish/).first()).toBeVisible()
+  await expect(page.getByText(/Next: /).first()).toBeVisible()
+})
+
+test('plan page lists modules and opens a task', async ({ page }) => {
+  await openSeeded(page, '/plans')
+  await page.getByRole('heading', { level: 2 }).first().getByRole('link').click()
+  await expect(page.getByRole('heading', { level: 2, name: 'Modules' })).toBeVisible()
+  const modules = page.locator('details')
+  expect(await modules.count()).toBeGreaterThan(2)
+  await expect(modules.first()).toHaveAttribute('open', '')
+  await modules.first().getByRole('listitem').first().getByRole('link').click()
+  await expect(page.getByRole('navigation', { name: 'Breadcrumb' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Mark done' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Skip', exact: true })).toBeVisible()
+})
+
+test('deleting a plan asks first and removes it', async ({ page }) => {
+  await openSeeded(page, '/plans')
+  const first = page.getByRole('heading', { level: 2 }).first().getByRole('link')
+  const name = await first.innerText()
+  await first.click()
+  await page.getByRole('button', { name: 'Delete plan' }).click()
+  await expect(page.getByRole('dialog', { name: 'Delete this plan?' })).toBeVisible()
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete plan' }).click()
+  await expect(page).toHaveURL('/plans')
+  await expect(page.getByRole('link', { name, exact: true })).toBeHidden()
+})
+
+test('skip and pin on the task page', async ({ page }) => {
+  await openSeeded(page, '/todo')
+  const lesson = page.getByRole('region', { name: 'Today' }).getByRole('listitem').filter({ hasText: '· Lesson ·' }).first()
+  await lesson.getByRole('link').first().click()
+  await page.getByRole('button', { name: 'Skip', exact: true }).click()
+  await expect(page.getByText('Skipped', { exact: true }).first()).toBeVisible()
+  await page.getByRole('button', { name: 'Unskip' }).click()
+  await expect(page.getByRole('button', { name: 'Skip', exact: true })).toBeVisible()
+  await page.getByLabel('Pin to date').fill('2026-11-20')
+  await page.getByRole('button', { name: 'Pin', exact: true }).click()
+  await expect(page.getByText('Pinned to', { exact: true })).toBeVisible()
+  await expect(page.getByText('Fri, Nov 20, 2026').first()).toBeVisible()
+})

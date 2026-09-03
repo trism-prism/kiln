@@ -16,14 +16,14 @@ import {
   type SchedulerOptions,
 } from '../domain/mastery'
 import type { KilnDB } from './db'
-import { getDeviceId, insertRecord, setTaskStatus, updateRecord } from './repo'
+import { getDeviceId, insertRecord, revertWrite, setTaskStatus, updateRecord } from './repo'
 import type { ReviewCardRecord, ReviewLogRecord, TaskRecord } from './types'
 
 /** The app spreads review dates with fuzz; tests pass `{ fuzz: false }`. */
 const APP_OPTS: SchedulerOptions = { fuzz: true }
 
 /** The task's card. If two devices each made one before syncing, the smallest id wins everywhere. */
-async function liveCardForTask(db: KilnDB, taskId: string): Promise<ReviewCardRecord | undefined> {
+export async function liveCardForTask(db: KilnDB, taskId: string): Promise<ReviewCardRecord | undefined> {
   return (await db.reviewCards.where('taskId').equals(taskId).toArray()).filter((c) => !c.deleted).sort((a, b) => (a.id < b.id ? -1 : 1))[0]
 }
 
@@ -36,6 +36,8 @@ export interface CompleteResult {
   /** Undefined when the task type gets no review card (see cardMinutes). */
   card?: ReviewCardRecord
   log?: ReviewLogRecord
+  /** Puts everything back as it was before this call (task state, card, review log). False, and nothing changes, if a record was changed since. */
+  undo: () => Promise<boolean>
 }
 
 /**
@@ -55,10 +57,12 @@ export async function completeTask(
   await getDeviceId(db) // resolve before the transaction opens; the writes below reuse it
   // The callback must be an async function: Dexie keeps the transaction open across native awaits only then.
   return db.transaction('rw', db.tasks, db.reviewCards, db.reviewLogs, async () => {
+    const before = await db.tasks.get(taskId)
     const task = await setTaskStatus(db, taskId, 'done')
-    if (!task) throw new Error(`Task ${taskId} not found`)
+    if (!task || !before) throw new Error(`Task ${taskId} not found`)
+    const restoreTask: ['tasks', TaskRecord, number] = ['tasks', before, task.updatedAt]
     const minutes = cardMinutes(task)
-    if (minutes === undefined) return { task }
+    if (minutes === undefined) return { task, undo: () => revertWrite(db, { restore: [restoreTask] }) }
 
     const existing = await liveCardForTask(db, taskId)
     const { card, log } = rate(existing ?? newCard(now), rating, now, opts)
@@ -75,7 +79,13 @@ export async function completeTask(
         minutes,
       })
     }
-    return { task, card: rec, log: await logReview(db, rec.id, log) }
+    const logRec = await logReview(db, rec.id, log)
+    const undo = () =>
+      revertWrite(db, {
+        restore: existing ? [restoreTask, ['reviewCards', existing, rec.updatedAt]] : [restoreTask],
+        remove: existing ? [['reviewLogs', logRec.id]] : [['reviewLogs', logRec.id], ['reviewCards', rec.id]],
+      })
+    return { task, card: rec, log: logRec, undo }
   })
 }
 
@@ -86,14 +96,15 @@ export async function reviewCard(
   rating: RatingName,
   now: number,
   opts: SchedulerOptions = APP_OPTS,
-): Promise<{ card: ReviewCardRecord; log: ReviewLogRecord }> {
+): Promise<{ card: ReviewCardRecord; log: ReviewLogRecord; undo: () => Promise<boolean> }> {
   await getDeviceId(db)
   return db.transaction('rw', db.reviewCards, db.reviewLogs, async () => {
     const old = await db.reviewCards.get(cardId)
     if (!old || old.deleted) throw new Error(`Review card ${cardId} not found`)
     const { card, log } = rate(old, rating, now, opts)
     const rec = (await updateRecord(db, 'reviewCards', cardId, card))!
-    return { card: rec, log: await logReview(db, cardId, log) }
+    const logRec = await logReview(db, cardId, log)
+    return { card: rec, log: logRec, undo: () => revertWrite(db, { restore: [['reviewCards', old, rec.updatedAt]], remove: [['reviewLogs', logRec.id]] }) }
   })
 }
 
@@ -187,8 +198,10 @@ export interface BrushUpEntry extends BrushUpItem<ReviewCardRecord> {
 /** The brush-up list: cards due or with recall under 85%, weakest first. */
 export async function brushUp(db: KilnDB, now: number): Promise<BrushUpEntry[]> {
   const tasks = await liveTasks(db)
+  // Cards for generated daily problems have no task: their title comes from the problem record.
+  const problems = new Map((await db.practiceItems.toArray()).filter((p) => !p.deleted).map((p) => [p.slug, p.title]))
   return brushUpCards(await liveCards(db, tasks), now).map((i) => ({
     ...i,
-    title: (i.card.taskId && tasks.get(i.card.taskId)?.title) || i.card.slug || '',
+    title: (i.card.taskId && tasks.get(i.card.taskId)?.title) || (i.card.slug && (problems.get(i.card.slug) ?? i.card.slug)) || '',
   }))
 }

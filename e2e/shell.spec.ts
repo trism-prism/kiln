@@ -77,12 +77,10 @@ test('theme setting overrides the system and persists', async ({ page }) => {
   expect(bg).toBe('rgb(22, 21, 19)')
 })
 
-test('To Do range tabs switch with the keyboard', async ({ page }) => {
+test('To Do with no plans offers to import one', async ({ page }) => {
   await page.goto('/todo')
-  await page.getByRole('tab', { name: 'Today' }).focus()
-  await page.keyboard.press('ArrowRight')
-  await expect(page.getByRole('tab', { name: '7 days' })).toHaveAttribute('aria-selected', 'true')
-  await expect(page.getByRole('heading', { name: 'Nothing due in the next 7 days' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'No plans yet' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Import a plan' })).toBeVisible()
 })
 
 test('focus moves to the page heading after navigation, not on first load', async ({ page }) => {

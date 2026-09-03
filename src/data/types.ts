@@ -32,6 +32,8 @@ export interface PlanRecord extends Base {
   /** Day 1 of the plan. */
   startDate: string
   deadline?: string
+  /** Keep this plan's optional tasks in the backlog. */
+  skipOptional?: boolean
   // Part progress
   /** How many files the plan is split into (1 when not split). */
   partTotal: number
@@ -122,6 +124,25 @@ export interface PracticeLogRecord extends Base {
   completedAt: number
 }
 
+/**
+ * A daily LeetCode problem the scheduler generated for a day, kept so it stays the same between runs
+ * and can be checked off. Keyed by (planId, date, slug). Finished ones also get a practiceLog row.
+ */
+export interface PracticeItemRecord extends Base {
+  planId: string
+  date: string
+  slug: string
+  title: string
+  difficulty: 'easy' | 'medium' | 'hard'
+  topic?: string
+  /** Estimated minutes (the scheduler's, by difficulty). */
+  minutes: number
+  status: 'open' | 'done'
+  /** 1-4 as for reviews, set on completion. */
+  rating?: number
+  completedAt?: number
+}
+
 /** Singleton, id "settings". */
 export interface SettingsRecord extends Base {
   /** Study minutes available per weekday, Monday first. */
@@ -152,7 +173,8 @@ export interface Records {
   reviewCards: ReviewCardRecord
   reviewLogs: ReviewLogRecord
   practiceLog: PracticeLogRecord
+  practiceItems: PracticeItemRecord
   settings: SettingsRecord
 }
 export type TableName = keyof Records
-export const TABLE_NAMES: TableName[] = ['plans', 'modules', 'tasks', 'reviewCards', 'reviewLogs', 'practiceLog', 'settings']
+export const TABLE_NAMES: TableName[] = ['plans', 'modules', 'tasks', 'reviewCards', 'reviewLogs', 'practiceLog', 'practiceItems', 'settings']
