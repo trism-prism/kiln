@@ -11,7 +11,7 @@ import {
 } from '../domain/mastery'
 import type { GeneratedPractice } from '../domain/scheduler'
 import type { KilnDB } from './db'
-import { getDeviceId, insertRecord, revertWrite, updateRecord } from './repo'
+import { getDeviceId, insertRecord, revertWrite, stampAfter, updateRecord } from './repo'
 import type { PracticeItemRecord, PracticeLogRecord, ReviewCardRecord, ReviewLogRecord } from './types'
 import { uuidv7 } from './uuid'
 
@@ -39,7 +39,6 @@ export async function persistPractice(
   plans: { id: string; generates: boolean }[],
   dropOverdue: boolean,
 ): Promise<void> {
-  const stamp = { updatedAt: Date.now(), deviceId }
   const all = (await db.practiceItems.toArray()).filter((r) => !r.deleted)
   const out: PracticeItemRecord[] = []
   for (const { id: planId, generates } of plans) {
@@ -52,7 +51,7 @@ export async function persistPractice(
     const hasToday = mine.some((r) => r.date === today)
     for (const r of mine) {
       const stale = r.status === 'open' && ((r.date < today && dropOverdue) || (r.date > today && r.date <= reach && !wantedKeys.has(key(r))))
-      if (stale) out.push({ ...r, deleted: true, ...stamp })
+      if (stale) out.push({ ...r, deleted: true, updatedAt: stampAfter(r.updatedAt), deviceId })
       else kept.add(key(r))
     }
     // A problem already stored on another day is not offered again.
@@ -71,7 +70,8 @@ export async function persistPractice(
         minutes: g.minutes,
         status: 'open',
         deleted: false,
-        ...stamp,
+        updatedAt: stampAfter(),
+        deviceId,
       })
     }
   }

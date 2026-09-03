@@ -24,6 +24,13 @@ export const DEFAULT_SETTINGS: SettingsRecord = {
   blackoutDates: [],
 }
 
+/**
+ * The updatedAt for a write to a record last written at `prev`: the clock, but always later than
+ * `prev`. Two writes in the same millisecond (or a clock that stepped back) would otherwise tie, and
+ * sync, undo guards and last-write-wins all need a record's updatedAt to rise on every local write.
+ */
+export const stampAfter = (prev?: number): number => Math.max(Date.now(), (prev ?? 0) + 1)
+
 const deviceIds = new WeakMap<KilnDB, Promise<string>>()
 
 /** This device's id: generated once, kept in the local-only meta table. */
@@ -59,7 +66,7 @@ export async function insertRecord<N extends Exclude<TableName, 'settings'>>(
   fields: Omit<Records[N], keyof Base>,
 ): Promise<Records[N]> {
   const deviceId = await getDeviceId(db)
-  const rec = { ...fields, id: uuidv7(), updatedAt: Date.now(), deleted: false, deviceId } as Records[N]
+  const rec = { ...fields, id: uuidv7(), updatedAt: stampAfter(), deleted: false, deviceId } as Records[N]
   await table(db, name).add(rec)
   return rec
 }
@@ -76,7 +83,7 @@ export async function updateRecord<N extends TableName>(
   return db.transaction('rw', t, async () => {
     const old = await t.get(id)
     if (!old || old.deleted) return undefined
-    const next = { ...old, ...patch, updatedAt: Date.now(), deviceId }
+    const next = { ...old, ...patch, updatedAt: stampAfter(old.updatedAt), deviceId }
     await t.put(next)
     return next
   })
@@ -90,11 +97,10 @@ export async function softDelete(db: KilnDB, name: TableName, id: string): Promi
 /** Tombstones a plan with its modules, tasks, review cards and logs, its practice log rows and its generated daily problems. */
 export async function softDeletePlan(db: KilnDB, planId: string): Promise<void> {
   const deviceId = await getDeviceId(db)
-  const now = Date.now()
-  const tomb = <T extends Base>(rows: T[]) => rows.filter((r) => !r.deleted).map((r) => ({ ...r, deleted: true, updatedAt: now, deviceId }))
+  const tomb = <T extends Base>(rows: T[]) => rows.filter((r) => !r.deleted).map((r) => ({ ...r, deleted: true, updatedAt: stampAfter(r.updatedAt), deviceId }))
   await db.transaction('rw', [db.plans, db.modules, db.tasks, db.reviewCards, db.reviewLogs, db.practiceLog, db.practiceItems], async () => {
     const plan = await db.plans.get(planId)
-    if (plan) await db.plans.put({ ...plan, deleted: true, updatedAt: now, deviceId })
+    if (plan) await db.plans.put({ ...plan, deleted: true, updatedAt: stampAfter(plan.updatedAt), deviceId })
     await db.modules.bulkPut(tomb(await db.modules.where('planId').equals(planId).toArray()))
     await db.tasks.bulkPut(tomb(await db.tasks.where('planId').equals(planId).toArray()))
     const cards = await db.reviewCards.where('planId').equals(planId).toArray()
@@ -119,14 +125,13 @@ export async function revertWrite(
   const restore = change.restore ?? []
   const remove = change.remove ?? []
   const deviceId = await getDeviceId(db)
-  const now = Date.now()
   const names = [...new Set([...restore, ...remove].map(([n]) => n))]
   return db.transaction('rw', names.map((n) => db.table(n)), async () => {
     for (const [n, rec, after] of restore) {
       const cur = (await db.table(n).get(rec.id)) as Base | undefined
       if (!cur || cur.updatedAt !== after) return false
     }
-    for (const [n, rec] of restore) await db.table(n).put({ ...rec, updatedAt: now, deviceId })
+    for (const [n, rec, after] of restore) await db.table(n).put({ ...rec, updatedAt: stampAfter(after), deviceId })
     for (const [n, id] of remove) await softDelete(db, n, id)
     return true
   })
@@ -191,7 +196,8 @@ export async function getSettings(db: KilnDB): Promise<SettingsRecord> {
 export async function updateSettings(db: KilnDB, patch: Partial<Omit<SettingsRecord, keyof Base>>): Promise<SettingsRecord> {
   const deviceId = await getDeviceId(db)
   return db.transaction('rw', db.settings, async () => {
-    const next = { ...((await liveSettings(db)) ?? DEFAULT_SETTINGS), ...patch, updatedAt: Date.now(), deviceId }
+    const prev = await db.settings.get(SETTINGS_ID) // also a deleted row: its updatedAt must still be beaten
+    const next = { ...((await liveSettings(db)) ?? DEFAULT_SETTINGS), ...patch, updatedAt: stampAfter(prev?.updatedAt), deviceId }
     await db.settings.put(next)
     return next
   })
@@ -228,9 +234,8 @@ const json = (v: unknown) => JSON.stringify(v)
  */
 export async function importPlan(db: KilnDB, plan: Plan, opts: ImportOptions): Promise<ImportResult> {
   const deviceId = await getDeviceId(db)
-  const now = Date.now()
   const part = plan.part ?? { index: 1, total: 1 }
-  const stamp = { updatedAt: now, deviceId }
+  const stamp = (prev?: number) => ({ updatedAt: stampAfter(prev), deviceId })
 
   return db.transaction('rw', db.plans, db.modules, db.tasks, async () => {
     const existing = await getPlanByKey(db, plan.id)
@@ -257,7 +262,7 @@ export async function importPlan(db: KilnDB, plan: Plan, opts: ImportOptions): P
         ...(opts.deadline ? { deadline: opts.deadline } : {}),
         partTotal: part.total,
         partsIn,
-        ...stamp,
+        ...stamp(existing.updatedAt),
       }
     } else {
       planRec = {
@@ -270,7 +275,7 @@ export async function importPlan(db: KilnDB, plan: Plan, opts: ImportOptions): P
         partTotal: part.total,
         partsIn,
         deleted: false,
-        ...stamp,
+        ...stamp(),
       }
     }
     await db.plans.put(planRec)
@@ -285,13 +290,13 @@ export async function importPlan(db: KilnDB, plan: Plan, opts: ImportOptions): P
       const old = oldModules.get(m.id)
       const fields = { key: m.id, title: m.title, order: m.order, summary: m.summary, notBeforeDay: m.notBeforeDay }
       if (!old) {
-        const rec: ModuleRecord = { ...fields, planId, id: uuidv7(), deleted: false, ...stamp }
+        const rec: ModuleRecord = { ...fields, planId, id: uuidv7(), deleted: false, ...stamp() }
         await db.modules.add(rec)
         moduleIds.set(m.id, rec.id)
         modulesAdded++
       } else if (!old.deleted) {
         const next = { ...old, ...fields }
-        if (json(next) !== json(old)) await db.modules.put({ ...next, ...stamp })
+        if (json(next) !== json(old)) await db.modules.put({ ...next, ...stamp(old.updatedAt) })
       }
     }
 
@@ -307,14 +312,14 @@ export async function importPlan(db: KilnDB, plan: Plan, opts: ImportOptions): P
       // Optional fields the file leaves out are cleared, not kept.
       const fields = { description: undefined, practice: undefined, notBeforeDay: undefined, fixedDate: undefined, deadline: undefined, ...t, key: t.id, moduleId } as Partial<TaskRecord>
       if (!old) {
-        const rec = { ...fields, id: uuidv7(), planId, status: 'open', pinnedDate: t.fixedDate, deleted: false, ...stamp } as TaskRecord
+        const rec = { ...fields, id: uuidv7(), planId, status: 'open', pinnedDate: t.fixedDate, deleted: false, ...stamp() } as TaskRecord
         await db.tasks.add(rec)
         tasksAdded++
       } else if (!old.deleted) {
         const next = { ...old, ...fields, id: old.id } as TaskRecord
         if (t.fixedDate && t.fixedDate !== old.fixedDate) next.pinnedDate = t.fixedDate
         if (json(next) !== json(old)) {
-          await db.tasks.put({ ...next, ...stamp })
+          await db.tasks.put({ ...next, ...stamp(old.updatedAt) })
           tasksUpdated++
         }
       }

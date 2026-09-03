@@ -1,6 +1,6 @@
 import type { Table } from 'dexie'
 import type { KilnDB } from './db'
-import { getDeviceId } from './repo'
+import { getDeviceId, stampAfter } from './repo'
 import { TABLE_NAMES, type Base } from './types'
 
 /** Erases every plan, task, review, log and setting on this device. The device id (meta) stays. */
@@ -17,13 +17,12 @@ export async function resetLocalData(db: KilnDB): Promise<void> {
  */
 export async function tombstoneAll(db: KilnDB): Promise<number> {
   const deviceId = await getDeviceId(db)
-  const now = Date.now()
   let count = 0
   await db.transaction('rw', TABLE_NAMES.map((n) => db.table(n)), async () => {
     for (const name of TABLE_NAMES) {
       const t = db.table(name) as Table<Base, string>
       const live = (await t.toArray()).filter((r) => !r.deleted)
-      await t.bulkPut(live.map((r) => ({ ...r, deleted: true, updatedAt: now, deviceId })))
+      await t.bulkPut(live.map((r) => ({ ...r, deleted: true, updatedAt: stampAfter(r.updatedAt), deviceId })))
       count += live.length
     }
   })

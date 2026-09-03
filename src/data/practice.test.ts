@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { addDaysISO } from '../lib/date'
 import { fixtureTexts, validateParts } from './fixtures'
 import { brushUp, completeTask, dueCards } from './mastery'
@@ -165,5 +165,26 @@ describe('completeTask undo', () => {
     expect((await db.reviewLogs.toArray()).filter((l) => !l.deleted)).toHaveLength(2)
     expect(await second.undo()).toBe(true)
     expect(await db.reviewCards.get(first.card!.id)).toMatchObject({ reps: 1 })
+  })
+})
+
+describe('updatedAt is monotonic', () => {
+  it('rises on every local write even when the clock does not, so the undo guard sees a later rating', async () => {
+    const { db, planId } = await seeded()
+    const lesson = (await listTasks(db, planId)).find((t) => t.type === 'lesson')!
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(new Date(2026, 10, 9, 12).getTime())
+    try {
+      const first = await completeTask(db, lesson.id, 'good', NOON, NO_FUZZ)
+      const second = await completeTask(db, lesson.id, 'easy', NOON, NO_FUZZ)
+      expect(second.card!.updatedAt).toBeGreaterThan(first.card!.updatedAt)
+      expect(second.task.updatedAt).toBeGreaterThan(first.task.updatedAt)
+      expect(await first.undo()).toBe(false)
+      expect(await db.reviewCards.get(first.card!.id)).toMatchObject({ reps: 2 })
+      const t = await updateRecord(db, 'tasks', lesson.id, { priority: 'optional' })
+      const t2 = await updateRecord(db, 'tasks', lesson.id, { priority: 'core' })
+      expect(t2!.updatedAt).toBeGreaterThan(t!.updatedAt)
+    } finally {
+      clock.mockRestore()
+    }
   })
 })
