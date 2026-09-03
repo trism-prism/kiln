@@ -13,3 +13,4 @@ CLAUDE.md
 AGENTS.md
 .claude/
 .dev.vars
+!.env.example
