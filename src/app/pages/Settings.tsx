@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, getSettings, scheduleAll } from '../../data'
 import { toLocalISODate } from '../../lib/date'
-import { Button } from '../../ui/button'
+import { Button, Link } from '../../ui/button'
 import { ListBoxItem, Select } from '../../ui/form'
 import { toasts } from '../../ui/overlay'
 import { Card, Skeleton } from '../../ui/surface'
@@ -10,7 +10,9 @@ import { Page } from '../Page'
 import { readTheme, saveTheme, type Theme } from '../theme'
 import { BlackoutSection, BudgetSection } from '../settings/BudgetSection'
 import { BackupSection, DangerSection } from '../settings/DataSection'
+import { InstallSection } from '../settings/InstallSection'
 import { ReminderSection } from '../settings/ReminderSection'
+import { SyncSection } from '../settings/SyncSection'
 
 export default function SettingsPage() {
   const [theme, setTheme] = useState<Theme>(readTheme)
@@ -48,6 +50,7 @@ export default function SettingsPage() {
         ) : (
           <Skeleton className="h-64" />
         )}
+        <SyncSection />
         <Card>
           <Select
             label="Theme"
@@ -65,8 +68,12 @@ export default function SettingsPage() {
             <ListBoxItem id="dark">Dark</ListBoxItem>
           </Select>
         </Card>
+        <InstallSection />
         <BackupSection />
         <DangerSection />
+        <p className="text-sm text-text-muted">
+          <Link href="/privacy">Privacy: what Kiln stores and sends</Link>
+        </p>
       </div>
     </Page>
   )

@@ -13,6 +13,7 @@ import {
   SelectValue,
   Switch as AriaSwitch,
   Text,
+  TextArea,
   TextField as AriaTextField,
   type CheckboxProps,
   type ListBoxItemProps,
@@ -53,6 +54,23 @@ export function TextField({
       <Input className={`${control} placeholder:text-text-muted`} />
       {description && <Text slot="description" className={help}>{description}</Text>}
       <FieldError className={error}>{errorMessage}</FieldError>
+    </AriaTextField>
+  )
+}
+
+/** Multi-line text field (pasted keys and similar). */
+export function TextAreaField({
+  label,
+  description,
+  className = '',
+  rows = 4,
+  ...props
+}: Omit<TextFieldProps, 'className'> & { label: string; description?: string; className?: string; rows?: number }) {
+  return (
+    <AriaTextField {...props} className={`${field} ${className}`}>
+      <Label className="font-medium">{label}</Label>
+      <TextArea rows={rows} className={`${control} h-auto py-2 placeholder:text-text-muted`} />
+      {description && <Text slot="description" className={help}>{description}</Text>}
     </AriaTextField>
   )
 }
