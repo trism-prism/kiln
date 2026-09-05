@@ -1,5 +1,6 @@
 // Steps 3-7 of docs/plan-import.md for one input: validation report, plan details, match, preview, import.
 import { useEffect, useMemo, useState } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router'
 import { RadioGroup, Radio, Label } from 'react-aria-components'
 import { Dot } from './Dot'
@@ -10,6 +11,7 @@ import { Button } from '../../ui/button'
 import { TextField } from '../../ui/form'
 import { toasts } from '../../ui/overlay'
 import { Card } from '../../ui/surface'
+import { META_START_DATE } from '../../pwa/onboarding'
 import { Report } from './Report'
 import {
   analyze,
@@ -54,7 +56,10 @@ function useAsync<T>(deps: unknown[], run: () => Promise<T>, delay = 0): { value
 
 export function Review({ input }: { input: Input }) {
   const navigate = useNavigate()
-  const tomorrow = addDaysISO(toLocalISODate(new Date()), 1)
+  const today = toLocalISODate(new Date())
+  // Onboarding remembers the start date the person chose; it is the default while it is still today or later.
+  const chosen0 = useLiveQuery(() => db.meta.get(META_START_DATE))?.value
+  const tomorrow = chosen0 !== undefined && /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(chosen0) && chosen0 >= today ? chosen0 : addDaysISO(today, 1)
   const [title, setTitle] = useState('')
   const [id, setId] = useState<string | null>(null)
   const [goal, setGoal] = useState('')

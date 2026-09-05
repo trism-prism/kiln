@@ -4,6 +4,18 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Kiln</title>
+    <meta name="description" content="Turns any study plan into a daily to-do list with reminders and reviews." />
+    <!-- Browser toolbar color. Keep in sync with --kiln-surface in src/index.css. -->
+    <meta name="theme-color" content="#f7f4ee" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#161513" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" href="/kiln-arch.svg" type="image/svg+xml" />
+    <!-- iOS: installed from Share > Add to Home Screen; the web manifest alone is not enough there. -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon-180x180.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Kiln" />
     <script>
       // Apply the saved theme before first paint. Keep the key and values in sync with src/app/theme.ts.
       try {

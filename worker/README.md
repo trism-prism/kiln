@@ -96,6 +96,10 @@ Client registration: after `pushManager.subscribe({userVisibleOnly: true, applic
 
 Management token: the client generates a random secret once (for example `crypto.randomUUID()`, or 16+ random bytes base64url; 16-128 chars of `A-Za-z0-9_-`), keeps it locally, and sends it as `token` on every POST and DELETE. The server stores only its SHA-256. A re-POST or DELETE for an existing endpoint with a different token gets 403, so someone who learns an endpoint cannot change or remove another device's subscription.
 
+The app's client is `src/pwa/push-client.ts`. It asks for notification permission only from the "Turn on reminders" button, subscribes, and keeps the management token in the device-local `meta` table (`pushToken`, 22 base64url characters). It re-POSTs when the times change and on app open if they differ from what the Worker last accepted, and DELETEs on "Turn off reminders" (the local subscription is removed even if the DELETE cannot be sent). If a POST gets 403 (the Worker has the endpoint under another token, for example after local data was erased) it unsubscribes, subscribes again and retries once. The Worker address is `VITE_API_URL` for push, sync and the ping (the old `VITE_SYNC_URL` is still read for one release); the VAPID public key is `VITE_VAPID_PUBLIC_KEY`. `ALLOWED_ORIGINS` must include the site's origin or every call is refused with 403.
+
+The service worker (`src/sw.ts`, `src/pwa/push-handler.ts`) reads IndexedDB directly (no Dexie, to keep the worker small) and counts exactly as the app's badge does: today's open tasks, overdue open tasks and due review cards.
+
 Active-device ping: generate `deviceId` once (`crypto.randomUUID()` with dashes kept, or 16 random bytes base64url) and store it locally; POST `/ping` at most once per day when the app opens.
 
 ## Push implementation
