@@ -5,7 +5,8 @@ import { Button, IconButton } from '../../ui/button'
 import { ListBoxItem, Select, TextField } from '../../ui/form'
 import { toasts } from '../../ui/overlay'
 import { Card } from '../../ui/surface'
-import { formatHours, parseMinutes, WEEKDAYS, weekTotal } from './budget'
+import { parseMinutes } from './budget'
+import { WeekdayMinutes } from './WeekdayMinutes'
 
 export const failed = (e: unknown) =>
   toasts.add({ title: 'Could not save', description: e instanceof Error ? e.message : String(e) }, { timeout: 8000 })
@@ -16,7 +17,6 @@ export function BudgetSection({ settings, onChanged }: { settings: SettingsRecor
   const [weekStart, setWeekStart] = useState(settings.weekStartsOn)
   const parsed = values.map(parseMinutes)
   const valid = parsed.every((v) => v !== undefined)
-  const total = weekTotal(values)
 
   async function save() {
     if (!valid) return
@@ -36,23 +36,7 @@ export function BudgetSection({ settings, onChanged }: { settings: SettingsRecor
           <h2 id="budget-heading" className="text-base font-medium">Study time</h2>
           <p className="text-sm text-text-muted">Minutes you can study on each weekday. Use 0 for a day off.</p>
         </div>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          {WEEKDAYS.map((day, i) => (
-            <TextField
-              key={day}
-              label={day}
-              inputMode="numeric"
-              value={values[i]}
-              onChange={(v) => setValues((vs) => vs.map((x, j) => (j === i ? v : x)))}
-              isInvalid={parsed[i] === undefined}
-              errorMessage="0 to 1440"
-              className="min-w-0"
-            />
-          ))}
-        </div>
-        <p className="text-sm" data-testid="week-total">
-          Total per week: <strong className="font-medium tabular-nums">{total} min</strong> <span className="text-text-muted">({formatHours(total)})</span>
-        </p>
+        <WeekdayMinutes values={values} onChange={setValues} />
         <div className="grid max-w-sm gap-4">
           <Select label="Week starts on" selectedKey={weekStart} onSelectionChange={(k) => setWeekStart(k as typeof weekStart)}>
             <ListBoxItem id="monday">Monday</ListBoxItem>
