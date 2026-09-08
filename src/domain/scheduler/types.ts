@@ -5,7 +5,7 @@ export type Priority = 'core' | 'recommended' | 'optional'
 
 export interface SchedPlan {
   id: string
-  /** 1-5. A plan with weight 2 gets about twice the minutes of a plan with weight 1. */
+  /** Positive (2, 3 or 5 from the share). A plan with weight 2 gets about twice the minutes of a plan with weight 1. */
   weight: number
   /** Day 1. Nothing of this plan is placed before it. */
   startDate: string
@@ -63,6 +63,8 @@ export interface ScheduleInput {
   reviewsDue?: Record<string, { count: number; minutes: number }>
   /** Default 25. */
   reviewCapPercent?: number
+  /** Minutes already taken per date outside plans (dated personal to-dos), counted like pinned tasks. Events take none. */
+  fixedMinutes?: Record<string, number>
   /** Send every open optional task to the backlog. */
   skipOptional?: boolean
   /** Problems already solved (the practice log): feeds the ramp and is never offered again. */
@@ -91,7 +93,7 @@ export interface DayLoad {
   reviewMinutes: number
   /** Generated daily problems. */
   practiceMinutes: number
-  /** Plan tasks, including plan problems, pinned and already dated ones. */
+  /** Plan tasks, including plan problems, pinned and already dated ones, plus `fixedMinutes` (personal to-dos). */
   taskMinutes: number
 }
 

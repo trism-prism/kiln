@@ -4,6 +4,7 @@ import { schedule, BACKLOG, type SchedPlan, type SchedTask, type ScheduleInput, 
 import { addDaysISO } from '../lib/date'
 import type { KilnDB } from './db'
 import { reviewsDue } from './mastery'
+import { planWeight, practiceConfig } from './plan-settings'
 import { persistPractice } from './practice'
 import { getDeviceId, getSettings, stampAfter, isPlanComplete, listModules, listPlans, listTasks } from './repo'
 import type { TaskRecord } from './types'
@@ -30,7 +31,7 @@ export async function scheduleAll(db: KilnDB, today: string, opts: ScheduleAllOp
   opts = { ...opts, reviewsDue: opts.reviewsDue ?? (await reviewsDue(db, today, addDaysISO(today, REVIEW_HORIZON_DAYS))) }
   // The callback must itself be an async function: Dexie only keeps the transaction alive across native
   // awaits when it can see that, and an arrow returning run()'s promise commits after the first await.
-  return db.transaction('rw', [db.plans, db.modules, db.tasks, db.practiceLog, db.practiceItems, db.settings], async () => run(db, deviceId, today, opts))
+  return db.transaction('rw', [db.plans, db.modules, db.tasks, db.practiceLog, db.practiceItems, db.settings, db.personalTodos], async () => run(db, deviceId, today, opts))
 }
 
 async function run(db: KilnDB, deviceId: string, today: string, opts: ScheduleAllOptions): Promise<ScheduleOutput> {
@@ -41,17 +42,18 @@ async function run(db: KilnDB, deviceId: string, today: string, opts: ScheduleAl
   const schedTasks: SchedTask[] = []
   for (const plan of plans) {
     const modules = new Map((await listModules(db, plan.id)).map((m) => [m.id, m]))
+    const practice = practiceConfig(plan)
     schedPlans.push({
       id: plan.id,
-      weight: plan.weight,
+      weight: planWeight(plan),
       startDate: plan.startDate,
       deadline: plan.deadline,
       skipOptional: plan.skipOptional,
-      dailyPractice: plan.dailyPractice && {
-        source: plan.dailyPractice.source,
-        perDay: plan.dailyPractice.perDay ?? 1,
-        startDifficulty: plan.dailyPractice.startDifficulty ?? 'easy',
-        topicFollowsLessons: plan.dailyPractice.topicFollowsLessons ?? true,
+      dailyPractice: practice && {
+        source: practice.source,
+        perDay: practice.perDay ?? 1,
+        startDifficulty: practice.startDifficulty ?? 'easy',
+        topicFollowsLessons: practice.topicFollowsLessons ?? true,
       },
     })
     for (const t of await listTasks(db, plan.id)) {
@@ -85,12 +87,19 @@ async function run(db: KilnDB, deviceId: string, today: string, opts: ScheduleAl
     .filter((r) => !r.deleted)
     .map((r) => ({ slug: r.slug, difficulty: r.difficulty, topic: r.topic === undefined ? undefined : normalizeTopic(r.topic), rating: r.rating }))
 
+  // Dated personal to-dos with minutes take time from their day, done or not (like a done task's day).
+  const fixedMinutes: Record<string, number> = {}
+  for (const t of await db.personalTodos.toArray()) {
+    if (!t.deleted && t.date && t.minutes) fixedMinutes[t.date] = (fixedMinutes[t.date] ?? 0) + t.minutes
+  }
+
   const out = schedule({
     plans: schedPlans,
     tasks: schedTasks,
     minutesPerWeekday: settings.minutesPerWeekday,
     blackoutDates: settings.blackoutDates,
     reviewCapPercent: settings.reviewCapPercent,
+    fixedMinutes,
     today,
     mode: opts.mode ?? 'initial',
     skipOptional: opts.skipOptional,
@@ -107,6 +116,6 @@ async function run(db: KilnDB, deviceId: string, today: string, opts: ScheduleAl
     if (next.scheduledDate !== t.scheduledDate || next.backlog !== t.backlog) changed.push({ ...next, updatedAt: stampAfter(t.updatedAt), deviceId })
   }
   await db.tasks.bulkPut(changed)
-  await persistPractice(db, deviceId, today, out.practice, plans.map((p) => ({ id: p.id, generates: p.dailyPractice?.source === 'neetcode' })), opts.mode === 'reschedule')
+  await persistPractice(db, deviceId, today, out.practice, plans.map((p) => ({ id: p.id, generates: practiceConfig(p)?.source === 'neetcode' })), opts.mode === 'reschedule')
   return out
 }

@@ -55,7 +55,8 @@ export function useBadgeCount(today: string): number {
     useLiveQuery(async () => {
       const tasks = await tasksScheduledBetween(db, '0000-01-01', today)
       const problems = alive(await db.practiceItems.where('date').belowOrEqual(today).toArray())
-      return badgeCount([...tasks, ...problems.map((p) => ({ status: p.status, scheduledDate: p.date }))], await dueCards(db, today), today)
+      const todos = await db.personalTodos.where('date').belowOrEqual(today).toArray()
+      return badgeCount([...tasks, ...problems.map((p) => ({ status: p.status, scheduledDate: p.date }))], await dueCards(db, today), today, todos)
     }, [today]) ?? 0
   )
 }
