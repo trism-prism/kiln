@@ -50,7 +50,7 @@ test('seed, To Do matches the badge, complete a lesson, review comes back and sh
 
   // Brush up lists it as due, with a recall bar, and Review now rates it.
   await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Brush up' }).click()
-  const entry = page.getByRole('listitem').filter({ hasText: title })
+  const entry = page.getByRole('main').getByRole('listitem').filter({ hasText: title })
   await expect(entry).toBeVisible()
   await expect(entry.getByText('Due', { exact: true })).toBeVisible()
   await expect(entry.getByRole('meter', { name: 'Recall' })).toBeVisible()
@@ -69,6 +69,8 @@ test('undo from the toast puts a completion back', async ({ page }) => {
   await lesson.getByRole('checkbox').click({ force: true })
   await page.getByRole('button', { name: /^Hard/ }).click()
   await expect(lesson.getByRole('checkbox')).toBeChecked()
+  // A toast with an action stays until dismissed.
+  await page.clock.fastForward(30_000)
   await page.getByRole('button', { name: 'Undo' }).click()
   await expect(lesson.getByRole('checkbox')).not.toBeChecked()
   await expect.poll(() => today.getByRole('checkbox', { checked: false }).count()).toBe(before)
@@ -81,7 +83,7 @@ test('overdue work is pinned on top and can be rescheduled', async ({ page }) =>
   await expect(overdue).toBeVisible()
   await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Dashboard' }).click()
   await page.getByRole('button', { name: /^Reschedule overdue/ }).click()
-  await expect(page.getByText('Overdue work rescheduled')).toBeVisible()
+  await expect(page.getByText(/^Moved \d+ overdue tasks?: /)).toBeVisible()
   await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /^To Do/ }).click()
   await expect(page.getByRole('region', { name: /^Overdue/ })).toBeHidden()
 })
@@ -101,9 +103,9 @@ test('dashboard shows one card per plan', async ({ page }) => {
   await openSeeded(page, '/')
   const cards = page.getByRole('heading', { level: 2 })
   await expect(cards).toHaveCount(2)
-  await expect(page.getByText('Core tasks')).toHaveCount(2)
+  await expect(page.getByText('Essential tasks')).toHaveCount(2)
   await expect(page.getByText('Mastery')).toHaveCount(2)
-  await expect(page.getByText(/Projected finish/).first()).toBeVisible()
+  await expect(page.getByText(/Expected finish/).first()).toBeVisible()
   await expect(page.getByText(/Next: /).first()).toBeVisible()
 })
 

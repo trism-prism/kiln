@@ -83,7 +83,7 @@ test('Settings offers reminders, install help and the privacy page', async ({ pa
   await page.goto('/settings')
   await expect(page.getByRole('button', { name: 'Turn on reminders' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Install' })).toBeVisible()
-  await page.getByRole('link', { name: 'Privacy: what Kiln stores and sends' }).click()
+  await page.getByRole('link', { name: 'Privacy', exact: true }).click()
   await expect(page).toHaveURL('/privacy')
   await expect(page.getByRole('heading', { level: 1, name: 'Privacy' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'How to delete your data' })).toBeVisible()

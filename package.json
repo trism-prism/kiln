@@ -16,6 +16,7 @@
     "schema": "node scripts/write-schema.ts",
     "templates": "node scripts/write-templates.ts",
     "neetcode": "node scripts/write-neetcode.ts",
+    "licenses": "node scripts/write-licenses.ts",
     "icons": "pwa-assets-generator --config scripts/pwa-assets.config.ts"
   },
   "dependencies": {

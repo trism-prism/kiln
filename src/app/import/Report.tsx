@@ -1,6 +1,7 @@
-import { Copy } from 'lucide-react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Check, Copy } from 'lucide-react'
 import { formatIssue, MAX_ISSUES, type Issue } from '../../domain/plan-format'
-import { Button } from '../../ui/button'
+import { Button, type ButtonVariant } from '../../ui/button'
 import { toasts } from '../../ui/overlay'
 import { splitIssues } from './logic'
 
@@ -12,6 +13,33 @@ export async function copyText(text: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+/**
+ * Copies `getText()` on press. No toast: the button turns into a check and "Copied" for 2 s and a polite
+ * live region says so. A refused copy still gets a toast, because nothing else would tell the user.
+ */
+export function CopyButton({ getText, children, variant }: { getText: () => string; children: ReactNode; variant?: ButtonVariant }) {
+  const [copied, setCopied] = useState(false)
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  useEffect(() => () => clearTimeout(timer.current), [])
+  async function copy() {
+    if (!(await copyText(getText()))) {
+      toasts.add({ title: 'Could not copy', description: 'Your browser blocked clipboard access. Select the text and copy it by hand.' }, { timeout: 6000 })
+      return
+    }
+    setCopied(true)
+    clearTimeout(timer.current)
+    timer.current = setTimeout(() => setCopied(false), 2000)
+  }
+  return (
+    <>
+      <Button variant={variant} onPress={copy}>
+        {copied ? <Check /> : <Copy />} {copied ? 'Copied' : children}
+      </Button>
+      <span aria-live="polite" className="sr-only">{copied ? 'Copied to the clipboard' : ''}</span>
+    </>
+  )
 }
 
 function Group({ title, tone, issues }: { title: string; tone: string; issues: Issue[] }) {
@@ -37,10 +65,6 @@ function Group({ title, tone, issues }: { title: string; tone: string; issues: I
 export function Report({ issues }: { issues: Issue[] }) {
   if (issues.length === 0) return null
   const { errors, warnings } = splitIssues(issues)
-  const copy = async () => {
-    const ok = await copyText(issues.map(formatIssue).join('\n'))
-    toasts.add({ title: ok ? 'Problems copied' : 'Could not copy', description: ok ? undefined : 'Select the text and copy it by hand.' }, { timeout: 4000 })
-  }
   return (
     <div className="grid gap-4 rounded-lg border border-border bg-surface-raised p-5">
       <div className="flex items-center justify-between gap-4">
@@ -49,9 +73,9 @@ export function Report({ issues }: { issues: Issue[] }) {
             ? `${errors.length} ${errors.length === 1 ? 'error blocks' : 'errors block'} the import. Fix ${errors.length === 1 ? 'it' : 'them'} and paste again.`
             : 'No errors. Warnings do not block the import.'}
         </p>
-        <Button variant="secondary" onPress={copy}>
-          <Copy /> Copy
-        </Button>
+        <CopyButton variant="secondary" getText={() => issues.map(formatIssue).join('\n')}>
+          Copy
+        </CopyButton>
       </div>
       <Group title="Errors" tone="text-danger" issues={errors} />
       <Group title="Warnings" tone="text-warning" issues={warnings} />
