@@ -81,7 +81,7 @@ export default function CalendarPage() {
           onOpenDay={setOpen}
           onMove={move}
         />
-        {study && <StreakSection study={study} today={today} />}
+        {study && <StreakSection study={study} today={today} settings={settings} />}
       </div>
       <DayPanel
         date={open}

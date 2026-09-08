@@ -84,22 +84,32 @@ export function MenuItem({ children, ...props }: Omit<MenuItemProps, 'className'
 
 export type ToastContentValue = { title: string; description?: string; action?: { label: string; onPress: () => void } }
 
-/** App-wide toast queue: toasts.add({ title: 'Plan imported' }, { timeout: 5000 }). */
-export const toasts = new ToastQueue<ToastContentValue>({ maxVisibleToasts: 3 })
+const DEFAULT_TOAST_MS = 4000
+
+/**
+ * App-wide toast queue: toasts.add({ title: 'Plan imported' }). Closes after 4 s unless a timeout is given
+ * (the region pauses the timer on hover and focus). A toast with an action (Undo) stays until dismissed.
+ */
+class ToastsQueue extends ToastQueue<ToastContentValue> {
+  override add(content: ToastContentValue, options: { timeout?: number; onClose?: () => void } = {}) {
+    return super.add(content, { ...options, timeout: content.action ? undefined : (options.timeout ?? DEFAULT_TOAST_MS) })
+  }
+}
+export const toasts = new ToastsQueue({ maxVisibleToasts: 3 })
 
 /** Mounted once by the shell, above the phone tab bar. */
 export function ToastRegion() {
   return (
     <AriaToastRegion
       queue={toasts}
-      className="fixed right-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] left-4 z-50 flex flex-col gap-2 outline-none md:bottom-6 md:left-auto md:w-80"
+      className="fixed right-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] left-4 z-50 flex flex-col gap-2 outline-none md:bottom-6 md:left-auto md:w-72"
     >
       {({ toast }) => (
         <AriaToast
           toast={toast}
-          className="flex items-start gap-3 rounded-lg bg-text py-3 pr-2 pl-4 text-surface shadow-lg data-entering:animate-rise"
+          className="flex items-start gap-2 rounded-lg bg-text py-2 pr-1.5 pl-3 text-surface shadow-lg data-entering:animate-rise"
         >
-          <ToastContent className="min-w-0 flex-1 py-1">
+          <ToastContent role="status" className="min-w-0 flex-1 py-1">
             <Text slot="title" className="block text-sm font-medium">
               {toast.content.title}
             </Text>

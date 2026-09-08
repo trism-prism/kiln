@@ -35,11 +35,11 @@ function PlanCard({ s }: { s: PlanSummary }) {
           ' · No open tasks'
         )}
       </p>
-      <ProgressBar label="Core tasks" value={pct(s.coreDone, s.coreTotal)} valueLabel={`${s.coreDone} of ${s.coreTotal}`} />
+      <ProgressBar label="Essential tasks" value={pct(s.coreDone, s.coreTotal)} valueLabel={`${s.coreDone} of ${s.coreTotal}`} />
       <p className="-mt-2 text-xs text-text-muted">All tasks: {s.allDone} of {s.allTotal} done</p>
       <Meter label="Mastery" value={Math.round(s.mastery * 100)} valueLabel={percent(s.mastery)} />
       <p className="flex flex-wrap items-center gap-2 text-sm text-text-muted">
-        {s.finish ? `Projected finish ${formatDay(s.finish, true)}` : 'No finish date yet'}
+        {s.finish ? `Expected finish ${formatDay(s.finish, true)}` : 'No finish date yet'}
         {late && <Badge tone="warning">After the {formatDay(plan.deadline!, true)} deadline</Badge>}
       </p>
     </Card>

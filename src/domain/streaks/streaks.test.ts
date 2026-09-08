@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { buildStudyDays, heatLevel, heatmapColumns, streakStats, type DayStudy } from './index'
+import { weekdayIndex } from '../../lib/date'
+import { buildStudyDays, heatLevel, heatmapColumns, monthLabels, rowLabels, streakStats, type DayStudy } from './index'
 
 const at = (month: number, day: number, hour = 12) => new Date(2026, month - 1, day, hour).getTime()
 const ev = (month: number, day: number, minutes = 20, hour = 12) => ({ at: at(month, day, hour), minutes })
@@ -65,30 +66,73 @@ describe('streakStats', () => {
 })
 
 describe('heatLevel', () => {
-  it('has four levels by minutes and 0 for nothing done', () => {
-    const lv = (minutes: number, count = 1) => heatLevel({ count, minutes })
+  const lv = (minutes: number, budget?: number, count = 1) => heatLevel({ count, minutes }, budget)
+
+  it('is 0 when nothing was done', () => {
     expect(heatLevel(undefined)).toBe(0)
-    expect(lv(0, 0)).toBe(0)
-    expect(lv(0)).toBe(1) // done, but no minutes on record: still shows
-    expect([lv(1), lv(30), lv(31), lv(60), lv(61), lv(120), lv(121), lv(600)]).toEqual([1, 1, 2, 2, 3, 3, 4, 4])
+    expect(lv(0, 60, 0)).toBe(0)
+  })
+
+  it('follows the share of the day budget: <25 %, <50 %, <100 %, 100 % or more', () => {
+    // budget 100: shares are the minutes
+    expect([lv(0, 100), lv(24, 100), lv(25, 100), lv(49, 100), lv(50, 100), lv(99, 100), lv(100, 100), lv(300, 100)]).toEqual([1, 1, 2, 2, 3, 3, 4, 4])
+  })
+
+  it('uses minutes (30, 60, 120) on days with no budget', () => {
+    expect([lv(0), lv(30), lv(31), lv(60), lv(61), lv(120), lv(121)]).toEqual([1, 1, 2, 2, 3, 3, 4])
+    expect(lv(61, 0)).toBe(3)
   })
 })
 
 describe('heatmapColumns', () => {
-  it('has 52 Monday-first columns ending in the current week, with the rest of that week in the future', () => {
+  it('has 53 Monday-first columns ending in the current week, with the rest of that week in the future', () => {
     const cols = heatmapColumns(days(['2026-11-09', 45], ['2026-11-11', 130]), TODAY) // Wednesday
-    expect(cols).toHaveLength(52)
+    expect(cols).toHaveLength(53)
     expect(cols.every((c) => c.length === 7)).toBe(true)
     const last = cols.at(-1)!
     expect(last.map((c) => c.date)).toEqual(['2026-11-09', '2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13', '2026-11-14', '2026-11-15'])
     expect(last.map((c) => c.future)).toEqual([false, false, false, true, true, true, true])
     expect(last.map((c) => c.level)).toEqual([2, 0, 4, 0, 0, 0, 0])
-    expect(cols[0]![0]!.date).toBe('2025-11-17') // 51 weeks before that Monday
-    expect(new Set(cols.flat().map((c) => c.date)).size).toBe(364)
+    expect(cols[0]![0]!.date).toBe('2025-11-10') // 52 weeks before that Monday
+    expect(new Set(cols.flat().map((c) => c.date)).size).toBe(371)
   })
 
-  it('carries the count and minutes of a day for its label', () => {
-    const cell = heatmapColumns(new Map([['2026-11-10', { count: 3, minutes: 95 }]]), TODAY).at(-1)![1]!
-    expect(cell).toMatchObject({ date: '2026-11-10', count: 3, minutes: 95, level: 3 })
+  it('starts rows on Sunday when asked', () => {
+    const cols = heatmapColumns(new Map(), TODAY, { weekStartsOn: 'sunday' })
+    expect(cols.at(-1)!.map((c) => c.date)[0]).toBe('2026-11-08')
+    expect(cols.every((c) => weekdayIndex(c[0]!.date) === 6)).toBe(true)
+    expect(cols.at(-1)!.filter((c) => c.future)).toHaveLength(3)
+  })
+
+  it('carries the count and minutes of a day, and grades it by that day budget', () => {
+    const d = new Map([['2026-11-10', { count: 3, minutes: 95 }]])
+    expect(heatmapColumns(d, TODAY).at(-1)![1]).toMatchObject({ date: '2026-11-10', count: 3, minutes: 95, level: 3 })
+    expect(heatmapColumns(d, TODAY, { budget: () => 90 }).at(-1)![1]!.level).toBe(4)
+    expect(heatmapColumns(d, TODAY, { budget: (x) => (x === '2026-11-10' ? 300 : 0) }).at(-1)![1]!.level).toBe(2)
+  })
+})
+
+describe('monthLabels', () => {
+  it('names a month over the first column that holds its 1st', () => {
+    const labels = monthLabels(heatmapColumns(new Map(), TODAY))
+    expect(labels).toHaveLength(53)
+    expect(labels.filter(Boolean)).toEqual(['Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov'])
+    expect(labels[3]).toBe('Dec') // column 3 starts Monday 2025-12-01
+    expect(labels[0]).toBe('') // column 0 is 2025-11-10 to 16: no 1st
+  })
+
+  it('follows the week start', () => {
+    // Sunday-first: the week of Sun 2026-11-01 holds the 1st, as does the Monday-first week of Mon 2026-10-26
+    const cols = heatmapColumns(new Map(), '2026-11-01', { weekStartsOn: 'sunday' })
+    expect(monthLabels(cols).at(-1)).toBe('Nov')
+    expect(monthLabels(heatmapColumns(new Map(), '2026-10-31')).at(-1)).toBe('Nov') // Mon Oct 26 to Sun Nov 1
+    expect(monthLabels(heatmapColumns(new Map(), '2026-10-31', { weekStartsOn: 'sunday' })).at(-1)).toBe('')
+  })
+})
+
+describe('rowLabels', () => {
+  it('shows Mon, Wed and Fri on the matching rows', () => {
+    expect(rowLabels('monday')).toEqual(['Mon', '', 'Wed', '', 'Fri', '', ''])
+    expect(rowLabels('sunday')).toEqual(['', 'Mon', '', 'Wed', '', 'Fri', ''])
   })
 })
