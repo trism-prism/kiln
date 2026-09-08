@@ -269,6 +269,6 @@ describe('migration to version 2', () => {
     expect(await db.reviewCards.get('c1')).toEqual({ ...cardRest, learningSteps: 0, minutes: 10 })
     expect(await db.reviewLogs.get('l1')).toEqual({ ...logRest, learningSteps: 0 })
     expect(await db.reviewCards.get('c2')).toMatchObject({ minutes: 15 }) // lesson, 60 min -> 15
-    expect(db.verno).toBe(3)
+    expect(db.verno).toBe(4)
   })
 })

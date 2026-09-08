@@ -30,3 +30,17 @@ describe('badgeCount', () => {
     expect(badgeCount([t('open', today), t('open', '2026-11-01')], [{ due: noon(9) }], today)).toBe(3)
   })
 })
+
+describe('personal to-dos', () => {
+  it('count open ones due today or overdue; undated, done, deleted and future ones do not', () => {
+    const todos = [
+      { done: false, date: today },
+      { done: false, date: '2026-11-01' },
+      { done: false },
+      { done: true, date: today },
+      { done: false, date: today, deleted: true },
+      { done: false, date: '2026-11-10' },
+    ]
+    expect(badgeBreakdown([t('open', today)], [], today, todos)).toEqual({ today: 2, overdue: 1, reviews: 0, total: 3 })
+  })
+})

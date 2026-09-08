@@ -1,3 +1,4 @@
+import { SHARE_LABEL, shareFromWeight } from '../../data'
 import { Link } from '../../ui/button'
 import { Badge, EmptyState, ProgressBar, Skeleton } from '../../ui/surface'
 import { formatDay } from '../../lib/date'
@@ -28,7 +29,7 @@ export default function PlansPage() {
                 <p className="text-sm text-text-muted">
                   {[
                     `${s.allTotal} tasks`,
-                    `weight ${s.plan.weight}`,
+                    plans.length > 1 ? `${SHARE_LABEL[s.plan.share ?? shareFromWeight(s.plan.weight)]} share of study time` : undefined,
                     s.plan.deadline ? `deadline ${formatDay(s.plan.deadline, true)}` : undefined,
                     s.finish ? `expected finish ${formatDay(s.finish, true)}` : undefined,
                   ]

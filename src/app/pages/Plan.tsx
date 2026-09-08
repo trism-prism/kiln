@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
-import { db, scheduleAll, softDeletePlan, updateRecord, type TaskRecord } from '../../data'
+import { db, scheduleAll, setPlanShare, SHARE_LABEL, shareFromWeight, SHARES, softDeletePlan, updateRecord, type Share, type TaskRecord } from '../../data'
 import { formatDay, isRealISODate, toLocalISODate } from '../../lib/date'
 import { Button, Link } from '../../ui/button'
 import { ListBoxItem, Select, Switch, TextField } from '../../ui/form'
@@ -72,14 +72,19 @@ function Settings({ detail }: { detail: PlanDetail }) {
     <Card className="grid h-fit gap-5">
       <h2 className="text-base font-medium">Plan settings</h2>
       <Select
-        label="Weight"
-        description="How much of each day this plan gets compared with the others (1 to 5)."
-        selectedKey={String(plan.weight)}
-        onSelectionChange={(k) => void safely(() => updateRecord(db, 'plans', plan.id, { weight: Number(k) }))}
+        label="Share of study time"
+        description="How much of each day this plan gets compared with the others."
+        selectedKey={plan.share ?? shareFromWeight(plan.weight)}
+        onSelectionChange={(k) =>
+          void safely(async () => {
+            await setPlanShare(db, plan.id, k as Share)
+            await scheduleAll(db, toLocalISODate(new Date()))
+          })
+        }
       >
-        {['1', '2', '3', '4', '5'].map((w) => (
-          <ListBoxItem key={w} id={w}>
-            {w}
+        {SHARES.map((s) => (
+          <ListBoxItem key={s} id={s}>
+            {SHARE_LABEL[s]}
           </ListBoxItem>
         ))}
       </Select>
