@@ -6,6 +6,7 @@ declare namespace Cloudflare {
     VAPID_PUBLIC_KEY: string
     VAPID_SUBJECT: string
     VAPID_PRIVATE_KEY: string // secret
+    FEED_LIMITER: RateLimit
     TEST_MIGRATIONS: import('@cloudflare/vitest-plugin').D1Migration[]
   }
 }
