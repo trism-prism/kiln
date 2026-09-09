@@ -3,6 +3,7 @@ import { ExternalLink } from 'lucide-react'
 import { Link as AriaLink, type LinkProps } from 'react-aria-components'
 import { leetcodeUrl } from '../data'
 import { Link } from '../ui/button'
+import type { TodoItem } from '../domain/todo'
 import { Badge } from '../ui/surface'
 
 const TONE = { easy: 'success', medium: 'warning', hard: 'danger' } as const
@@ -30,3 +31,7 @@ export function TitleLink({ className = '', ...props }: Omit<LinkProps, 'classNa
 export const minutesText = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}` : `${m} min`)
 
 export const percent = (fraction: number) => `${Math.round(fraction * 100)}%`
+
+/** "Plan · Lesson · 30 min" under an item's title. Events and to-dos without minutes show no duration. */
+export const itemMeta = (item: TodoItem) =>
+  [item.planTitle, item.typeLabel, item.minutes > 0 || (item.kind !== 'event' && item.kind !== 'personal') ? minutesText(item.minutes) : ''].filter(Boolean).join(' · ')

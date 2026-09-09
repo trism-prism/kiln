@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { newDbForTests, fixtureTexts, importPlan } from './test-support'
 import { validatePlan, formatIssue } from '../../domain/plan-format'
 import { analyze, decideMatch, defaultChoice, detect, effectiveId, peekJson, slugify, splitIssues, summarize, type Details } from './logic'
-import { buildPlan, emptyDraft, emptyTask } from './builder'
+import { buildPlan, type Draft, type DraftTask } from './builder'
 
 const csv = readFileSync(new URL('../../../public/kiln-plan-template.csv', import.meta.url), 'utf8')
 const details: Details = { title: 'Template', id: '', goal: '', startDate: '2026-11-09', deadline: '' }
@@ -109,37 +109,30 @@ describe('summarize and ids', () => {
   })
 })
 
+const task = (fields: Partial<DraftTask>): DraftTask => ({ uid: `u${Math.random()}`, title: 'Task', type: 'lesson', minutes: '30', priority: 'core', due: '', links: '', ...fields })
+
 describe('builder', () => {
-  const draft = () => {
-    const d = emptyDraft()
-    d.title = 'Hand made'
-    const m = d.modules[0]!
-    m.title = 'Basics'
-    Object.assign(m.tasks[0]!, { title: 'Read chapter one', minutes: '45', topics: 'arrays, hash maps' })
-    const second = emptyTask()
-    Object.assign(second, { title: 'Two Sum', type: 'practice', minutes: '30', slug: 'two-sum', dependsOn: [m.tasks[0]!.uid] })
-    m.tasks.push(second)
-    return d
-  }
+  const draft = (): Draft => ({
+    title: 'Hand made',
+    modules: [{ uid: 'm', title: 'Basics', tasks: [task({ title: 'Read chapter one', minutes: '45' }), task({ title: 'Two Sum', type: 'practice' })] }],
+  })
   const opts = { id: 'hand-made', startDate: '2026-11-09' }
   const errors = (r: ReturnType<typeof validatePlan>) => r.issues.filter((i) => i.severity === 'error').map(formatIssue)
 
-  it('makes a plan that validates', () => {
+  it('makes an auto plan that validates', () => {
     const r = validatePlan(buildPlan(draft(), opts))
     expect(errors(r)).toEqual([])
     expect(r.plan?.schedulingMode).toBe('auto')
     expect(r.plan?.tasks.map((t) => t.id)).toEqual(['read-chapter-one', 'two-sum'])
-    expect(r.plan?.tasks[1]).toMatchObject({ dependsOn: ['read-chapter-one'], practice: { slug: 'two-sum', difficulty: 'easy' } })
-    expect(r.plan?.tasks[0]?.topics).toEqual(['arrays', 'hash-maps'])
   })
 
-  it('pins a date: the plan becomes fixed and takes the start date', () => {
+  it('a due date makes the plan fixed with the start date', () => {
     const d = draft()
-    d.modules[0]!.tasks[0]!.pinned = '2026-11-12'
+    d.modules[0]!.tasks[0]!.due = '2026-11-12'
     const r = validatePlan(buildPlan(d, opts))
     expect(errors(r)).toEqual([])
     expect(r.plan).toMatchObject({ schedulingMode: 'fixed', startDate: '2026-11-09' })
-    expect(r.plan?.tasks[0]?.fixedDate).toBe('2026-11-12')
+    expect(r.plan?.tasks[0]?.deadline).toBe('2026-11-12')
   })
 
   it('keeps ids unique when titles repeat, and reports a missing duration as the validator does', () => {
@@ -152,11 +145,10 @@ describe('builder', () => {
     expect(plan.tasks.map((t) => t.id)).toEqual(['read-chapter-one', 'read-chapter-one-2'])
   })
 
-  it('an unknown LeetCode slug is a warning from the validator', async () => {
-    const d = draft()
-    d.modules[0]!.tasks[1]!.slug = 'not-a-real-problem'
-    const a = await analyze(newDbForTests(), { kind: 'build', draft: d }, { ...details, id: 'hand-made' })
-    expect(splitIssues(a.result.issues).warnings.map(formatIssue).join('\n')).toContain('not-a-real-problem')
+  it('analyze validates a built plan under the given id', async () => {
+    const a = await analyze(newDbForTests(), { kind: 'build', draft: draft() }, { ...details, id: 'hand-made' })
+    expect(splitIssues(a.result.issues).errors).toEqual([])
+    expect(a.result.plan?.id).toBe('hand-made')
   })
 })
 
@@ -173,18 +165,10 @@ describe('defaultChoice', () => {
 })
 
 describe('builder minutes', () => {
-  const base = () => {
-    const d = emptyDraft()
-    d.title = 'T'
-    d.modules[0]!.title = 'M'
-    d.modules[0]!.tasks[0]!.title = 'Task'
-    return d
-  }
-  const run = (minutes: string, type: 'lesson' | 'milestone' = 'lesson') => {
-    const d = base()
-    Object.assign(d.modules[0]!.tasks[0]!, { minutes, type })
-    return validatePlan(buildPlan(d, { id: 't', startDate: '2026-11-09' })).issues.filter((i) => i.severity === 'error').map(formatIssue)
-  }
+  const run = (minutes: string, type: DraftTask['type'] = 'lesson') =>
+    validatePlan(buildPlan({ title: 'T', modules: [{ uid: 'm', title: 'M', tasks: [task({ minutes, type })] }] }, { id: 't', startDate: '2026-11-09' }))
+      .issues.filter((i) => i.severity === 'error')
+      .map(formatIssue)
   it('accepts whole minutes from 5 to 180', () => {
     expect(run('5')).toEqual([])
     expect(run('180')).toEqual([])

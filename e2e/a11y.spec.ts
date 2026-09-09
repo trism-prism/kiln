@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
-import { openSeeded } from './seed'
+import { animationsDone, openSeeded } from './seed'
 
 for (const colorScheme of ['light', 'dark'] as const) {
   test.describe(`axe, ${colorScheme}`, () => {
@@ -36,7 +36,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       expect(await seriousViolations(page)).toEqual([])
       await lesson.getByRole('checkbox').click({ force: true })
       await expect(page.getByRole('dialog', { name: 'How did it go?' })).toBeVisible()
-      await page.waitForTimeout(800)
+      await animationsDone(page)
       expect(await seriousViolations(page)).toEqual([])
       await page.keyboard.press('3')
       await expect(lesson.getByText('Done', { exact: true })).toBeVisible()
@@ -49,6 +49,19 @@ for (const colorScheme of ['light', 'dark'] as const) {
       expect(await seriousViolations(page)).toEqual([])
     })
 
+    test('/todo preferences dialog and add-to-do form', async ({ page }) => {
+      await openSeeded(page, '/todo')
+      await page.getByRole('button', { name: 'To-do list preferences' }).click()
+      await expect(page.getByRole('dialog', { name: 'To-do list preferences' })).toBeVisible()
+      await animationsDone(page)
+      expect(await seriousViolations(page)).toEqual([])
+      await page.getByRole('button', { name: 'Done' }).click()
+      await page.getByRole('button', { name: 'Add to-do' }).click()
+      await expect(page.getByRole('dialog', { name: 'Add to-do' })).toBeVisible()
+      await animationsDone(page)
+      expect(await seriousViolations(page)).toEqual([])
+    })
+
     test('/tasks page (done task)', async ({ page }) => {
       await openSeeded(page, '/todo')
       const lesson = page.getByRole('region', { name: 'Today' }).getByRole('listitem').filter({ hasText: '· Lesson ·' }).first()
@@ -57,7 +70,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       expect(await seriousViolations(page)).toEqual([])
       await page.getByRole('button', { name: 'Mark done' }).click()
       await expect(page.getByRole('dialog', { name: 'How did it go?' })).toBeVisible()
-      await page.waitForTimeout(800) // let the sheet finish its entrance before axe reads its colors
+      await animationsDone(page)
       await page.keyboard.press('4')
       await expect(page.getByText(/^Completed /)).toBeVisible()
       expect(await seriousViolations(page)).toEqual([])

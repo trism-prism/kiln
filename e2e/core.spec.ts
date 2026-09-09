@@ -88,15 +88,56 @@ test('overdue work is pinned on top and can be rescheduled', async ({ page }) =>
   await expect(page.getByRole('region', { name: /^Overdue/ })).toBeHidden()
 })
 
-test('range tabs: keyboard, forward lists group by day, past is empty on day one', async ({ page }) => {
+test('to-do list preferences: choose the days, kept after a reload', async ({ page }) => {
   await openSeeded(page, '/todo')
-  await page.getByRole('tab', { name: 'Today' }).focus()
-  await page.keyboard.press('ArrowRight')
-  await expect(page.getByRole('tab', { name: 'Next 7' })).toHaveAttribute('aria-selected', 'true')
   await expect(page.getByRole('heading', { level: 2, name: 'Today' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 2, name: 'Tomorrow' })).toBeHidden()
+  await page.getByRole('button', { name: 'To-do list preferences' }).click()
+  const dialog = page.getByRole('dialog', { name: 'To-do list preferences' })
+  await expect(dialog.getByRole('checkbox', { name: 'Show personal to-dos' })).toBeChecked()
+  await dialog.getByRole('radiogroup', { name: 'Show tasks until' }).locator('label', { hasText: 'Next week' }).click()
+  await dialog.getByLabel('Until day').fill('31')
+  await expect(dialog.getByText('Pick a month and a day')).toBeVisible()
+  await expect(dialog.getByLabel('Until day')).toHaveAccessibleDescription('Pick a month and a day')
+  await dialog.getByLabel('Until day').fill('')
+  await expect(dialog.getByText('Pick a month and a day')).toBeHidden()
+  await dialog.getByRole('button', { name: 'Done' }).click()
   await expect(page.getByRole('heading', { level: 2, name: 'Tomorrow' })).toBeVisible()
-  await page.getByRole('tab', { name: 'Past 7' }).click()
-  await expect(page.getByRole('heading', { name: 'Nothing was due in the past 7 days' })).toBeVisible()
+  await page.reload()
+  await expect(page.getByRole('heading', { level: 2, name: 'Tomorrow' })).toBeVisible()
+})
+
+test('personal to-dos: add with minutes, mark done, edit, delete', async ({ page }) => {
+  await openSeeded(page, '/todo')
+  await page.getByRole('button', { name: 'Add to-do' }).click()
+  const form = page.getByRole('dialog', { name: 'Add to-do' })
+  await form.getByRole('button', { name: 'Add to-do' }).click()
+  await expect(form.getByText('Enter a title.')).toBeVisible()
+  await form.getByLabel('Title').fill('Buy lab notebook')
+  for (const bad of ['0x1A', '1e2']) {
+    await form.getByLabel('Minutes (optional)').fill(bad)
+    await form.getByRole('button', { name: 'Add to-do' }).click()
+    await expect(form.getByText('Enter whole minutes from 0 to 1440, or leave it empty.')).toBeVisible()
+  }
+  await expect(form.getByLabel('Day (optional)')).toHaveValue('') // not prefilled: the hint says no day means today
+  await form.getByLabel('Minutes (optional)').fill('20')
+  await form.getByRole('button', { name: 'Add to-do' }).click()
+  // The row appears (live query) while the form is still saving; the dialog's scrim covers the page until it closes.
+  await expect(form).toBeHidden()
+  const row = page.getByRole('region', { name: 'Today' }).getByRole('listitem').filter({ hasText: 'Buy lab notebook' })
+  await expect(row).toContainText('To-do · 20 min')
+  await row.locator('label').click()
+  await expect(row.getByRole('checkbox')).toBeChecked()
+  await expect(row.getByText('Done', { exact: true })).toBeVisible()
+  await row.getByRole('button', { name: 'Edit Buy lab notebook' }).click()
+  await page.getByLabel('Title').fill('Buy two lab notebooks')
+  await page.getByRole('button', { name: 'Save' }).click()
+  const renamed = page.getByRole('listitem').filter({ hasText: 'Buy two lab notebooks' })
+  await expect(renamed).toBeVisible()
+  await renamed.getByRole('button', { name: 'Delete Buy two lab notebooks' }).click()
+  // The Undo toast also names the to-do, so check the list (main) and the toast separately.
+  await expect(page.getByRole('main').getByRole('listitem').filter({ hasText: 'Buy two lab notebooks' })).toBeHidden()
+  await expect(page.getByText('Deleted: Buy two lab notebooks')).toBeVisible()
 })
 
 test('dashboard shows one card per plan', async ({ page }) => {
