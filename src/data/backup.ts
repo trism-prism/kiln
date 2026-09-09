@@ -3,7 +3,7 @@ import type { Table } from 'dexie'
 import { z } from 'zod'
 import { planSchema } from '../domain/plan-format'
 import type { KilnDB } from './db'
-import { TABLE_NAMES, type Base, type TableName } from './types'
+import { TABLE_NAMES, type Base, type FeedRecord, type TableName } from './types'
 
 const BACKUP_APP = 'kiln'
 const DAY_MS = 86_400_000
@@ -171,12 +171,15 @@ export function rowSchemas(now: number) {
       }),
       feeds: rows({
         lms: z.enum(['canvas', 'blackboard', 'moodle', 'brightspace', 'schoology', 'google', 'other']),
-        url: z.url({ protocol: /^https$/ }).max(2048),
+        // Empty when restored from a backup (the backup file never holds the link).
+        url: z.url({ protocol: /^https$/ }).max(2048).or(z.literal('')),
+        needsLink: z.boolean().optional(),
+        noticeFp: str.max(200).optional(),
         name: str.max(120).optional(),
         planIds: z.array(str),
         lastFetchedAt: num.optional(),
         lastResult: z
-          .object({ ok: z.boolean(), added: int.min(0).optional(), changed: int.min(0).optional(), removed: int.min(0).optional(), error: str.max(500).optional() })
+          .object({ ok: z.boolean(), added: int.min(0).optional(), changed: int.min(0).optional(), removed: int.min(0).optional(), moved: int.min(0).optional(), error: str.max(500).optional() })
           .optional(),
       }),
   } satisfies Record<TableName, z.ZodType>
@@ -256,6 +259,8 @@ export async function exportBackup(db: KilnDB): Promise<string> {
   await db.transaction('r', TABLE_NAMES.map((n) => db.table(n)), async () => {
     for (const name of TABLE_NAMES) tables[name] = await db.table(name).toArray()
   })
+  // A feed link is a login token for the person's calendar, and a backup is a plain file that gets shared: it is left out.
+  tables.feeds = (tables.feeds as FeedRecord[]).map((f) => ({ ...f, url: '', needsLink: true }))
   return JSON.stringify({ app: BACKUP_APP, schemaVersion: db.verno, exportedAt: new Date().toISOString(), tables })
 }
 
@@ -297,6 +302,12 @@ export async function checkBackup(db: KilnDB, text: string): Promise<BackupCheck
   if (backup.schemaVersion > db.verno) {
     throw new Error(`This backup is from a newer Kiln (schema ${backup.schemaVersion}); update the app first`)
   }
+
+  // A restored feed has no link: it asks for one, and never blanks a link this device already has.
+  const have = await db.feeds.bulkGet(backup.tables.feeds.map((f) => f.id))
+  backup.tables.feeds = backup.tables.feeds
+    .map((f) => (f.url === '' ? { ...f, needsLink: true } : f))
+    .filter((f, i) => !(f.url === '' && have[i] && have[i].url !== ''))
 
   const counts: BackupResult = {}
   await db.transaction('r', TABLE_NAMES.map((n) => db.table(n)), async () => {
