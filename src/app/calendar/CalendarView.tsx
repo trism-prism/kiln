@@ -49,7 +49,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 function ItemChip({ chip, date }: { chip: Chip; date: string }) {
   const item = chip.item
-  const movable = !!item && !item.done && item.kind !== 'review'
+  const movable = !!item && !item.done && (item.kind === 'task' || item.kind === 'practice')
   const { dragProps, isDragging } = useDrag({
     isDisabled: !movable,
     getItems: () => [{ [DRAG_TYPE]: JSON.stringify({ kind: item!.kind as DragPayload['kind'], id: item!.id, title: item!.title, from: date } satisfies DragPayload) }],

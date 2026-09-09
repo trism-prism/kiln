@@ -25,3 +25,8 @@ export async function openSeeded(page: Page, path = '/') {
 export async function advanceDays(page: Page, days: number) {
   await page.clock.fastForward(days * 24 * 3_600_000)
 }
+
+/** Waits until every running animation on the page (a dialog's entrance) has finished, so axe reads final colors. */
+export async function animationsDone(page: import('@playwright/test').Page) {
+  await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined))))
+}
