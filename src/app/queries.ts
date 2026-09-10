@@ -15,6 +15,8 @@ import {
   listPersonalTodos,
   listPlans,
   masteryByPlan,
+  practiceConfig,
+  practiceLanguage,
   studyEvents,
   tasksScheduledBetween,
   type ModuleRecord,
@@ -58,7 +60,8 @@ export function useBadgeCount(today: string): number {
   return (
     useLiveQuery(async () => {
       const tasks = await tasksScheduledBetween(db, '0000-01-01', today)
-      const problems = alive(await db.practiceItems.where('date').belowOrEqual(today).toArray())
+      const on = new Set((await listPlans(db)).filter((p) => practiceConfig(p)).map((p) => p.id))
+      const problems = alive(await db.practiceItems.where('date').belowOrEqual(today).toArray()).filter((p) => on.has(p.planId))
       const todos = await db.personalTodos.where('date').belowOrEqual(today).toArray()
       return badgeCount([...tasks, ...problems.map((p) => ({ status: p.status, scheduledDate: p.date }))], await dueCards(db, today), today, todos)
     }, [today]) ?? 0
@@ -69,6 +72,8 @@ async function loadTodo(today: string, horizonDays: number) {
   const plans = await listPlans(db)
   const allTasks = alive(await db.tasks.toArray())
   const problems = alive(await db.practiceItems.toArray())
+  const planLanguages = new Map(plans.map((p) => [p.id, practiceLanguage(p)]))
+  const practiceLanguages = new Map(plans.filter((p) => practiceConfig(p)).map((p) => [p.id, practiceLanguage(p)]))
   const cards = await dueCards(db, addDaysISO(today, horizonDays))
   const taskTitle = new Map(allTasks.map((t) => [t.id, t.title]))
   const problemTitle = new Map(problems.map((p) => [p.slug, p.title]))
@@ -80,6 +85,8 @@ async function loadTodo(today: string, horizonDays: number) {
       personalTodos: await listPersonalTodos(db),
       events: await eventsBetween(db, addDaysISO(today, -horizonDays), addDaysISO(today, horizonDays)),
       planTitles: new Map(plans.map((p) => [p.id, p.title])),
+      practiceLanguages,
+      planLanguages,
       cardTitle: (c) => (c.taskId && taskTitle.get(c.taskId)) || (c.slug && (problemTitle.get(c.slug) ?? c.slug)) || '',
     },
     today,
@@ -165,7 +172,7 @@ export function usePlanSummaries(today: string): PlanSummary[] | undefined {
       const mine = tasks.filter((t) => t.planId === plan.id && t.status !== 'skipped')
       const open = mine.filter((t) => t.status === 'open')
       const dated = open.filter((t) => t.scheduledDate).sort((a, b) => (a.scheduledDate! < b.scheduledDate! ? -1 : a.scheduledDate! > b.scheduledDate! ? 1 : a.order - b.order))
-      const myProblems = problems.filter((p) => p.planId === plan.id && p.status === 'open')
+      const myProblems = practiceConfig(plan) ? problems.filter((p) => p.planId === plan.id && p.status === 'open') : []
       const core = mine.filter((t) => t.priority === 'core')
       return {
         plan,

@@ -32,7 +32,7 @@ function Entry({ e, onReview }: { e: BrushUpEntry; onReview: () => void }) {
             Open task
           </Link>
         ) : (
-          e.card.slug && <LeetCodeLink slug={e.card.slug} title={e.title} />
+          e.card.slug && <LeetCodeLink slug={e.card.slug} title={e.title} language={e.language} />
         )}
         <Button variant={e.due ? 'primary' : 'secondary'} onPress={onReview} aria-label={`Review now: ${e.title}`}>
           Review now
