@@ -5,8 +5,10 @@ import { useNavigate } from 'react-router'
 import { useTodoCount } from '../app/useTodoCount'
 import { db, getSettings } from '../data'
 import { toLocalISODate } from '../lib/date'
+import { toasts } from '../ui/overlay'
 import { applyBadge } from './badge'
 import { API_URL } from './env'
+import { checkFeedsIfDue, feedNotice } from './feeds'
 import { pingIfDue } from './ping'
 import { syncPush } from './push-client'
 import { registerServiceWorker } from './register'
@@ -14,6 +16,7 @@ import { scheduleSync } from './sync-runner'
 
 // StrictMode runs effects twice in development; the once-per-open work happens once.
 let opened = false
+let feedsChecked = false
 
 export function PwaEffects() {
   const navigate = useNavigate()
@@ -32,6 +35,21 @@ export function PwaEffects() {
     void getSettings(db).then((s) => syncPush(db, s)).catch(() => undefined)
     scheduleSync(0)
   }, [])
+
+  // Calendar links kept in sync: at most every 6 hours, on open; new items wait for the person's review.
+  useEffect(() => {
+    if (feedsChecked) return
+    feedsChecked = true
+    void checkFeedsIfDue(db, fetch, API_URL, Date.now(), toLocalISODate(new Date())).then((found) => {
+      for (const c of found) {
+        toasts.add({
+          title: 'Your course calendar changed',
+          description: feedNotice(c.added, c.changed, c.moved),
+          action: { label: 'Review', onPress: () => void navigate(`/import?tab=calendar&feed=${c.feed.id}`) },
+        })
+      }
+    })
+  }, [navigate])
 
   // Sync again when the connection comes back or the app returns to the foreground.
   useEffect(() => {

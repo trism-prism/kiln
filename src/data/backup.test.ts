@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { exportBackup, importBackup } from './backup'
 import { fixtureTexts, validateParts } from './fixtures'
-import { importPlan, listTasks, setTaskStatus, softDelete, updateSettings } from './repo'
+import { importPlan, insertRecord, listTasks, setTaskStatus, softDelete, updateSettings } from './repo'
 import { newDb } from './test-db'
 
 const sd = validateParts([fixtureTexts.sd]).plans[0]!
@@ -17,6 +17,25 @@ async function seeded() {
 }
 
 describe('backup', () => {
+  it('leaves feed links out of the file and restores the feeds as needing their link', async () => {
+    const db = newDb()
+    const url = 'https://canvas.example.edu/feeds/calendars/user_secret_token.ics'
+    const feed = await insertRecord(db, 'feeds', { lms: 'canvas', url, planIds: ['p1'], lastFetchedAt: 5 })
+    const text = await exportBackup(db)
+    expect(text).not.toContain('user_secret_token')
+    expect(text).not.toContain(url)
+    expect(JSON.parse(text).tables.feeds[0]).toMatchObject({ id: feed.id, url: '', needsLink: true })
+
+    const other = newDb()
+    await importBackup(other, text)
+    expect(await other.feeds.get(feed.id)).toMatchObject({ url: '', needsLink: true, planIds: ['p1'] })
+
+    // Restoring over a device that has the link keeps the link.
+    await db.feeds.update(feed.id, { updatedAt: Date.now() - 1000 })
+    await importBackup(db, text)
+    expect((await db.feeds.get(feed.id))?.url).toBe(url)
+  })
+
   it('round-trips every table, tombstones included, into an empty database', async () => {
     const { db } = await seeded()
     const text = await exportBackup(db)
