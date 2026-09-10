@@ -288,6 +288,13 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await check(page)
     })
 
+    test('/import, course calendar with a file loaded', async ({ page }) => {
+      await page.goto('/import?tab=calendar')
+      await page.getByRole('tabpanel', { name: 'From a course calendar' }).locator('input[type=file]').setInputFiles(fileURLToPath(new URL('../fixtures/calendars/canvas.ics', import.meta.url)))
+      await expect(page.getByLabel('Minutes for Quiz 2')).toBeVisible()
+      await check(page)
+    })
+
     test('/settings', async ({ page }) => {
       await page.goto('/settings')
       await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible()
