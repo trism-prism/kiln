@@ -247,6 +247,15 @@ export interface ImportOptions {
   deadline?: string
   /** Share of study time, default even. Used when the plan is created. */
   share?: Share
+  /**
+   * Make the plan's modules and tasks match the file exactly (plan edits and version restores):
+   * deleted ones that are in the file come back with their progress, live ones not in it are deleted.
+   */
+  replace?: boolean
+  /** With replace: delete only these keys (modules and tasks) when the file leaves them out; others left out stay. */
+  onlyRemove?: ReadonlySet<string>
+  /** Apply to this plan (by record id) instead of the live plan with the file's key; two devices can create duplicates of a key. */
+  planId?: string
 }
 
 export interface ImportResult {
@@ -273,7 +282,8 @@ export async function importPlan(db: KilnDB, plan: Plan, opts: ImportOptions): P
   const stamp = (prev?: number) => ({ updatedAt: stampAfter(prev), deviceId })
 
   return db.transaction('rw', db.plans, db.modules, db.tasks, async () => {
-    const existing = await getPlanByKey(db, plan.id)
+    const existing = opts.planId ? await getPlan(db, opts.planId) : await getPlanByKey(db, plan.id)
+    if (opts.planId && !existing) throw new Error('The plan is missing or deleted')
     if (!existing && part.index !== 1) throw new Error(`Part ${part.index} of "${plan.id}" needs part 1 imported first`)
 
     const content = {
@@ -287,7 +297,9 @@ export async function importPlan(db: KilnDB, plan: Plan, opts: ImportOptions): P
       sources: plan.sources,
       dailyPractice: plan.dailyPractice,
     }
-    const partsIn = [...new Set([...(existing?.partsIn ?? []), part.index])].sort((a, b) => a - b)
+    // An edit or restore of a split plan is not a part: it keeps the parts already in.
+    const keepParts = !!(opts.replace && existing)
+    const partsIn = keepParts ? existing.partsIn : [...new Set([...(existing?.partsIn ?? []), part.index])].sort((a, b) => a - b)
     let planRec: PlanRecord
     if (existing) {
       // Plan-level fields come from part 1 only (docs/plan-format.md, "Parts").
@@ -295,7 +307,7 @@ export async function importPlan(db: KilnDB, plan: Plan, opts: ImportOptions): P
         ...existing,
         ...(part.index === 1 ? content : {}),
         ...(opts.deadline ? { deadline: opts.deadline } : {}),
-        partTotal: part.total,
+        partTotal: keepParts ? existing.partTotal : part.total,
         partsIn,
         ...stamp(existing.updatedAt),
       }
@@ -330,9 +342,17 @@ export async function importPlan(db: KilnDB, plan: Plan, opts: ImportOptions): P
         await db.modules.add(rec)
         moduleIds.set(m.id, rec.id)
         modulesAdded++
-      } else if (!old.deleted) {
-        const next = { ...old, ...fields }
+      } else if (!old.deleted || opts.replace) {
+        const next = { ...old, ...fields, deleted: false }
         if (json(next) !== json(old)) await db.modules.put({ ...next, ...stamp(old.updatedAt) })
+        moduleIds.set(m.id, old.id)
+      }
+    }
+    const notIn = <T extends { key: string; deleted: boolean }>(rows: Iterable<T>, keys: Set<string>) => [...rows].filter((r) => !r.deleted && !keys.has(r.key))
+    if (opts.replace) {
+      for (const m of notIn(oldModules.values(), new Set(plan.modules.map((m) => m.id))).filter((m) => !opts.onlyRemove || opts.onlyRemove.has(m.key))) {
+        await db.modules.put({ ...m, deleted: true, ...stamp(m.updatedAt) })
+        moduleIds.delete(m.key)
       }
     }
 
@@ -351,14 +371,17 @@ export async function importPlan(db: KilnDB, plan: Plan, opts: ImportOptions): P
         const rec = { ...fields, id: uuidv7(), planId, status: 'open', pinnedDate: t.fixedDate, deleted: false, ...stamp() } as TaskRecord
         await db.tasks.add(rec)
         tasksAdded++
-      } else if (!old.deleted) {
-        const next = { ...old, ...fields, id: old.id } as TaskRecord
+      } else if (!old.deleted || opts.replace) {
+        const next = { ...old, ...fields, id: old.id, deleted: false } as TaskRecord
         if (t.fixedDate && t.fixedDate !== old.fixedDate) next.pinnedDate = t.fixedDate
         if (json(next) !== json(old)) {
           await db.tasks.put({ ...next, ...stamp(old.updatedAt) })
           tasksUpdated++
         }
       }
+    }
+    if (opts.replace) {
+      for (const t of notIn(oldTasks.values(), new Set(plan.tasks.map((t) => t.id))).filter((t) => !opts.onlyRemove || opts.onlyRemove.has(t.key))) await db.tasks.put({ ...t, deleted: true, ...stamp(t.updatedAt) })
     }
 
     return { planId, created: !existing, modulesAdded, tasksAdded, tasksUpdated, partsIn, complete: isPlanComplete(planRec) }
