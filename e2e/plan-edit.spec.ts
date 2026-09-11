@@ -119,3 +119,22 @@ test('the editor manages focus, disables the end arrows and checks dependency cy
   await form.getByRole('button', { name: 'Cancel' }).click()
   await expect(edit).toBeFocused()
 })
+
+test('an error under Deadline leaves Pinned to level, and Save plan focuses the unreadable date', async ({ page }) => {
+  await openSeeded(page, '/plans')
+  await page.getByRole('main').getByRole('heading', { level: 2 }).first().getByRole('link').click()
+  await page.getByRole('button', { name: 'Edit plan', exact: true }).click()
+  const form = page.getByRole('form', { name: 'Edit plan' })
+  await form.locator('[data-module]').first().getByRole('button', { name: 'Details' }).first().click()
+  const deadline = form.getByRole('textbox', { name: 'Deadline (optional)' })
+  const pinned = form.getByRole('textbox', { name: 'Pinned to (optional)' })
+  const offset = async () => (await pinned.boundingBox())!.y - (await deadline.boundingBox())!.y
+  expect(Math.abs(await offset())).toBeLessThanOrEqual(1)
+  await deadline.fill('soon')
+  await deadline.press('Tab')
+  await expect(form.getByText('Try a date like Nov 20')).toBeVisible()
+  expect(Math.abs(await offset())).toBeLessThanOrEqual(1)
+  await form.getByRole('button', { name: 'Save plan' }).click()
+  await expect(deadline).toBeFocused()
+  await expect(form).toBeVisible()
+})

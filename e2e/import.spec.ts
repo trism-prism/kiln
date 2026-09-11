@@ -211,10 +211,10 @@ test('a changed study budget persists and offers a reschedule', async ({ page })
 
 test('days off can be added and removed', async ({ page }) => {
   await page.goto('/settings')
-  await page.getByLabel('Date', { exact: true }).fill('2027-01-01')
+  await page.getByLabel('Date', { exact: true }).fill('2099-01-01')
   await page.getByRole('button', { name: 'Add day off' }).click()
-  await expect(page.getByRole('list', { name: 'Days off' })).toContainText('2027-01-01')
-  await page.getByRole('button', { name: 'Remove 2027-01-01' }).click()
+  await expect(page.getByRole('list', { name: 'Days off' })).toContainText('2099-01-01')
+  await page.getByRole('button', { name: 'Remove 2099-01-01' }).click()
   await expect(page.getByText('No days off.')).toBeVisible()
 })
 

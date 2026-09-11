@@ -85,10 +85,10 @@ describe('Settings', () => {
   it('adds and removes a day off', async () => {
     const user = userEvent.setup()
     renderPage()
-    await user.type(await screen.findByLabelText('Date'), '2027-01-01')
+    await user.type(await screen.findByLabelText('Date'), '2099-01-01')
     await user.click(screen.getByRole('button', { name: 'Add day off' }))
-    await waitFor(async () => expect((await getSettings(db)).blackoutDates).toEqual(['2027-01-01']))
-    await user.click(await screen.findByRole('button', { name: 'Remove 2027-01-01' }))
+    await waitFor(async () => expect((await getSettings(db)).blackoutDates).toEqual(['2099-01-01']))
+    await user.click(await screen.findByRole('button', { name: 'Remove 2099-01-01' }))
     await waitFor(async () => expect((await getSettings(db)).blackoutDates).toEqual([]))
   })
 
@@ -123,5 +123,35 @@ describe('Settings reset dialog', () => {
     expect(await screen.findByRole('radio', { name: /Erase on this device only \(turns sync off\)/ })).toBeTruthy()
     expect(screen.getByRole('radio', { name: /Erase everywhere/ })).toBeTruthy()
     await db.meta.clear()
+  })
+})
+
+describe('Days off', () => {
+  it('reads yesterday typed with no year as yesterday and refuses it', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    const d = new Date()
+    d.setDate(d.getDate() - 1)
+    const field = await screen.findByRole('textbox', { name: 'Date' })
+    await user.type(field, d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }))
+    await user.tab()
+    expect(screen.getByText('Pick today or later')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Add day off' }).hasAttribute('disabled')).toBe(true)
+  })
+
+  it('does not add a day off while the date text cannot be read', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    const field = await screen.findByRole('textbox', { name: 'Date' })
+    const add = screen.getByRole('button', { name: 'Add day off' })
+    await user.type(field, '2099-01-02')
+    await user.tab()
+    expect(add.hasAttribute('disabled')).toBe(false)
+    // The field goes back to Jan 2 underneath, but shows an error: adding must wait for a fix.
+    await user.type(field, 'x')
+    await user.click(add)
+    expect(screen.getByText('Try a date like Nov 20')).toBeTruthy()
+    expect(add.hasAttribute('disabled')).toBe(true)
+    expect((await getSettings(db)).blackoutDates).toEqual([])
   })
 })

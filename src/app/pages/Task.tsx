@@ -49,6 +49,8 @@ export default function TaskPage() {
   const detail = useTaskDetail(taskId)
   const { complete, sheet } = useCompleter()
   const [pinDate, setPinDate] = useState('')
+  // The pin field shows its own error for text it can't read; Pin waits until it is fixed.
+  const [pinBad, setPinBad] = useState(false)
 
   if (detail === undefined) {
     return (
@@ -72,7 +74,7 @@ export default function TaskPage() {
   const skipped = task.status === 'skipped'
   const hasCard = cardMinutes(task) !== undefined
   const lc = task.practice?.provider === 'leetcode' && task.practice.slug ? task.practice : undefined
-  const validPin = isRealISODate(pinDate)
+  const validPin = isRealISODate(pinDate) && !pinBad
 
   return (
     <Page title={task.title}>
@@ -207,7 +209,7 @@ export default function TaskPage() {
             {skipped ? 'Unskip' : 'Skip'}
           </Button>
           <div className="grid gap-2">
-            <TextField label="Pin to date" type="date" value={pinDate} onChange={setPinDate} description="The scheduler keeps a pinned task on its day." />
+            <TextField label="Pin to date" type="date" value={pinDate} onChange={setPinDate} onInvalidChange={setPinBad} description="The scheduler keeps a pinned task on its day." />
             <div className="flex gap-2">
               <Button variant="secondary" isDisabled={!validPin} onPress={() => void pinTask(task.id, pinDate)}>
                 Pin

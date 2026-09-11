@@ -160,7 +160,7 @@ test('personal to-dos: add with minutes, mark done, edit, delete', async ({ page
     await form.getByRole('button', { name: 'Add to-do' }).click()
     await expect(form.getByText('Enter whole minutes from 0 to 1440, or leave it empty.')).toBeVisible()
   }
-  await expect(form.getByLabel('Day (optional)')).toHaveValue('') // not prefilled: the hint says no day means today
+  await expect(form.getByLabel('Day (optional)')).toHaveValue('') // not prefilled: a to-do with no day is listed under today
   await form.getByLabel('Minutes (optional)').fill('20')
   await form.getByRole('button', { name: 'Add to-do' }).click()
   // The row appears (live query) while the form is still saving; the dialog's scrim covers the page until it closes.
