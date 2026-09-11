@@ -13,9 +13,16 @@ The layout follows a familiar course-site pattern: left nav rail with a red coun
 | Dashboard | [light](dashboard-desktop-light.png), [dark](dashboard-desktop-dark.png) | [light](dashboard-phone-light.png), [dark](dashboard-phone-dark.png) |
 | To Do | [light](todo-desktop-light.png), [dark](todo-desktop-dark.png) | [light](todo-phone-light.png), [dark](todo-phone-dark.png) |
 | Calendar (month view, full page with the streak heatmap) | [light](calendar-desktop-light.png), [dark](calendar-desktop-dark.png) | [light](calendar-phone-light.png), [dark](calendar-phone-dark.png) |
+| Onboarding (study-time presets) | [light](onboarding-desktop-light.png), [dark](onboarding-desktop-dark.png) | [light](onboarding-phone-light.png), [dark](onboarding-phone-dark.png) |
+| To-do list preferences dialog | [light](todo-preferences-desktop-light.png), [dark](todo-preferences-desktop-dark.png) | [light](todo-preferences-phone-light.png), [dark](todo-preferences-phone-dark.png) |
+| Quick add builder (full page) | [light](quick-add-desktop-light.png), [dark](quick-add-desktop-dark.png) | [light](quick-add-phone-light.png), [dark](quick-add-phone-dark.png) |
+| Import from a course calendar (full page) | [light](course-calendar-desktop-light.png), [dark](course-calendar-desktop-dark.png) | [light](course-calendar-phone-light.png), [dark](course-calendar-phone-dark.png) |
+| Plan editor | [light](plan-edit-desktop-light.png), [dark](plan-edit-desktop-dark.png) | [light](plan-edit-phone-light.png), [dark](plan-edit-phone-dark.png) |
+| Plan history (versions, restore) | [light](plan-history-desktop-light.png), [dark](plan-history-desktop-dark.png) | [light](plan-history-phone-light.png), [dark](plan-history-phone-dark.png) |
+| Streak and heatmap (a year of sample history) | [light](heatmap-desktop-light.png), [dark](heatmap-desktop-dark.png) | [light](heatmap-phone-light.png), [dark](heatmap-phone-dark.png) |
 | Design system (full page) | [light](design-desktop-light.png), [dark](design-desktop-dark.png) | [light](design-phone-light.png), [dark](design-phone-dark.png) |
 
-The /design page shows every token and component twice, light and dark side by side, whatever the system theme. Dashboard, To Do and Calendar are shot with the sample plans three days in (one lesson done, the rest overdue); the design page has no data. Regenerate with `SCREENSHOTS=1 npx playwright test screenshots`.
+The /design page shows every token and component twice, light and dark side by side, whatever the system theme. Dashboard, To Do and Calendar are shot with the sample plans three days in (one lesson done, the rest overdue); the design page has no data. The screens added by the UX overhaul (onboarding to heatmap) are shot with the same sample plans; the heatmap shot first marks 90 tasks done on scattered past days so it shows a history. Regenerate with `SCREENSHOTS=1 npx playwright test screenshots`.
 
 ## Tokens
 
