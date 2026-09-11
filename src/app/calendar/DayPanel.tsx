@@ -78,7 +78,7 @@ function Row({ item, date, today, onMove }: { item: TodoItem; date: string; toda
           </div>
           <p className="mt-0.5 text-xs text-text-muted">{itemMeta(item)}</p>
         </div>
-        {item.leetcode && !item.done && <LeetCodeLink slug={item.leetcode.slug} title={item.title} />}
+        {item.leetcode && !item.done && <LeetCodeLink slug={item.leetcode.slug} title={item.title} language={item.leetcode.language} />}
         {item.kind === 'personal' && <PersonalActions item={item} />}
       </div>
       {movable &&

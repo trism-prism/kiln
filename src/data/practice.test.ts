@@ -104,6 +104,13 @@ describe('completePractice', () => {
     expect(due.map((c) => c.slug)).toContain(item.slug)
     expect((await brushUp(db, r.card.due + 1)).map((e) => e.title)).toContain(item.title)
 
+    // Switching the plan's daily practice off hides its problem cards from dueCards and the brush-up list.
+    await updateRecord(db, 'plans', item.planId, { dailyPracticeOn: false })
+    expect((await dueCards(db, addDaysISO(TODAY, 30))).map((c) => c.slug)).not.toContain(item.slug)
+    expect(await brushUp(db, r.card.due + 1)).toEqual([])
+    await updateRecord(db, 'plans', item.planId, { dailyPracticeOn: undefined })
+    expect((await brushUp(db, r.card.due + 1))[0]).toMatchObject({ language: 'Python' })
+
     await r.undo()
     expect((await db.practiceItems.get(item.id))!).toMatchObject({ status: 'open' })
     expect((await db.practiceLog.toArray()).filter((l) => !l.deleted)).toEqual([])

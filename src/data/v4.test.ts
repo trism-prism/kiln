@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { exportBackup, importBackup } from './backup'
 import { KilnDB } from './db'
 import { fixtureTexts, validateParts } from './fixtures'
-import { planWeight, practiceConfig } from './plan-settings'
+import { planWeight, practiceConfig, practiceLanguage } from './plan-settings'
 import {
   eventsBetween,
   getPlan,
@@ -26,6 +26,8 @@ import { listPlanVersions, MAX_VERSIONS, planFromRecords, readSnapshot, snapshot
 
 const TODAY = '2026-11-09' // a Monday
 const sd = () => validateParts([fixtureTexts.sd]).plans[0]!
+
+const dp0 = { source: 'plan' as const, perDay: 1, startDifficulty: 'easy' as const, topicFollowsLessons: true }
 
 describe('migration to version 4', () => {
   it('keeps version 3 data and maps plan weight to share (1-2 less, 3 even, 4-5 more)', async () => {
@@ -85,6 +87,12 @@ describe('plan settings', () => {
     expect(practiceConfig({ dailyPractice: dp, dailyPracticeOn: false })).toBeUndefined()
     expect(practiceConfig({})).toBeUndefined()
     expect(practiceConfig({ dailyPracticeOn: true })).toMatchObject({ source: 'neetcode', perDay: 1 })
+  })
+
+  it('practiceLanguage names the language of the plan, Python when none', () => {
+    expect(practiceLanguage({})).toBe('Python')
+    expect(practiceLanguage({ dailyPractice: { ...dp0, language: 'javascript' } })).toBe('JavaScript')
+    expect(practiceLanguage({ dailyPractice: { ...dp0, language: 'rust' } })).toBe('Rust')
   })
 })
 

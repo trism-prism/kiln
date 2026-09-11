@@ -28,10 +28,20 @@ const problem = (id: string, date: string, over: Partial<TodoProblem> = {}): Tod
 })
 const card = (id: string, due: number, over: Partial<TodoCard> = {}): TodoCard => ({ id, planId: 'p1', taskId: 't1', due, minutes: 10, ...over })
 
-const build = (tasks: TodoSource['tasks'], problems: TodoProblem[] = [], cards: TodoCard[] = []) =>
-  buildTodoItems({ tasks, problems, cards, planTitles: new Map([['p1', 'DSA']]), cardTitle: (c) => (c.taskId ? `Task ${c.taskId}` : (c.slug ?? '')) }, TODAY)
+const build = (tasks: TodoSource['tasks'], problems: TodoProblem[] = [], cards: TodoCard[] = [], practiceLanguages: TodoSource['practiceLanguages'] = new Map([['p1', 'Python']]), planLanguages: TodoSource['planLanguages'] = new Map([['p1', 'Python']])) =>
+  buildTodoItems({ tasks, problems, cards, planTitles: new Map([['p1', 'DSA']]), practiceLanguages, planLanguages, cardTitle: (c) => (c.taskId ? `Task ${c.taskId}` : (c.slug ?? '')) }, TODAY)
 
 describe('buildTodoItems', () => {
+  it('lists generated daily problems only for plans with daily practice on, in the language of that plan', () => {
+    const lcTask = task('t1', TODAY, { practice: { provider: 'leetcode', slug: 'two-sum', difficulty: 'easy' } })
+    const off = build([lcTask], [problem('a', TODAY)], [], new Map(), new Map([['p1', 'Go']]))
+    expect(off.map((i) => i.kind)).toEqual(['task'])
+    // a LeetCode task written into the plan keeps its Solve link, in the plan's language even with the setting off
+    expect(off[0]?.leetcode).toMatchObject({ language: 'Go' })
+    const on = build([], [problem('a', TODAY)], [], new Map([['p1', 'Go']]))
+    expect(on[0]).toMatchObject({ kind: 'practice', leetcode: { language: 'Go' } })
+  })
+
   it('lists scheduled open and done tasks, not skipped or undated ones', () => {
     const items = build([task('t1', TODAY), task('t2', TODAY, { status: 'done' }), task('t3', TODAY, { status: 'skipped' }), task('t4', undefined)])
     expect(items.map((i) => [i.id, i.done])).toEqual([
@@ -58,8 +68,8 @@ describe('buildTodoItems', () => {
   it('asks for a rating only where a review card exists or will', () => {
     const items = build([task('t1', TODAY), task('t2', TODAY, { type: 'milestone' }), task('t3', TODAY, { type: 'practice', practice: { provider: 'leetcode', slug: 'two-sum', difficulty: 'easy' } })], [problem('a', TODAY)])
     expect(Object.fromEntries(items.map((i) => [i.id, i.rates]))).toEqual({ t1: true, t2: false, t3: true, a: true })
-    expect(items.find((i) => i.id === 't3')?.leetcode).toEqual({ slug: 'two-sum', difficulty: 'easy' })
-    expect(items.find((i) => i.id === 'a')).toMatchObject({ kind: 'practice', leetcode: { slug: 'slug-a', difficulty: 'easy' } })
+    expect(items.find((i) => i.id === 't3')?.leetcode).toEqual({ slug: 'two-sum', difficulty: 'easy', language: 'Python' })
+    expect(items.find((i) => i.id === 'a')).toMatchObject({ kind: 'practice', leetcode: { slug: 'slug-a', difficulty: 'easy', language: 'Python' } })
   })
 
   it('orders reviews, then tasks in plan order, then daily problems', () => {
@@ -143,6 +153,8 @@ describe('personal to-dos and events', () => {
       tasks: [task('t1', TODAY)],
       problems: [],
       cards: [],
+      practiceLanguages: new Map(),
+      planLanguages: new Map(),
       personalTodos: [
         { id: 'p1', title: 'Buy a book', done: false },
         { id: 'p2', title: 'Hand in form', date: '2026-11-09', minutes: 15, done: false },

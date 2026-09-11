@@ -1,6 +1,21 @@
-import { useState } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
-import { db, scheduleAll, setPlanShare, SHARE_LABEL, shareFromWeight, SHARES, softDeletePlan, updateRecord, type Share, type TaskRecord } from '../../data'
+import {
+  db,
+  getSettings,
+  listPlans,
+  practiceOn,
+  scheduleAll,
+  setPlanShare,
+  SHARE_LABEL,
+  shareFromWeight,
+  SHARES,
+  softDeletePlan,
+  updateRecord,
+  type Share,
+  type TaskRecord,
+} from '../../data'
 import { formatDay, isRealISODate, toLocalISODate } from '../../lib/date'
 import { Button, Link } from '../../ui/button'
 import { ListBoxItem, Select, Switch, TextField } from '../../ui/form'
@@ -8,6 +23,9 @@ import { Sheet, toasts } from '../../ui/overlay'
 import { Badge, Card, EmptyState, ProgressBar, Skeleton } from '../../ui/surface'
 import { rescheduleOverdue, safely, scheduleBacklogAgain } from '../actions'
 import { Page } from '../Page'
+import { PlanEditor } from '../plan/PlanEditor'
+import { shareExample } from '../plan/share-example'
+import { FavoriteButton, History } from '../plan/PlanExtras'
 import { minutesText, TitleLink } from '../parts'
 import { PRIORITY_LABEL } from '../priority'
 import { usePlanDetail, useToday, type PlanDetail } from '../queries'
@@ -61,44 +79,49 @@ function Modules({ detail, today }: { detail: PlanDetail; today: string }) {
   )
 }
 
-function Settings({ detail }: { detail: PlanDetail }) {
+function Settings({ detail, today }: { detail: PlanDetail; today: string }) {
   const { plan } = detail
   const [deadline, setDeadline] = useState(plan.deadline ?? '')
+  const others = useLiveQuery(async () => ({ plans: await listPlans(db), settings: await getSettings(db) }))
   // A half-typed date reads as empty, so only a complete date is saved; Clear removes the deadline.
   const commitDeadline = () => {
     if (deadline !== plan.deadline && isRealISODate(deadline)) void safely(() => updateRecord(db, 'plans', plan.id, { deadline: deadline }))
   }
+  const rescheduleAfter = (write: () => Promise<unknown>) =>
+    void safely(async () => {
+      await write()
+      await scheduleAll(db, toLocalISODate(new Date()))
+    })
+  const example = others && shareExample(plan, others.plans, others.settings, today)
   return (
     <Card className="grid h-fit gap-5">
       <h2 className="text-base font-medium">Plan settings</h2>
-      <Select
-        label="Share of study time"
-        description="How much of each day this plan gets compared with the others."
-        selectedKey={plan.share ?? shareFromWeight(plan.weight)}
-        onSelectionChange={(k) =>
-          void safely(async () => {
-            await setPlanShare(db, plan.id, k as Share)
-            await scheduleAll(db, toLocalISODate(new Date()))
-          })
-        }
-      >
-        {SHARES.map((s) => (
-          <ListBoxItem key={s} id={s}>
-            {SHARE_LABEL[s]}
-          </ListBoxItem>
-        ))}
-      </Select>
-      <Switch
-        isSelected={!!plan.skipOptional}
-        onChange={(on) =>
-          void safely(async () => {
-            await updateRecord(db, 'plans', plan.id, { skipOptional: on })
-            await scheduleAll(db, toLocalISODate(new Date()))
-          })
-        }
-      >
-        Skip optional work
-      </Switch>
+      {others && others.plans.length > 1 && (
+        <Select
+          label="Share of study time"
+          description={`How much of each day this plan gets compared with your other plans${example ? `: ${example}` : ''}.`}
+          selectedKey={plan.share ?? shareFromWeight(plan.weight)}
+          onSelectionChange={(k) => rescheduleAfter(() => setPlanShare(db, plan.id, k as Share))}
+        >
+          {SHARES.map((s) => (
+            <ListBoxItem key={s} id={s}>
+              {SHARE_LABEL[s]}
+            </ListBoxItem>
+          ))}
+        </Select>
+      )}
+      <div className="grid gap-1.5">
+        <Switch isSelected={!!plan.skipOptional} onChange={(on) => rescheduleAfter(() => updateRecord(db, 'plans', plan.id, { skipOptional: on }))}>
+          Skip optional work
+        </Switch>
+        <p className="text-sm text-text-muted">Optional tasks go to the backlog instead of your days, so the plan finishes sooner.</p>
+      </div>
+      <div className="grid gap-1.5">
+        <Switch isSelected={practiceOn(plan)} onChange={(on) => rescheduleAfter(() => updateRecord(db, 'plans', plan.id, { dailyPracticeOn: on }))}>
+          Daily practice problem
+        </Switch>
+        <p className="text-sm text-text-muted">A practice problem on each study day, on top of the plan&apos;s tasks.</p>
+      </div>
       <TextField
         label="Deadline"
         type="date"
@@ -119,7 +142,7 @@ function Settings({ detail }: { detail: PlanDetail }) {
           Clear deadline
         </Button>
       )}
-      <p className="text-sm text-text-muted">Weight and deadline apply the next time you reschedule.</p>
+      <p className="text-sm text-text-muted">The deadline applies the next time you reschedule.</p>
     </Card>
   )
 }
@@ -162,6 +185,13 @@ export default function PlanPage() {
   const detail = usePlanDetail(planId)
   const today = useToday()
   const [confirming, setConfirming] = useState(false)
+  const [editing, setEditing] = useState(false)
+  // Closing the editor returns focus to the button that opened it.
+  const wasEditing = useRef(false)
+  useEffect(() => {
+    if (wasEditing.current && !editing) document.getElementById('edit-plan')?.focus()
+    wasEditing.current = editing
+  }, [editing, detail])
 
   if (detail === undefined) {
     return (
@@ -186,7 +216,13 @@ export default function PlanPage() {
     <Page
       title={detail.plan.title}
       actions={
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <FavoriteButton plan={detail.plan} />
+          {!editing && (
+            <Button variant="secondary" id="edit-plan" onPress={() => setEditing(true)}>
+              Edit plan
+            </Button>
+          )}
           <Button variant="secondary" onPress={() => void rescheduleOverdue()}>
             Reschedule
           </Button>
@@ -197,34 +233,43 @@ export default function PlanPage() {
       }
     >
       <div className="grid gap-8 lg:grid-cols-[1fr_20rem]">
-        <div className="grid min-w-0 content-start gap-8">
-          <ProgressBar label="All tasks" value={all.length ? Math.round((done / all.length) * 100) : 0} valueLabel={`${done} of ${all.length}`} />
-          <section aria-labelledby="modules" className="grid gap-3">
-            <h2 id="modules" className="text-base font-medium">
-              Modules
-            </h2>
-            <Modules detail={detail} today={today} />
-          </section>
-          {detail.backlog.length > 0 && (
-            <section aria-labelledby="backlog" className="grid gap-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 id="backlog" className="text-base font-medium">
-                  Backlog
-                </h2>
-                <Button variant="secondary" onPress={() => void scheduleBacklogAgain()}>
-                  Schedule again
-                </Button>
-              </div>
-              <p className="text-sm text-text-muted">The scheduler set these aside to keep the plan on time, or you chose to skip optional work. They have no date.</p>
-              <ul className="divide-y divide-border rounded-lg border border-border bg-surface-raised px-4">
-                {detail.backlog.map((t) => (
-                  <TaskRow key={t.id} t={t} today={today} />
-                ))}
-              </ul>
+        {editing ? (
+          <div className="min-w-0">
+            <PlanEditor detail={detail} onClose={() => setEditing(false)} />
+          </div>
+        ) : (
+          <div className="grid min-w-0 content-start gap-8">
+            <ProgressBar label="All tasks" value={all.length ? Math.round((done / all.length) * 100) : 0} valueLabel={`${done} of ${all.length}`} />
+            <section aria-labelledby="modules" className="grid gap-3">
+              <h2 id="modules" className="text-base font-medium">
+                Modules
+              </h2>
+              <Modules detail={detail} today={today} />
             </section>
-          )}
+            {detail.backlog.length > 0 && (
+              <section aria-labelledby="backlog" className="grid gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h2 id="backlog" className="text-base font-medium">
+                    Backlog
+                  </h2>
+                  <Button variant="secondary" onPress={() => void scheduleBacklogAgain()}>
+                    Schedule again
+                  </Button>
+                </div>
+                <p className="text-sm text-text-muted">The scheduler set these aside to keep the plan on time, or you chose to skip optional work. They have no date.</p>
+                <ul className="divide-y divide-border rounded-lg border border-border bg-surface-raised px-4">
+                  {detail.backlog.map((t) => (
+                    <TaskRow key={t.id} t={t} today={today} />
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
+        )}
+        <div className="grid content-start gap-8">
+          <Settings detail={detail} today={today} />
+          {!editing && <History planId={detail.plan.id} />}
         </div>
-        <Settings detail={detail} />
       </div>
       <DeleteDialog detail={detail} isOpen={confirming} onOpenChange={setConfirming} />
     </Page>
