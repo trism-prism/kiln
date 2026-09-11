@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_TODO_PREFS, buildTodoItems, dayLabel, filterTodoItems, firstMonthDayOnOrAfter, isRealMonthDay, lastMonthDayOnOrBefore, parseTodoPrefs, rangeBounds, todoView, type TodoCard, type TodoPrefs, type TodoProblem, type TodoSource, type TodoTask } from './index'
+import { DEFAULT_TODO_PREFS, buildTodoItems, dayLabel, filterTodoItems, optionBounds, parseTodoPrefs, shortDate, rangeBounds, todoView, type TodoCard, type TodoPrefs, type TodoProblem, type TodoSource, type TodoTask } from './index'
 
 const TODAY = '2026-11-11' // a Wednesday
 const at = (day: number, h = 12) => new Date(2026, 10, day, h).getTime()
@@ -92,48 +92,36 @@ describe('rangeBounds', () => {
     [{ from: 'weeks2', until: 'weeks2' }, 'monday', '2026-10-26', '2026-11-29'],
     [{ from: 'weeks3', until: 'weeks3' }, 'monday', '2026-10-19', '2026-12-06'],
   ] as const)('anchors %j, week starts %s', (over, weekStart, from, to) => expect(rangeBounds(prefs(over), TODAY, weekStart)).toEqual({ from, to }))
+})
 
-  it('uses custom month and day instead of the anchors, in this year', () => {
-    const custom = prefs({ from: 'weeks4', until: 'weeks4', customFrom: { month: 11, day: 1 }, customUntil: { month: 11, day: 30 } })
-    expect(rangeBounds(custom, TODAY)).toEqual({ from: '2026-11-01', to: '2026-11-30' })
-    expect(rangeBounds(prefs({ customFrom: { month: 11, day: 1 } }), TODAY)).toEqual({ from: '2026-11-01', to: TODAY })
+describe('optionBounds', () => {
+  // Mon Nov 9 2026, as in the preferences sheet.
+  const MON = '2026-11-09'
+  it('gives the first day of each From and the last day of each Until, Monday start', () => {
+    expect(optionBounds(prefs({}), MON, 'monday')).toEqual({
+      from: { weeks4: '2026-10-12', weeks3: '2026-10-19', weeks2: '2026-10-26', lastWeek: '2026-11-02', thisWeek: MON, today: MON },
+      until: { today: MON, thisWeek: '2026-11-15', nextWeek: '2026-11-22', weeks2: '2026-11-29', weeks3: '2026-12-06', weeks4: '2026-12-13' },
+    })
   })
-
-  it('a custom From is the latest occurrence on or before today, an Until the first on or after the From', () => {
-    const range = (customFrom: TodoPrefs['customFrom'], customUntil: TodoPrefs['customUntil'], today = TODAY) => rangeBounds(prefs({ customFrom, customUntil }), today)
-    // The whole calendar year, and a school year that crosses New Year: never inverted.
-    expect(range({ month: 1, day: 1 }, { month: 12, day: 31 })).toEqual({ from: '2026-01-01', to: '2026-12-31' })
-    expect(range({ month: 9, day: 1 }, { month: 8, day: 31 })).toEqual({ from: '2026-09-01', to: '2027-08-31' })
-    // From Dec 1 on Jan 5 is last December.
-    expect(range({ month: 12, day: 1 }, { month: 1, day: 20 }, '2027-01-05')).toEqual({ from: '2026-12-01', to: '2027-01-20' })
-    // A From later in the year than today is last year's; an Until alone follows the preset From (today).
-    expect(range({ month: 12, day: 1 }, undefined).from).toBe('2025-12-01')
-    expect(range(undefined, { month: 11, day: 1 })).toEqual({ from: TODAY, to: '2027-11-01' })
-    expect(range(undefined, { month: 11, day: 11 })).toEqual({ from: TODAY, to: TODAY })
-    // After a preset From of 4 weeks ago.
-    expect(rangeBounds(prefs({ from: 'weeks4', customUntil: { month: 10, day: 1 } }), TODAY)).toEqual({ from: '2026-10-12', to: '2027-10-01' })
+  it('follows a Sunday week start', () => {
+    expect(optionBounds(prefs({}), MON, 'sunday')).toEqual({
+      from: { weeks4: '2026-10-11', weeks3: '2026-10-18', weeks2: '2026-10-25', lastWeek: '2026-11-01', thisWeek: '2026-11-08', today: MON },
+      until: { today: MON, thisWeek: '2026-11-14', nextWeek: '2026-11-21', weeks2: '2026-11-28', weeks3: '2026-12-05', weeks4: '2026-12-12' },
+    })
   })
-
-  it('never returns an inverted range', () => {
-    for (let m = 1; m <= 12; m++)
-      for (const d of [1, 15, 28]) for (let m2 = 1; m2 <= 12; m2++) {
-        const r = rangeBounds(prefs({ customFrom: { month: m, day: d }, customUntil: { month: m2, day: d } }), TODAY)
-        expect(r.from <= r.to).toBe(true)
-      }
+  it('crosses a year boundary, and the current choice does not change the options', () => {
+    const b = optionBounds(prefs({ from: 'weeks2', until: 'nextWeek' }), '2026-12-30', 'monday') // a Wednesday
+    expect(b.until.weeks4).toBe('2027-01-31')
+    expect(b.from.thisWeek).toBe('2026-12-28')
+    expect(optionBounds(prefs({}), '2027-01-04', 'monday').from.weeks4).toBe('2026-12-07')
   })
+})
 
-  it('29 Feb resolves to the nearest leap-year occurrence in its direction', () => {
-    const feb29 = { month: 2, day: 29 }
-    expect(lastMonthDayOnOrBefore(feb29, '2026-11-11')).toBe('2024-02-29')
-    expect(lastMonthDayOnOrBefore(feb29, '2028-02-29')).toBe('2028-02-29')
-    expect(firstMonthDayOnOrAfter(feb29, '2026-11-11')).toBe('2028-02-29')
-    expect(rangeBounds(prefs({ customFrom: { month: 11, day: 1 }, customUntil: feb29 }), TODAY)).toEqual({ from: '2026-11-01', to: '2028-02-29' })
-  })
-
-  it('ignores a date that does not exist', () => {
-    expect(isRealMonthDay({ month: 2, day: 29 })).toBe(true)
-    expect(isRealMonthDay({ month: 4, day: 31 })).toBe(false)
-    expect(rangeBounds(prefs({ customFrom: { month: 2, day: 30 } }), TODAY)).toEqual({ from: TODAY, to: TODAY })
+describe('shortDate', () => {
+  it('adds the year only when it is not the year of today', () => {
+    expect(shortDate('2025-12-28', '2026-01-04')).toContain('2025')
+    expect(shortDate('2026-12-28', '2026-01-04')).not.toContain('2026')
+    expect(shortDate('2026-12-28', '2026-01-04')).toContain('28')
   })
 })
 
@@ -141,9 +129,13 @@ describe('parseTodoPrefs', () => {
   it('defaults when missing or damaged and keeps valid fields', () => {
     expect(parseTodoPrefs(undefined)).toEqual(DEFAULT_TODO_PREFS)
     expect(parseTodoPrefs('{not json')).toEqual(DEFAULT_TODO_PREFS)
-    const saved = prefs({ completed: false, favoriteOnly: true, from: 'lastWeek', until: 'weeks3', customFrom: { month: 9, day: 1 } })
-    expect(parseTodoPrefs(JSON.stringify(saved))).toEqual({ ...saved, customUntil: undefined })
-    expect(parseTodoPrefs(JSON.stringify({ from: 'bogus', customFrom: { month: 13, day: 1 } }))).toEqual(DEFAULT_TODO_PREFS)
+    const saved = prefs({ completed: false, favoriteOnly: true, from: 'lastWeek', until: 'weeks3' })
+    expect(parseTodoPrefs(JSON.stringify(saved))).toEqual(saved)
+    expect(parseTodoPrefs(JSON.stringify({ from: 'bogus' }))).toEqual(DEFAULT_TODO_PREFS)
+  })
+  it('ignores custom dates saved by an older version', () => {
+    const old = { ...prefs({ from: 'lastWeek' }), customFrom: { month: 9, day: 1 }, customUntil: { month: 12, day: 31 } }
+    expect(parseTodoPrefs(JSON.stringify(old))).toEqual(prefs({ from: 'lastWeek' }))
   })
 })
 

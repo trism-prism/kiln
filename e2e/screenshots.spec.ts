@@ -102,10 +102,10 @@ const scenes: Record<string, (page: Page) => Promise<{ full?: boolean; clip?: Lo
   },
   'todo-preferences': async (page) => {
     await openSeeded(page, '/todo')
-    await page.getByRole('button', { name: 'To-do list preferences' }).click()
-    const dialog = page.getByRole('dialog', { name: 'To-do list preferences' })
+    await page.getByRole('button', { name: 'To-do List Preferences' }).click()
+    const dialog = page.getByRole('dialog', { name: 'To-do List Preferences' })
     await expect(dialog).toBeVisible()
-    await dialog.getByRole('radiogroup', { name: 'Show tasks until' }).locator('label', { hasText: 'Next week' }).click()
+    await dialog.getByRole('radiogroup', { name: 'Show tasks until' }).locator('label', { hasText: 'Next Week' }).click()
   },
   'quick-add': async (page) => {
     await page.goto('/import')
