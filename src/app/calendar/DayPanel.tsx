@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from 'react'
 import { Badge } from '../../ui/surface'
 import { Button } from '../../ui/button'
+import { DateField } from '../../ui/date'
 import { Checkbox } from '../../ui/form'
 import { Sheet } from '../../ui/overlay'
 import { formatDay } from '../../lib/date'
@@ -15,39 +16,38 @@ import type { DragPayload } from './CalendarView'
 
 function MoveField({ item, date, today, onMove, onDone }: { item: TodoItem; date: string; today: string; onMove: (p: DragPayload, to: string) => void; onDone: () => void }) {
   const [to, setTo] = useState(date < today ? today : date)
-  const valid = to >= today && to !== date
-  const hint = `move-hint-${item.key}`
+  // The field itself keeps the day from today on and shows its own error for text it can't read.
+  const [bad, setBad] = useState(false)
+  // Like the to-do form: Move stays enabled, and pressing it flags what is wrong.
+  const [shown, setShown] = useState(false)
+  const missing = to === '' ? 'Pick a day' : to === date ? 'Pick a different day' : ''
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    if (!valid) return
+    setShown(true)
+    if (bad || missing || to < today) return
     onMove({ kind: item.kind as 'task' | 'practice', id: item.id, title: item.title, from: date }, to)
     onDone()
     // The row leaves the list, so its focus would fall to the page: keep it in the panel.
     requestAnimationFrame(() => document.querySelector<HTMLElement>('[role="dialog"]')?.focus())
   }
   return (
-    <form onSubmit={submit} className="mt-2 flex flex-wrap items-center gap-2">
-      <input
-        type="date"
+    <form onSubmit={submit} className="mt-2 flex flex-wrap items-start gap-2">
+      <DateField
         aria-label={`Move ${item.title} to`}
         min={today}
         value={to}
-        onChange={(e) => setTo(e.target.value)}
-        aria-invalid={!valid}
-        aria-describedby={valid ? undefined : hint}
-        className="h-10 rounded-md border border-border-strong bg-surface-raised px-3 text-sm text-text"
+        onChange={setTo}
+        onInvalidChange={setBad}
+        isInvalid={shown && !!missing}
+        errorMessage={missing}
+        className="w-full sm:w-56"
       />
-      <Button type="submit" variant="secondary" isDisabled={!valid}>
+      <Button type="submit" variant="secondary">
         Move
       </Button>
       <Button variant="quiet" onPress={onDone}>
         Cancel
       </Button>
-      {!valid && (
-        <p id={hint} className="basis-full text-xs text-text-muted">
-          Pick a day from today on, other than this one.
-        </p>
-      )}
     </form>
   )
 }

@@ -45,7 +45,7 @@ export function History({ planId }: { planId: string }) {
     <Card className="grid h-fit gap-3">
       <h2 className="text-base font-medium">History</h2>
       {!versions?.length ? (
-        <p className="text-sm text-text-muted">Each time you save an edit, the plan is kept here so you can go back. The last 20 versions are kept.</p>
+        <p className="text-sm text-text-muted">No earlier versions yet.</p>
       ) : (
         <ul aria-label="Versions" className="divide-y divide-border">
           {versions.map((v, i) => (

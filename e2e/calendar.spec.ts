@@ -45,10 +45,28 @@ test('week view, remembered after a reload', async ({ page }) => {
   await expect(page.locator('[data-day]')).toHaveCount(7)
   await page.getByRole('button', { name: 'Next week' }).click()
   await expect(page.getByRole('grid', { name: 'Nov 16 to Nov 22, 2026' })).toBeVisible()
-  await page.getByRole('button', { name: 'Today' }).click()
+  await page.getByRole('button', { name: 'Today', exact: true }).click()
   await expect(page.getByRole('grid', { name: 'Nov 9 to Nov 15, 2026' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Today', exact: true })).toBeDisabled()
   await page.reload()
   await expect(page.getByRole('tab', { name: 'Week', selected: true })).toBeVisible()
+})
+
+test('Today by keyboard puts the focus on today, in the month and the week view, every time', async ({ page }) => {
+  await openSeeded(page, '/calendar')
+  const todayButton = page.getByRole('button', { name: 'Today', exact: true })
+  for (const view of ['month', 'week', 'month'] as const) {
+    await page.getByRole('tab', { name: view === 'month' ? 'Month' : 'Week' }).click()
+    for (let i = 0; i < 2; i++) {
+      await page.getByRole('button', { name: `Next ${view}` }).focus()
+      await page.keyboard.press('Enter')
+      await expect(todayButton).toBeEnabled()
+      await todayButton.focus()
+      await page.keyboard.press('Enter')
+      await expect(todayButton).toBeDisabled()
+      await expect(page.locator('[data-day="2026-11-09"]')).toBeFocused()
+    }
+  }
 })
 
 test('arrow keys move between days and Enter opens the day with links to the tasks', async ({ page }) => {
@@ -133,7 +151,7 @@ test('the day panel adds a to-do on that day', async ({ page }) => {
   const panel = page.getByRole('dialog', { name: 'Thu, Nov 12, 2026' })
   await panel.getByRole('button', { name: 'Add to-do' }).click()
   const form = page.getByRole('dialog', { name: 'Add to-do' })
-  await expect(form.getByLabel('Day (optional)')).toHaveValue('2026-11-12')
+  await expect(form.getByLabel('Day (optional)')).toHaveValue('Thu, Nov 12, 2026')
   await form.getByLabel('Title').fill('Read chapter 3')
   await form.getByRole('button', { name: 'Add to-do' }).click()
   await expect(panel.getByRole('listitem').filter({ hasText: 'Read chapter 3' })).toBeVisible()

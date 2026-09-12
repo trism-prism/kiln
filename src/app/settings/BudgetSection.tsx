@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
 import { db, updateSettings, type SettingsRecord } from '../../data'
+import { toLocalISODate } from '../../lib/date'
 import { Button, IconButton } from '../../ui/button'
 import { ListBoxItem, Select, TextField } from '../../ui/form'
 import { toasts } from '../../ui/overlay'
@@ -57,6 +58,7 @@ export function BudgetSection({ settings, onChanged }: { settings: SettingsRecor
 /** Days with no study. Each change is saved at once. */
 export function BlackoutSection({ settings, onChanged }: { settings: SettingsRecord; onChanged: () => void }) {
   const [date, setDate] = useState('')
+  const [dateBad, setDateBad] = useState(false)
   const days = [...settings.blackoutDates].sort()
 
   async function set(next: string[]): Promise<boolean> {
@@ -77,11 +79,13 @@ export function BlackoutSection({ settings, onChanged }: { settings: SettingsRec
           <h2 id="blackout-heading" className="text-base font-medium">Days off</h2>
           <p className="text-sm text-text-muted">Kiln schedules nothing on these dates.</p>
         </div>
-        <div className="flex items-end gap-3">
-          <TextField label="Date" type="date" value={date} onChange={setDate} />
+        {/* Top-aligned so an error under the field doesn't push the button down; mt-6.5 is the label line plus the field gap. */}
+        <div className="flex items-start gap-3">
+          <TextField label="Date" type="date" min={toLocalISODate(new Date())} value={date} onChange={setDate} onInvalidChange={setDateBad} />
           <Button
             variant="secondary"
-            isDisabled={date === '' || days.includes(date)}
+            className="mt-6.5"
+            isDisabled={date === '' || dateBad || days.includes(date)}
             onPress={async () => {
               if (await set([...days, date])) setDate('')
             }}

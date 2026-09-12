@@ -51,8 +51,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
 
     test('/todo preferences dialog and add-to-do form', async ({ page }) => {
       await openSeeded(page, '/todo')
-      await page.getByRole('button', { name: 'To-do list preferences' }).click()
-      await expect(page.getByRole('dialog', { name: 'To-do list preferences' })).toBeVisible()
+      await page.getByRole('button', { name: 'To-do List Preferences' }).click()
+      await expect(page.getByRole('dialog', { name: 'To-do List Preferences' })).toBeVisible()
       await animationsDone(page)
       expect(await seriousViolations(page)).toEqual([])
       await page.getByRole('button', { name: 'Done' }).click()
