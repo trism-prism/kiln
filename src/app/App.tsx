@@ -11,6 +11,7 @@ const TaskPage = lazy(() => import('./pages/Task'))
 const CalendarPage = lazy(() => import('./pages/Calendar'))
 const PlansPage = lazy(() => import('./pages/Plans'))
 const PlanPage = lazy(() => import('./pages/Plan'))
+const ProgressPage = lazy(() => import('./pages/Progress'))
 const BrushUpPage = lazy(() => import('./pages/BrushUp'))
 const ImportPage = lazy(() => import('./pages/Import'))
 const SettingsPage = lazy(() => import('./pages/Settings'))
@@ -35,6 +36,7 @@ export function App() {
             <Route path="calendar" element={<CalendarPage />} />
             <Route path="plans" element={<PlansPage />} />
             <Route path="plans/:planId" element={<PlanPage />} />
+            <Route path="progress" element={<ProgressPage />} />
             <Route path="brush-up" element={<BrushUpPage />} />
             <Route path="import" element={<ImportPage />} />
             <Route path="settings" element={<SettingsPage />} />

@@ -3,6 +3,7 @@
 import type { Table } from 'dexie'
 import type { Plan } from '../domain/plan-format'
 import type { KilnDB } from './db'
+import { localDate } from '../domain/mastery'
 import { SHARE_WEIGHT } from './plan-settings'
 import type { Base, EventRecord, ModuleRecord, PersonalTodoRecord, PlanRecord, Records, SettingsRecord, Share, TableName, TaskRecord, TaskStatus } from './types'
 import { uuidv7 } from './uuid'
@@ -123,11 +124,12 @@ export async function softDeletePlan(db: KilnDB, planId: string): Promise<void> 
  * Undo for a multi-record write: puts the earlier copies back (with a fresh updatedAt, so the undo
  * also wins a sync) and tombstones the records the write created. All or nothing. Each restore names
  * the `updatedAt` the write left on the record; if the record changed since (another rating, a pin,
- * a sync), nothing is undone and this returns false, so an old undo cannot overwrite newer work.
+ * a sync), nothing is undone and this returns false, so an old undo cannot overwrite newer work. A removal
+ * may name an `updatedAt` too, with the same check.
  */
 export async function revertWrite(
   db: KilnDB,
-  change: { restore?: [Exclude<TableName, 'settings'>, Base, number][]; remove?: [Exclude<TableName, 'settings'>, string][] },
+  change: { restore?: [Exclude<TableName, 'settings'>, Base, number][]; remove?: [Exclude<TableName, 'settings'>, string, number?][] },
 ): Promise<boolean> {
   const restore = change.restore ?? []
   const remove = change.remove ?? []
@@ -136,6 +138,12 @@ export async function revertWrite(
   return db.transaction('rw', names.map((n) => db.table(n)), async () => {
     for (const [n, rec, after] of restore) {
       const cur = (await db.table(n).get(rec.id)) as Base | undefined
+      if (!cur || cur.updatedAt !== after) return false
+    }
+    // A removal that names the updatedAt its write left is guarded the same way.
+    for (const [n, id, after] of remove) {
+      if (after === undefined) continue
+      const cur = (await db.table(n).get(id)) as Base | undefined
       if (!cur || cur.updatedAt !== after) return false
     }
     for (const [n, rec, after] of restore) await db.table(n).put({ ...rec, updatedAt: stampAfter(after), deviceId })
@@ -202,9 +210,20 @@ export async function listPersonalTodos(db: KilnDB): Promise<PersonalTodoRecord[
   return live(await db.personalTodos.toArray()).sort((a, b) => day(a).localeCompare(day(b)) || a.id.localeCompare(b.id))
 }
 
-/** Marks a personal to-do done (sets `completedAt`) or open again (clears it). */
-export function setPersonalTodoDone(db: KilnDB, id: string, done: boolean) {
-  return updateRecord(db, 'personalTodos', id, { done, completedAt: done ? Date.now() : undefined })
+/**
+ * Marks a personal to-do done (stamps `completedAt` now) or open again (clears it). A logged session (minutes,
+ * and completed on its own day, as "Log study time" stamps it) keeps its `completedAt` through untick and
+ * re-tick, so past study stays on its day in the streak and heatmap. Any other to-do restamps, so a session
+ * really done today counts today.
+ */
+export async function setPersonalTodoDone(db: KilnDB, id: string, done: boolean) {
+  await getDeviceId(db) // resolve before the transaction opens; updateRecord reuses it
+  return db.transaction('rw', db.personalTodos, async () => {
+    const old = await db.personalTodos.get(id)
+    const logged = !!old && (old.minutes ?? 0) > 0 && old.completedAt !== undefined && localDate(old.completedAt) === old.date
+    const keep = logged ? old.completedAt : undefined
+    return updateRecord(db, 'personalTodos', id, { done, completedAt: done ? (keep ?? Date.now()) : keep })
+  })
 }
 
 /** Live events shown from `from` to `to` inclusive ("yyyy-mm-dd"), including multi-day ones that started earlier, by date then start. */

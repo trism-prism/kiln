@@ -1,5 +1,5 @@
-// Study streaks and the heatmap. A study day is a local day with at least one completion: a task
-// marked done, a daily problem marked done, or a review logged. Pure; the data layer lists the events.
+// Study streaks and the heatmap. A study day is a local day with at least one completion: a task, a
+// daily problem or a personal to-do with minutes marked done, or a review logged. Pure; the data layer lists the events.
 import { addDaysISO } from '../../lib/date'
 import { weekdayNames, weekStartOf, type WeekStart } from '../calendar'
 import { localDate } from '../mastery'
