@@ -1,3 +1,4 @@
+import { reviewsOn } from '../../data'
 import { Button, Link } from '../../ui/button'
 import { Badge, Card, EmptyState, Meter, ProgressBar, Skeleton } from '../../ui/surface'
 import { formatDay } from '../../lib/date'
@@ -37,7 +38,7 @@ function PlanCard({ s }: { s: PlanSummary }) {
       </p>
       <ProgressBar label="Essential tasks" value={pct(s.coreDone, s.coreTotal)} valueLabel={`${s.coreDone} of ${s.coreTotal}`} />
       <p className="-mt-2 text-xs text-text-muted">All tasks: {s.allDone} of {s.allTotal} done</p>
-      <Meter label="Mastery" value={Math.round(s.mastery * 100)} valueLabel={percent(s.mastery)} />
+      {reviewsOn(plan) && <Meter label="Mastery" value={Math.round(s.mastery * 100)} valueLabel={percent(s.mastery)} />}
       <p className="flex flex-wrap items-center gap-2 text-sm text-text-muted">
         {s.finish ? `Expected finish ${formatDay(s.finish, true)}` : 'No finish date yet'}
         {late && <Badge tone="warning">After the {formatDay(plan.deadline!, true)} deadline</Badge>}

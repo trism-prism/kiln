@@ -49,7 +49,7 @@ test('favorite a plan, edit it, then restore the older version', async ({ page }
   await firstPlan.click()
 
   // Settings: two seeded plans, so the share shows with a live example.
-  await expect(page.getByText(/about \d+ of your \d+ min a day/)).toBeVisible()
+  await expect(page.getByText(/About \d+ of your \d+ min a day/)).toBeVisible()
   await expect(page.getByRole('button', { name: 'Favorite', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByRole('switch', { name: 'Daily practice problem' })).toBeVisible()
 

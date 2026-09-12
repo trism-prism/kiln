@@ -16,7 +16,7 @@ import {
   type SchedulerOptions,
 } from '../domain/mastery'
 import type { KilnDB } from './db'
-import { practiceLanguage, practiceOn } from './plan-settings'
+import { practiceLanguage, practiceOn, reviewsOn } from './plan-settings'
 import { getDeviceId, insertRecord, revertWrite, setTaskStatus, updateRecord } from './repo'
 import type { ReviewCardRecord, ReviewLogRecord, TaskRecord } from './types'
 
@@ -45,6 +45,8 @@ export interface CompleteResult {
  * Marks the task done and records how well it went. First completion of a task that gets a card
  * (cardMinutes) creates the card and rates it; completing again rates the existing card. Tasks
  * without a card (reviews, projects, milestones) are only marked done and the rating is ignored.
+ * Cards are made whatever the plan's reviews setting: with reviews off they stay hidden (liveCards)
+ * and appear when reviews are switched on, so finished lessons are never lost.
  * Everything runs in one transaction, so it is all-or-nothing and two overlapping calls for one new
  * task produce exactly one card. A suspended card (skipped task) is resumed.
  */
@@ -57,13 +59,15 @@ export async function completeTask(
 ): Promise<CompleteResult> {
   await getDeviceId(db) // resolve before the transaction opens; the writes below reuse it
   // The callback must be an async function: Dexie keeps the transaction open across native awaits only then.
-  return db.transaction('rw', db.tasks, db.reviewCards, db.reviewLogs, async () => {
+  return db.transaction('rw', db.tasks, db.plans, db.reviewCards, db.reviewLogs, async () => {
     const before = await db.tasks.get(taskId)
     const task = await setTaskStatus(db, taskId, 'done')
     if (!task || !before) throw new Error(`Task ${taskId} not found`)
     const restoreTask: ['tasks', TaskRecord, number] = ['tasks', before, task.updatedAt]
     const minutes = cardMinutes(task)
-    if (minutes === undefined) return { task, undo: () => revertWrite(db, { restore: [restoreTask] }) }
+    // No card for a task of a plan that is gone.
+    const plan = await db.plans.get(task.planId)
+    if (minutes === undefined || !plan || plan.deleted) return { task, undo: () => revertWrite(db, { restore: [restoreTask] }) }
 
     const existing = await liveCardForTask(db, taskId)
     const { card, log } = rate(existing ?? newCard(now), rating, now, opts)
@@ -99,9 +103,12 @@ export async function reviewCard(
   opts: SchedulerOptions = APP_OPTS,
 ): Promise<{ card: ReviewCardRecord; log: ReviewLogRecord; undo: () => Promise<boolean> }> {
   await getDeviceId(db)
-  return db.transaction('rw', db.reviewCards, db.reviewLogs, async () => {
+  return db.transaction('rw', db.plans, db.reviewCards, db.reviewLogs, async () => {
     const old = await db.reviewCards.get(cardId)
     if (!old || old.deleted) throw new Error(`Review card ${cardId} not found`)
+    // A list drawn before reviews were switched off can still offer this card.
+    const plan = await db.plans.get(old.planId)
+    if (!plan || plan.deleted || !reviewsOn(plan)) throw new Error('Reviews are off for this plan')
     const { card, log } = rate(old, rating, now, opts)
     const rec = (await updateRecord(db, 'reviewCards', cardId, card))!
     const logRec = await logReview(db, cardId, log)
@@ -136,7 +143,7 @@ async function setSkipped(db: KilnDB, taskId: string, skipped: boolean): Promise
   })
 }
 
-// ---- queries (tombstones and suspended cards excluded; cards of deleted tasks are ignored) ----
+// ---- queries (tombstones, suspended cards and cards of plans with reviews off excluded; cards of deleted tasks are ignored) ----
 
 async function liveTasks(db: KilnDB): Promise<Map<string, TaskRecord>> {
   return new Map((await db.tasks.toArray()).filter((t) => !t.deleted).map((t) => [t.id, t]))
@@ -149,11 +156,14 @@ async function liveTasks(db: KilnDB): Promise<Map<string, TaskRecord>> {
  */
 async function liveCards(db: KilnDB, tasks: Map<string, TaskRecord>): Promise<ReviewCardRecord[]> {
   // Cards for generated daily problems (a slug, no task) belong to a plan's daily practice: none while it is off.
-  const practicePlans = new Set((await db.plans.toArray()).filter((p) => !p.deleted && practiceOn(p)).map((p) => p.id))
+  const plans = (await db.plans.toArray()).filter((p) => !p.deleted)
+  const practicePlans = new Set(plans.filter(practiceOn).map((p) => p.id))
+  // Cards of plans with reviews off are kept in the database but hidden from these queries (streaks still count their past review logs); switching reviews on resumes them.
+  const reviewPlans = new Set(plans.filter(reviewsOn).map((p) => p.id))
   const byTask = new Map<string, ReviewCardRecord>()
   const out: ReviewCardRecord[] = []
   for (const c of (await db.reviewCards.toArray()).sort((a, b) => (a.id < b.id ? -1 : 1))) {
-    if (c.deleted) continue
+    if (c.deleted || !reviewPlans.has(c.planId)) continue
     const task = c.taskId ? tasks.get(c.taskId) : undefined
     if (c.taskId && !task) continue
     if (!c.taskId && !practicePlans.has(c.planId)) continue
@@ -178,20 +188,22 @@ export async function reviewsDue(db: KilnDB, fromDate: string, toDate: string): 
   return bucketReviews(await liveCards(db, await liveTasks(db)), fromDate, toDate)
 }
 
-function planned(tasks: Map<string, TaskRecord>) {
-  return [...tasks.values()].filter((t) => t.status !== 'skipped' && cardMinutes(t) !== undefined)
+/** Tasks that count toward mastery: they get a card and their plan has reviews on. */
+async function planned(db: KilnDB, tasks: Map<string, TaskRecord>) {
+  const on = new Set((await db.plans.toArray()).filter((p) => !p.deleted && reviewsOn(p)).map((p) => p.id))
+  return [...tasks.values()].filter((t) => on.has(t.planId) && t.status !== 'skipped' && cardMinutes(t) !== undefined)
 }
 
 /** Mastery per topic over every live plan; see domain/mastery MasteryStat. */
 export async function masteryByTopic(db: KilnDB, now: number): Promise<Record<string, MasteryStat>> {
   const tasks = await liveTasks(db)
-  return topicMastery(planned(tasks), await liveCards(db, tasks), now)
+  return topicMastery(await planned(db, tasks), await liveCards(db, tasks), now)
 }
 
 /** Mastery per plan id. */
 export async function masteryByPlan(db: KilnDB, now: number): Promise<Record<string, MasteryStat>> {
   const tasks = await liveTasks(db)
-  return planMastery(planned(tasks), await liveCards(db, tasks), now)
+  return planMastery(await planned(db, tasks), await liveCards(db, tasks), now)
 }
 
 export interface BrushUpEntry extends BrushUpItem<ReviewCardRecord> {

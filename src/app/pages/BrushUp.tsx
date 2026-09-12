@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { brushUp, db, masteryByTopic, type BrushUpEntry } from '../../data'
+import { brushUp, db, listPlans, masteryByTopic, reviewsOn, type BrushUpEntry } from '../../data'
 import { formatDay } from '../../lib/date'
-import { localDate } from '../../domain/mastery'
+import { cardMinutes, localDate } from '../../domain/mastery'
 import { Button, Link } from '../../ui/button'
 import { Badge, EmptyState, Meter, Skeleton } from '../../ui/surface'
 import { Page } from '../Page'
@@ -42,20 +42,30 @@ function Entry({ e, onReview }: { e: BrushUpEntry; onReview: () => void }) {
   )
 }
 
+/** True when no plan has reviews on but some plan has lessons that could use them (the same test as the plan settings switch). */
+async function offerReviews() {
+  const plans = await listPlans(db)
+  if (plans.length === 0 || plans.some(reviewsOn)) return false
+  const ids = new Set(plans.map((p) => p.id))
+  return (await db.tasks.toArray()).some((t) => !t.deleted && ids.has(t.planId) && cardMinutes(t) !== undefined)
+}
+
 export default function BrushUpPage() {
   const today = useToday()
   const minute = useMinute()
   const data = useLiveQuery(async () => {
     const now = Date.now()
-    return { entries: await brushUp(db, now), topics: await masteryByTopic(db, now) }
+    return { entries: await brushUp(db, now), topics: await masteryByTopic(db, now), offer: await offerReviews() }
   }, [today, minute])
-  const { complete, sheet } = useCompleter()
+  const { complete } = useCompleter()
 
   const topics = data ? Object.entries(data.topics).sort(([a, x], [b, y]) => x.mastery - y.mastery || a.localeCompare(b)) : []
   return (
     <Page title="Brush up">
       {!data ? (
         <Skeleton className="h-48 w-full" />
+      ) : data.offer ? (
+        <p className="text-sm text-text-muted">Turn on Schedule reviews in a plan&apos;s settings.</p>
       ) : (
         <div className="grid gap-10">
           <section aria-labelledby="weakest" className="grid gap-3">
@@ -64,12 +74,12 @@ export default function BrushUpPage() {
             </h2>
             {data.entries.length === 0 ? (
               <EmptyState title="Nothing to brush up on">
-                Topics you rate as shaky come back here, spaced out so you review them just before you would forget.
+                Lessons that are due for review show up here.
               </EmptyState>
             ) : (
               <ul className="divide-y divide-border rounded-lg border border-border bg-surface-raised px-4 shadow-sm">
                 {data.entries.map((e) => (
-                  <Entry key={e.card.id} e={e} onReview={() => complete({ kind: 'review', id: e.card.id, title: `Review: ${e.title}`, rates: true })} />
+                  <Entry key={e.card.id} e={e} onReview={() => complete({ kind: 'review', id: e.card.id, title: `Review: ${e.title}` })} />
                 ))}
               </ul>
             )}
@@ -92,7 +102,6 @@ export default function BrushUpPage() {
           </section>
         </div>
       )}
-      {sheet}
     </Page>
   )
 }

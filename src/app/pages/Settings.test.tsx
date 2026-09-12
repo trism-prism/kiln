@@ -4,7 +4,8 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it } from 'vitest'
-import { db, getSettings } from '../../data'
+import { db, getSettings, importPlan } from '../../data'
+import { fixtureTexts, validateParts } from '../../data/fixtures'
 import SettingsPage from './Settings'
 
 afterEach(async () => {
@@ -24,7 +25,16 @@ describe('Settings', () => {
     renderPage()
     expect((await screen.findByRole('row', { name: /Monday/ })).textContent).toContain('120 min')
     expect(screen.getByTestId('week-total').textContent).toContain('960 min')
-    expect(screen.getByText('25%')).toBeTruthy()
+    // No plan has reviews on, so the review cap line is hidden.
+    expect(screen.queryByText('25%')).toBeNull()
+  })
+
+  it('shows the review cap once a plan has reviews on', async () => {
+    const plan = validateParts([fixtureTexts.sd]).plans[0]!
+    await importPlan(db, plan, { startDate: '2026-11-09', reviewsOn: true })
+    renderPage()
+    expect(await screen.findByText('25%')).toBeTruthy()
+    await db.plans.clear()
   })
 
   it('saves a changed budget, allows 0, and offers to reschedule', async () => {

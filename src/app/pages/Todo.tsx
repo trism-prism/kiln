@@ -29,7 +29,7 @@ function Row({ item, onComplete, pending }: { item: TodoItem; onComplete: (i: Co
         </Checkbox>
       ) : (
         <Checkbox isSelected={item.done} isDisabled={item.done || pending} onChange={() => onComplete(item as Completable)} className="mt-0.5">
-          <span className="sr-only">{item.kind === 'review' ? `Rate the review of ${item.title.replace('Review: ', '')}` : `Mark done: ${item.title}`}</span>
+          <span className="sr-only">{item.kind === 'review' ? `Mark reviewed: ${item.title.replace('Review: ', '')}` : `Mark done: ${item.title}`}</span>
         </Checkbox>
       )}
       <div className="min-w-0 flex-1">
@@ -79,7 +79,7 @@ export default function TodoPage() {
   const today = useToday()
   const data = useTodoItems(today)
   const [prefs, savePrefs] = useTodoPrefs()
-  const { complete, pending, sheet } = useCompleter()
+  const { complete, pending } = useCompleter()
   const [prefsOpen, setPrefsOpen] = useState(false)
   const [adding, setAdding] = useState(false)
 
@@ -134,7 +134,6 @@ export default function TodoPage() {
           <TodoEditor isOpen={adding} onClose={() => setAdding(false)} />
         </div>
       )}
-      {sheet}
     </Page>
   )
 }

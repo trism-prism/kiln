@@ -23,9 +23,6 @@ for (const colorScheme of ['light', 'dark'] as const) {
           await openSeeded(page, '/todo')
           const lesson = page.getByRole('region', { name: 'Today' }).getByRole('listitem').filter({ hasText: '· Lesson ·' }).first()
           await lesson.getByRole('checkbox').click({ force: true })
-          // The rating keys only work once the sheet is open; pressing early lost the key on a cold first run.
-          await expect(page.getByRole('dialog', { name: 'How did it go?' })).toBeVisible()
-          await page.keyboard.press('3')
           await expect(lesson.getByText('Done', { exact: true })).toBeVisible()
           await advanceDays(page, 3)
           await page.goto(path)

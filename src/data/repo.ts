@@ -247,6 +247,8 @@ export interface ImportOptions {
   deadline?: string
   /** Share of study time, default even. Used when the plan is created. */
   share?: Share
+  /** Spaced reviews on for a new plan (off when unset). An update or a later part keeps the plan's setting. */
+  reviewsOn?: boolean
   /**
    * Make the plan's modules and tasks match the file exactly (plan edits and version restores):
    * deleted ones that are in the file come back with their progress, live ones not in it are deleted.
@@ -318,6 +320,7 @@ export async function importPlan(db: KilnDB, plan: Plan, opts: ImportOptions): P
         key: plan.id,
         share: opts.share ?? 'even',
         weight: SHARE_WEIGHT[opts.share ?? 'even'],
+        ...(opts.reviewsOn ? { reviewsOn: true } : {}),
         startDate: opts.startDate,
         deadline: opts.deadline ?? plan.deadline,
         partTotal: part.total,
