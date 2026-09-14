@@ -76,7 +76,7 @@ export function ImportTab() {
     <div className="grid gap-6">
       <div className="grid gap-3">
         <label htmlFor="plan-text" className="text-sm font-medium">
-          Plan text
+          Paste the plan here
         </label>
         <textarea
           id="plan-text"
@@ -91,10 +91,10 @@ export function ImportTab() {
           disabled={!!file?.data}
           rows={8}
           spellCheck={false}
-          placeholder="Paste a plan here: Markdown with a JSON block, raw JSON, or cells copied from a spreadsheet."
-          className="min-h-40 w-full rounded-md border border-border-strong bg-surface-raised p-3 font-mono text-sm text-text placeholder:text-text-muted"
+          placeholder="Paste the AI's reply here. You can paste the whole message."
+          className="min-h-40 w-full rounded-md border border-border-strong bg-surface-raised p-3 text-sm text-text placeholder:text-text-muted"
         />
-        {file?.data && <p className="text-sm text-text-muted">Spreadsheet loaded: {file.name}</p>}
+        {file?.data && <p className="text-sm text-text-muted">Loaded {file.name}</p>}
         {hint && <p role="status" className="text-sm text-warning">{hint}</p>}
         <div className="flex flex-wrap items-center gap-3">
           <Button variant="secondary" onPress={paste}>
@@ -112,13 +112,13 @@ export function ImportTab() {
           )}
         </div>
         <p className="text-sm text-text-muted">
-          Files: .md, .txt, .json, .csv or .xlsx, up to 5 MB. Template:{' '}
-          <Link href="/kiln-plan-template.csv" download>
-            CSV
-          </Link>{' '}
-          or{' '}
+          Or upload a file, up to 5 MB. Start from a template:{' '}
           <Link href="/kiln-plan-template.xlsx" download>
             Excel
+          </Link>{' '}
+          or{' '}
+          <Link href="/kiln-plan-template.csv" download>
+            CSV
           </Link>
           .
         </p>

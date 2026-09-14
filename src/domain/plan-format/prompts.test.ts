@@ -30,6 +30,26 @@ describe.each(Object.entries(files))('prompt file %s', (_name, markdown) => {
     expect(prompt).toContain(schemaReference(planJsonSchema()))
     expect(prompt.startsWith('You are helping me create a study plan')).toBe(true)
   })
+
+  it('asks for a class calendar and keeps the questions plain', () => {
+    const prompt = buildPrompt(markdown)
+    expect(prompt).toContain('Do you have a class calendar link? Paste it here, or say no.')
+    expect(prompt).toContain('Talk to me in plain, friendly language')
+    expect(prompt).toContain('Copy this whole reply and paste it into Kiln.')
+    // The questions are relayed to me as written; the reference further down keeps its yyyy-mm-dd format for the AI.
+    expect(prompt.slice(0, prompt.indexOf('## Step 2'))).not.toContain('yyyy-mm-dd')
+    expect(prompt).not.toContain('reviews Kiln adds')
+    // The closing line for a long plan is the same, word for word, in the closing rule and the long-plan rule.
+    const long = '"Copy this whole reply and paste it into Kiln. Then reply next for the rest of the plan."'
+    expect(prompt).toContain(`(in a long plan, after every part but the last: ${long})`)
+    expect(prompt).toContain(`Write part 1, then stop; after its block write only: ${long}`)
+  })
+})
+
+describe('fixed-dates prompt', () => {
+  it('has the AI confirm a date that reads two ways', () => {
+    expect(buildPrompt(fixedDates)).toContain('could be read two ways, such as 03/04, ask me which I mean')
+  })
 })
 
 describe('buildPrompt', () => {

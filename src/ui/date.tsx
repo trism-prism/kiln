@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useEffectEvent, useRef, useState } from 'react'
 import { parseDate } from '@internationalized/date'
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
 import {
@@ -43,8 +43,13 @@ export interface DateFieldProps {
   description?: string
   /** 'sm' is the 36px version for table cells. */
   size?: 'md' | 'sm'
+  /** Example text in an empty box. A table of optional dates passes '' so empty cells don't look filled. */
+  placeholder?: string
   className?: string
 }
+
+/** The day each picker's week starts on. The shell provides Kiln's setting; without it, Monday (Kiln's default). */
+export const WeekStartContext = createContext<'monday' | 'sunday'>('monday')
 
 const display = (value: string) => (isRealISODate(value) ? formatDay(value, true) : '')
 
@@ -67,9 +72,11 @@ export function DateField({
   errorMessage,
   description,
   size = 'md',
+  placeholder = 'Nov 20',
   className = '',
 }: DateFieldProps) {
   const { locale } = useLocale()
+  const weekStart = useContext(WeekStartContext)
   const [text, setText] = useState(() => display(value))
   const [focused, setFocused] = useState(false)
   const [problem, setProblem] = useState('')
@@ -157,9 +164,12 @@ export function DateField({
     <AriaTextField
       value={text}
       onChange={type}
-      onFocus={() => {
+      onFocus={(e) => {
         setFocused(true)
         setBefore(value)
+        // Tabbing in selects all the text, so one key would wipe the date; start with the cursor at the end.
+        const box = e.currentTarget as HTMLInputElement
+        if (box.value !== '' && box.selectionStart === 0 && box.selectionEnd === box.value.length) box.setSelectionRange(box.value.length, box.value.length)
       }}
       onBlur={() => {
         setFocused(false)
@@ -177,7 +187,7 @@ export function DateField({
     >
       {label && <Label className="font-medium">{label}</Label>}
       <div className="relative">
-        <Input autoComplete="off" placeholder="Nov 20" className={`${control} w-full pr-10 placeholder:text-text-muted`} />
+        <Input autoComplete="off" placeholder={placeholder} className={`${control} w-full pr-10 placeholder:text-text-muted`} />
         <DialogTrigger isOpen={open} onOpenChange={setOpen}>
           <IconButton aria-label="Choose a date" className="absolute top-1/2 right-1 h-8 w-8 -translate-y-1/2 text-text-muted data-hovered:text-text">
             <CalendarDays size={16} />
@@ -187,6 +197,7 @@ export function DateField({
               <Calendar
                 // Focus starts on the chosen day (or today), so the arrow keys pick a day straight away.
                 autoFocus
+                firstDayOfWeek={weekStart === 'sunday' ? 'sun' : 'mon'}
                 value={isRealISODate(value) ? parseDate(value) : null}
                 minValue={min ? parseDate(min) : undefined}
                 maxValue={max ? parseDate(max) : undefined}

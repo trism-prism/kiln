@@ -80,6 +80,20 @@ test('a date field reads typed dates, keeps a typo, and has a calendar', async (
   await expect(date).toHaveValue('')
 })
 
+test('tabbing into a date field puts the cursor at the end instead of selecting the date', async ({ page }) => {
+  await openSeeded(page, '/settings')
+  const date = page.getByRole('textbox', { name: 'Date', exact: true })
+  await date.fill('fri')
+  await date.press('Enter')
+  await expect(date).toHaveValue('Fri, Nov 13, 2026')
+  await page.keyboard.press('Shift+Tab')
+  await expect(date).not.toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(date).toBeFocused()
+  const length = 'Fri, Nov 13, 2026'.length
+  expect(await date.evaluate((el: HTMLInputElement) => [el.selectionStart, el.selectionEnd])).toEqual([length, length])
+})
+
 test('the Add day off button lines up with the date box, with and without an error', async ({ page }) => {
   await openSeeded(page, '/settings')
   const date = page.getByRole('textbox', { name: 'Date', exact: true })

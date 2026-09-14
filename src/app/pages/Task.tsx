@@ -100,7 +100,7 @@ export default function TaskPage() {
               </ol>
             </nav>
             <div className="flex flex-wrap items-center gap-2">
-              {done && <Badge tone="success">Completed {task.completedAt ? formatDay(localDate(task.completedAt), true) : ''}</Badge>}
+              {done && <Badge tone="success">{task.completedAt ? `Completed ${formatDay(localDate(task.completedAt), true)}` : 'Completed'}</Badge>}
               {skipped && <Badge>Skipped</Badge>}
               {task.backlog && <Badge tone="warning">In the backlog</Badge>}
               <Badge>{cap(task.type)}</Badge>
@@ -202,9 +202,12 @@ export default function TaskPage() {
               Mark done
             </Button>
           )}
-          <Button variant="secondary" onPress={() => void toggleSkip(task.id, !skipped, task.title)}>
-            {skipped ? 'Unskip' : 'Skip'}
-          </Button>
+          {/* Done work is not skipped; unskipping would also reopen a task done without a completion time (imported history). */}
+          {!done && (
+            <Button variant="secondary" onPress={() => void toggleSkip(task.id, !skipped, task.title)}>
+              {skipped ? 'Unskip' : 'Skip'}
+            </Button>
+          )}
           <div className="grid gap-2">
             <TextField label="Pin to date" type="date" value={pinDate} onChange={setPinDate} onInvalidChange={setPinBad} description="The scheduler keeps a pinned task on its day." />
             <div className="flex gap-2">
