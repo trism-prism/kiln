@@ -1,8 +1,10 @@
 import { Suspense, lazy, type ComponentType } from 'react'
 import { BookOpen, CalendarDays, Ellipsis, FileUp, LayoutDashboard, ListTodo, RotateCcw, Settings } from 'lucide-react'
 import { NavLink, Outlet, useLocation } from 'react-router'
+import { WeekStartContext } from '../ui/date'
 import { CountBadge, KilnMark, Skeleton, badgeLabel } from '../ui/surface'
 import { HomeExtras } from './HomeExtras'
+import { useWeekStart } from './queries'
 import { useTodoCount } from './useTodoCount'
 
 // Menus and toasts pull in most of React Aria's overlay code. Splitting them off shrinks the first chunk;
@@ -112,27 +114,30 @@ function PageSkeleton() {
 
 export function Shell() {
   const count = useTodoCount()
+  const weekStart = useWeekStart()
   return (
-    <div className="flex min-h-dvh">
-      <a
-        href="#main"
-        className="fixed top-2 left-2 z-50 -translate-y-20 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-contrast focus:translate-y-0"
-      >
-        Skip to content
-      </a>
-      <Rail count={count} />
-      <main id="main" tabIndex={-1} className="min-w-0 flex-1 pb-24 outline-none md:pb-0">
-        {/* Shows only on first load: the router wraps navigations in startTransition, so React keeps
-            the old page on screen while the next page's chunk loads. */}
-        <HomeExtras />
-        <Suspense fallback={<PageSkeleton />}>
-          <Outlet />
+    <WeekStartContext value={weekStart}>
+      <div className="flex min-h-dvh">
+        <a
+          href="#main"
+          className="fixed top-2 left-2 z-50 -translate-y-20 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-contrast focus:translate-y-0"
+        >
+          Skip to content
+        </a>
+        <Rail count={count} />
+        <main id="main" tabIndex={-1} className="min-w-0 flex-1 pb-24 outline-none md:pb-0">
+          {/* Shows only on first load: the router wraps navigations in startTransition, so React keeps
+              the old page on screen while the next page's chunk loads. */}
+          <HomeExtras />
+          <Suspense fallback={<PageSkeleton />}>
+            <Outlet />
+          </Suspense>
+        </main>
+        <TabBar count={count} />
+        <Suspense>
+          <ToastRegion />
         </Suspense>
-      </main>
-      <TabBar count={count} />
-      <Suspense>
-        <ToastRegion />
-      </Suspense>
-    </div>
+      </div>
+    </WeekStartContext>
   )
 }

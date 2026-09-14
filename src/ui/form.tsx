@@ -1,5 +1,5 @@
 import { useId, type ReactNode } from 'react'
-import { Check, ChevronDown } from 'lucide-react'
+import { Check, ChevronDown, Minus } from 'lucide-react'
 import {
   Button as AriaButton,
   Checkbox as AriaCheckbox,
@@ -34,8 +34,9 @@ const error = 'text-sm text-danger'
 export function Checkbox({ children, className = '', ...props }: Omit<CheckboxProps, 'className' | 'children'> & { children: ReactNode; className?: string }) {
   return (
     <AriaCheckbox {...props} className={`group flex items-center gap-3 text-sm outline-none data-disabled:opacity-50 ${className}`}>
-      <span className="flex size-5 shrink-0 items-center justify-center rounded-sm border border-border-strong bg-surface-raised text-accent-contrast transition-colors group-data-selected:border-accent group-data-selected:bg-accent group-data-focus-visible:outline-2 group-data-focus-visible:outline-offset-2 group-data-focus-visible:outline-focus">
-        <Check size={14} className="opacity-0 group-data-selected:opacity-100" />
+      <span className="flex size-5 shrink-0 items-center justify-center rounded-sm border border-border-strong bg-surface-raised text-accent-contrast transition-colors group-data-selected:border-accent group-data-selected:bg-accent group-data-indeterminate:border-accent group-data-indeterminate:bg-accent group-data-focus-visible:outline-2 group-data-focus-visible:outline-offset-2 group-data-focus-visible:outline-focus">
+        <Check size={14} className="opacity-0 group-data-selected:opacity-100 group-data-indeterminate:hidden" />
+        <Minus size={14} className="hidden group-data-indeterminate:block" />
       </span>
       {children}
     </AriaCheckbox>

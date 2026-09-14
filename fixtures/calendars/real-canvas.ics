@@ -1,0 +1,70 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Example LMS//Canvas-style feed//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:Sam Student Calendar (Canvas)
+BEGIN:VEVENT
+DTSTART;TZID=America/New_York:20260906T235900
+DTEND;TZID=America/New_York:20260906T235900
+SUMMARY:Case Memo 1 [COB300A (Section 02 Fall 2026)]
+UID:event-assignment-3001
+URL;VALUE=URI:https://canvas.example.edu/courses/31/assignments/3001
+SEQUENCE:0
+CLASS:PUBLIC
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;TZID=America/New_York:20261004T235900
+DTEND;TZID=America/New_York:20261004T235900
+SUMMARY:Case Memo 2 [COB300A (Section 02 Fall 2026)]
+UID:event-assignment-3002
+URL;VALUE=URI:https://canvas.example.edu/courses/31/assignments/3002
+SEQUENCE:0
+CLASS:PUBLIC
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;TZID=America/New_York:20261015T235900
+DTEND;TZID=America/New_York:20261015T235900
+SUMMARY:Test 3 [COB300A (Section 02 Fall 2026)]
+UID:event-assignment-3003
+URL;VALUE=URI:https://canvas.example.edu/courses/31/assignments/3003
+SEQUENCE:0
+CLASS:PUBLIC
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;TZID=America/New_York:20261120T235900
+DTEND;TZID=America/New_York:20261120T235900
+SUMMARY:Test 4 [COB300A (Section 02 Fall 2026)]
+UID:event-assignment-3004
+URL;VALUE=URI:https://canvas.example.edu/courses/31/assignments/3004
+SEQUENCE:0
+CLASS:PUBLIC
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;TZID=America/New_York:20261210T235900
+DTEND;TZID=America/New_York:20261210T235900
+SUMMARY:Final Paper [COB300A (Section 02 Fall 2026)]
+UID:event-assignment-3005
+URL;VALUE=URI:https://canvas.example.edu/courses/31/assignments/3005
+SEQUENCE:0
+CLASS:PUBLIC
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;TZID=America/New_York:20260920T235900
+DTEND;TZID=America/New_York:20260920T235900
+SUMMARY:Reflection 1 [COB300D (Section 01 Fall 2026)]
+UID:event-assignment-4001
+URL;VALUE=URI:https://canvas.example.edu/courses/32/assignments/4001
+SEQUENCE:0
+CLASS:PUBLIC
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;TZID=America/New_York:20261203T235900
+DTEND;TZID=America/New_York:20261203T235900
+SUMMARY:BP Presentation [COB300D (Section 01 Fall 2026)]
+UID:event-assignment-4002
+URL;VALUE=URI:https://canvas.example.edu/courses/32/assignments/4002
+SEQUENCE:0
+CLASS:PUBLIC
+END:VEVENT
+END:VCALENDAR
