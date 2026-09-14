@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test'
 
 declare global {
   interface Window {
-    kilnSeed?: () => Promise<boolean>
+    kilnSeed?: (opts?: { reviews?: boolean }) => Promise<boolean>
   }
 }
 
@@ -11,13 +11,13 @@ export const DAY1 = new Date(2026, 10, 9, 9, 0, 0)
 
 /**
  * Fixes the browser clock at DAY1 (it keeps running from there), loads the sample plans through the
- * e2e build's hook and opens `path`.
+ * e2e build's hook and opens `path`. Reviews are off (the default) unless `reviews` is true.
  */
-export async function openSeeded(page: Page, path = '/') {
+export async function openSeeded(page: Page, path = '/', opts: { reviews?: boolean } = {}) {
   await page.clock.install({ time: DAY1 })
   await page.goto('/')
   await page.waitForFunction(() => typeof window.kilnSeed === 'function')
-  await page.evaluate(() => window.kilnSeed!())
+  await page.evaluate((o) => window.kilnSeed!(o), opts)
   await page.goto(path)
 }
 

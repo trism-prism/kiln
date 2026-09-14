@@ -1,12 +1,12 @@
+import { reviewsOn } from '../../data'
 import { Button, Link } from '../../ui/button'
 import { Badge, Card, EmptyState, Meter, ProgressBar, Skeleton } from '../../ui/surface'
 import { formatDay } from '../../lib/date'
 import { rescheduleOverdue } from '../actions'
-import { StreakChip } from '../calendar/Streak'
 import { canSeed, loadSamplePlans } from '../devSeed'
 import { Page } from '../Page'
 import { percent } from '../parts'
-import { usePlanSummaries, useStudy, useToday, type PlanSummary } from '../queries'
+import { usePlanSummaries, useToday, type PlanSummary } from '../queries'
 
 const pct = (n: number, of: number) => (of > 0 ? Math.round((n / of) * 100) : 0)
 
@@ -37,7 +37,7 @@ function PlanCard({ s }: { s: PlanSummary }) {
       </p>
       <ProgressBar label="Essential tasks" value={pct(s.coreDone, s.coreTotal)} valueLabel={`${s.coreDone} of ${s.coreTotal}`} />
       <p className="-mt-2 text-xs text-text-muted">All tasks: {s.allDone} of {s.allTotal} done</p>
-      <Meter label="Mastery" value={Math.round(s.mastery * 100)} valueLabel={percent(s.mastery)} />
+      {reviewsOn(plan) && <Meter label="Mastery" value={Math.round(s.mastery * 100)} valueLabel={percent(s.mastery)} />}
       <p className="flex flex-wrap items-center gap-2 text-sm text-text-muted">
         {s.finish ? `Expected finish ${formatDay(s.finish, true)}` : 'No finish date yet'}
         {late && <Badge tone="warning">After the {formatDay(plan.deadline!, true)} deadline</Badge>}
@@ -49,7 +49,6 @@ function PlanCard({ s }: { s: PlanSummary }) {
 export default function DashboardPage() {
   const today = useToday()
   const plans = usePlanSummaries(today)
-  const study = useStudy(today)
   const overdue = plans?.reduce((n, s) => n + s.overdue, 0) ?? 0
 
   return (
@@ -76,17 +75,10 @@ export default function DashboardPage() {
           Import a study plan and Kiln turns it into a daily list with due dates and spaced reviews.
         </EmptyState>
       ) : (
-        <div className="grid gap-4">
-          {study && (
-            <div>
-              <StreakChip stats={study.stats} />
-            </div>
-          )}
-          <div className="grid gap-4 md:grid-cols-2">
-            {plans.map((s) => (
-              <PlanCard key={s.plan.id} s={s} />
-            ))}
-          </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          {plans.map((s) => (
+            <PlanCard key={s.plan.id} s={s} />
+          ))}
         </div>
       )}
     </Page>

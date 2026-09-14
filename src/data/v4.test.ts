@@ -1,7 +1,7 @@
 // Schema 4: migration, plan settings, personal to-dos, events, plan versions, backup of the new tables.
 import 'fake-indexeddb/auto'
 import Dexie from 'dexie'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { exportBackup, importBackup } from './backup'
 import { KilnDB } from './db'
 import { fixtureTexts, validateParts } from './fixtures'
@@ -106,7 +106,26 @@ describe('personal to-dos and events', () => {
     const done = await setPersonalTodoDone(db, first.id, true)
     expect(done).toMatchObject({ done: true, completedAt: expect.any(Number) })
     expect(done!.updatedAt).toBeGreaterThan(first.updatedAt)
-    expect(await setPersonalTodoDone(db, first.id, false)).toMatchObject({ done: false, completedAt: undefined })
+    expect(await setPersonalTodoDone(db, first.id, false)).toMatchObject({ done: false })
+    // A logged session (minutes, completed at noon of its own day) keeps its completion time through untick and re-tick.
+    const noon8 = new Date(2026, 10, 8, 12).getTime()
+    const logged = await insertRecord(db, 'personalTodos', { title: 'Psychology', date: '2026-11-08', minutes: 30, done: true, completedAt: noon8 })
+    const nextDay = new Date(2026, 10, 9, 18).getTime()
+    vi.useFakeTimers({ toFake: ['Date'], now: nextDay })
+    try {
+      expect(await setPersonalTodoDone(db, logged.id, false)).toMatchObject({ done: false, completedAt: noon8 })
+      expect(await setPersonalTodoDone(db, logged.id, true)).toMatchObject({ done: true, completedAt: noon8 })
+      // Minutes but not a logged session (done on another day than its date): re-tick restamps to now.
+      const session = await insertRecord(db, 'personalTodos', { title: 'Read ch. 3', date: '2026-11-07', minutes: 45, done: true, completedAt: noon8 })
+      expect(await setPersonalTodoDone(db, session.id, false)).toMatchObject({ done: false, completedAt: undefined })
+      expect(await setPersonalTodoDone(db, session.id, true)).toMatchObject({ done: true, completedAt: nextDay })
+      // Without minutes: clears, then restamps.
+      await setPersonalTodoDone(db, later.id, true)
+      expect(await setPersonalTodoDone(db, later.id, false)).toMatchObject({ done: false, completedAt: undefined })
+      expect(await setPersonalTodoDone(db, later.id, true)).toMatchObject({ done: true, completedAt: nextDay })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('eventsBetween includes multi-day events that started earlier', async () => {
@@ -197,7 +216,7 @@ describe('backup', () => {
   it('round-trips the new tables and plan fields', async () => {
     const a = newDb()
     const { planId } = await importPlan(a, sd(), { startDate: TODAY })
-    await updateRecord(a, 'plans', planId, { favorite: true, dailyPracticeOn: false })
+    await updateRecord(a, 'plans', planId, { favorite: true, dailyPracticeOn: false, reviewsOn: true })
     await insertRecord(a, 'personalTodos', { title: 'Call', date: TODAY, minutes: 15, done: false, notes: 'n' })
     await insertRecord(a, 'events', { title: 'Lab', date: TODAY, allDay: false, start: 1, end: 2, course: 'BIO 101', url: 'https://lms.example/e/1', feedId: 'f', uid: 'u@x', planId })
     await insertRecord(a, 'feeds', { lms: 'canvas', url: 'https://canvas.example/feeds/calendars/user_abc.ics', planIds: [planId], lastFetchedAt: 5, lastResult: { ok: true, added: 3, changed: 1 } })
@@ -212,6 +231,17 @@ describe('backup', () => {
       expect(await b.table(t).toArray()).toEqual(t === 'feeds' ? stored.map((f) => ({ ...f, url: '', needsLink: true })) : stored)
     }
     expect(await b.plans.get(planId)).toEqual(await a.plans.get(planId))
+    expect((await b.plans.get(planId))!.reviewsOn).toBe(true)
+  })
+
+  it('restores a backup made before reviews were optional with reviews off for every plan', async () => {
+    const a = newDb()
+    const { planId } = await importPlan(a, sd(), { startDate: TODAY })
+    const doc = JSON.parse(await exportBackup(a))
+    for (const p of doc.tables.plans) delete p.reviewsOn
+    const b = newDb()
+    await importBackup(b, JSON.stringify(doc))
+    expect((await b.plans.get(planId))!.reviewsOn).toBeUndefined()
   })
 
   it('rejects a feed that is not https', async () => {

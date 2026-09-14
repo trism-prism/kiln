@@ -23,9 +23,6 @@ for (const colorScheme of ['light', 'dark'] as const) {
           await openSeeded(page, '/todo')
           const lesson = page.getByRole('region', { name: 'Today' }).getByRole('listitem').filter({ hasText: '· Lesson ·' }).first()
           await lesson.getByRole('checkbox').click({ force: true })
-          // The rating keys only work once the sheet is open; pressing early lost the key on a cold first run.
-          await expect(page.getByRole('dialog', { name: 'How did it go?' })).toBeVisible()
-          await page.keyboard.press('3')
           await expect(lesson.getByText('Done', { exact: true })).toBeVisible()
           await advanceDays(page, 3)
           await page.goto(path)
@@ -145,11 +142,11 @@ const scenes: Record<string, (page: Page) => Promise<{ full?: boolean; clip?: Lo
     const { wrote, open } = await backfillHistory(page)
     expect(wrote).toBe(Math.min(90, open)) // every row it meant to write was written
     expect(wrote).toBe(90) // the sample plans have far more open tasks than that
-    await page.goto('/calendar')
-    const streak = page.getByRole('region', { name: 'Streak' })
-    await expect(streak.getByRole('group', { name: 'Study activity, last year' })).toBeVisible()
-    await expect(streak.getByText(`${wrote} tasks in the last year`)).toBeVisible()
-    return { clip: streak }
+    await page.goto('/progress')
+    const heatmap = page.getByRole('group', { name: 'Study activity, last year' })
+    await expect(heatmap).toBeVisible()
+    await expect(page.getByText(/in the last year$/)).toBeVisible()
+    return { clip: page.getByRole('main') }
   },
 }
 

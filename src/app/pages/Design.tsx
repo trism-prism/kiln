@@ -192,17 +192,16 @@ function Gallery({ theme }: { theme: 'light' | 'dark' }) {
             </Menu>
           </MenuTrigger>
           <DialogTrigger>
-            <Button variant="secondary">Rate topic</Button>
-            <Sheet title="How well do you know two pointers?">
+            <Button variant="secondary">Skip task</Button>
+            <Sheet title="Skip this task?">
               {({ close }) => (
                 <div className="grid gap-4">
-                  <p className="text-sm text-text-muted">Kiln schedules the next review from your answer.</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {['Again', 'Hard', 'Good', 'Easy'].map((r) => (
-                      <Button key={r} variant={r === 'Good' ? 'primary' : 'secondary'} onPress={close}>
-                        {r}
-                      </Button>
-                    ))}
+                  <p className="text-sm">It moves out of your days. You can bring it back from the task page.</p>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="quiet" onPress={close}>
+                      Cancel
+                    </Button>
+                    <Button onPress={close}>Skip task</Button>
                   </div>
                 </div>
               )}

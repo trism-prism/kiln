@@ -12,8 +12,8 @@ const TODAY = '2026-11-09' // a Monday
 
 async function loadFixtures() {
   const db = newDb()
-  for (const p of validateParts([fixtureTexts.dsa1, fixtureTexts.dsa2, fixtureTexts.dsa3]).plans) await importPlan(db, p, { startDate: TODAY })
-  for (const p of validateParts([fixtureTexts.sd]).plans) await importPlan(db, p, { startDate: TODAY })
+  for (const p of validateParts([fixtureTexts.dsa1, fixtureTexts.dsa2, fixtureTexts.dsa3]).plans) await importPlan(db, p, { startDate: TODAY, reviewsOn: true })
+  for (const p of validateParts([fixtureTexts.sd]).plans) await importPlan(db, p, { startDate: TODAY, reviewsOn: true })
   return db
 }
 

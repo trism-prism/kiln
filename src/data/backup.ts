@@ -54,6 +54,7 @@ export function rowSchemas(now: number) {
         share: z.enum(['less', 'even', 'more']).optional(),
         favorite: z.boolean().optional(),
         dailyPracticeOn: z.boolean().optional(),
+        reviewsOn: z.boolean().optional(),
         partTotal: int.min(1).max(20),
         partsIn: z.array(int.min(1).max(20)),
       }),

@@ -1,6 +1,7 @@
+import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
 import { X } from 'lucide-react'
-import { db, updateSettings, type SettingsRecord } from '../../data'
+import { db, listPlans, reviewsOn, updateSettings, type SettingsRecord } from '../../data'
 import { toLocalISODate } from '../../lib/date'
 import { Button, IconButton } from '../../ui/button'
 import { ListBoxItem, Select, TextField } from '../../ui/form'
@@ -16,6 +17,8 @@ export const failed = (e: unknown) =>
 export function BudgetSection({ settings, onChanged }: { settings: SettingsRecord; onChanged: () => void }) {
   const [values, setValues] = useState(() => settings.minutesPerWeekday.map(String))
   const [weekStart, setWeekStart] = useState(settings.weekStartsOn)
+  // The review cap only matters while some plan has reviews on.
+  const anyReviews = useLiveQuery(async () => (await listPlans(db)).some(reviewsOn)) ?? false
   const parsed = values.map(parseMinutes)
   const valid = parsed.every((v) => v !== undefined)
 
@@ -43,9 +46,11 @@ export function BudgetSection({ settings, onChanged }: { settings: SettingsRecor
             <ListBoxItem id="monday">Monday</ListBoxItem>
             <ListBoxItem id="sunday">Sunday</ListBoxItem>
           </Select>
-          <p className="text-sm text-text-muted">
-            Spaced reviews take at most <strong className="font-medium text-text">{settings.reviewCapPercent}%</strong> of a day&apos;s minutes.
-          </p>
+          {anyReviews && (
+            <p className="text-sm text-text-muted">
+              Spaced reviews take at most <strong className="font-medium text-text">{settings.reviewCapPercent}%</strong> of a day&apos;s minutes.
+            </p>
+          )}
         </div>
         <div>
           <Button onPress={save} isDisabled={!valid}>Save study time</Button>

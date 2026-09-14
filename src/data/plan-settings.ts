@@ -35,5 +35,8 @@ export function practiceLanguage(p: Pick<PlanRecord, 'dailyPractice'>): string {
   return LANGUAGE_NAMES[raw.toLowerCase()] ?? raw[0]!.toUpperCase() + raw.slice(1)
 }
 
+/** Whether spaced reviews are on for the plan. Unset is off. */
+export const reviewsOn = (p: Pick<PlanRecord, 'reviewsOn'>): boolean => p.reviewsOn === true
+
 /** Whether daily practice is on for the plan (the toggle's state). */
 export const practiceOn = (p: Pick<PlanRecord, 'dailyPractice' | 'dailyPracticeOn'>): boolean => practiceConfig(p) !== undefined

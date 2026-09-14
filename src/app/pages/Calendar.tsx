@@ -6,9 +6,8 @@ import { EmptyState, Skeleton } from '../../ui/surface'
 import { moveItem } from '../actions'
 import { CalendarView, type DragPayload } from '../calendar/CalendarView'
 import { DayPanel } from '../calendar/DayPanel'
-import { StreakSection } from '../calendar/Streak'
 import { Page } from '../Page'
-import { useCalendarData, useStudy, useToday } from '../queries'
+import { useCalendarData, useToday } from '../queries'
 
 const VIEW_KEY = 'kiln.calendarView'
 
@@ -37,7 +36,6 @@ function useStoredView(): [View, (v: View) => void] {
 export default function CalendarPage() {
   const today = useToday()
   const data = useCalendarData(today)
-  const study = useStudy(today)
   const [view, setView] = useStoredView()
   const [open, setOpen] = useState<string | null>(null)
 
@@ -69,20 +67,17 @@ export default function CalendarPage() {
 
   return (
     <Page title="Calendar">
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-10">
-        <CalendarView
-          items={data.items}
-          today={today}
-          view={view}
-          onViewChange={setView}
-          weekStartsOn={settings.weekStartsOn}
-          minutesPerWeekday={settings.minutesPerWeekday}
-          blackoutDates={settings.blackoutDates}
-          onOpenDay={setOpen}
-          onMove={move}
-        />
-        {study && <StreakSection study={study} today={today} settings={settings} />}
-      </div>
+      <CalendarView
+        items={data.items}
+        today={today}
+        view={view}
+        onViewChange={setView}
+        weekStartsOn={settings.weekStartsOn}
+        minutesPerWeekday={settings.minutesPerWeekday}
+        blackoutDates={settings.blackoutDates}
+        onOpenDay={setOpen}
+        onMove={move}
+      />
       <DayPanel
         date={open}
         items={open ? data.items.filter((i) => i.date === open) : []}
