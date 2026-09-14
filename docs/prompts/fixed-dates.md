@@ -1,35 +1,38 @@
 # Prompt: plan with fixed dates
 
-The "Copy prompt (fixed dates)" button copies everything between the `prompt:start` and `prompt:end` HTML comment markers below (each appears exactly once), with `{{SCHEMA_REFERENCE}}` replaced by the field reference generated from the plan schema, so the prompt and the schema cannot drift. The generated copy of that reference at the bottom of this file is for reading only and is not copied; `npm run schema` refreshes it. Use this prompt when some work happens on real dates (exams, classes, interviews, due dates); Kiln still schedules every undated task around them. Spec: `docs/plan-format.md`.
+The second "Copy prompt" button (fixed dates) copies everything between the `prompt:start` and `prompt:end` HTML comment markers below (each appears exactly once), with `{{SCHEMA_REFERENCE}}` replaced by the field reference generated from the plan schema, so the prompt and the schema cannot drift. The generated copy of that reference at the bottom of this file is for reading only and is not copied; `npm run schema` refreshes it. Use this prompt when some work happens on real dates (exams, classes, interviews, due dates); Kiln still schedules every undated task around them. Spec: `docs/plan-format.md`.
 
 <!-- prompt:start -->
 You are helping me create a study plan that I will import into Kiln, a study-plan tracker. Some parts of my plan happen on real dates. Kiln pins those and schedules everything else around them from my daily time budget.
 
+Talk to me in plain, friendly language, as you would to a first-year student. When you speak to me, don't mention JSON, code blocks, schemas, ids or field names; call the block 'your Kiln plan'. After the plan, tell me: 'Copy this whole reply and paste it into Kiln.'
+
 ## Step 1: ask before writing
 
-Ask me, in one message, for anything below that I have not already told you, then wait for my answers. You must have my answers to 1 and 2 before you write anything. Never invent, estimate or assume a date.
+Ask me, in one message, for anything below that I have not already told you, then wait for my answers. You must have my answers to 1 and 2 before you write anything. Never invent, estimate or assume a date. If I write a date that could be read two ways, such as 03/04, ask me which I mean.
 
-1. Start date: the day I begin (yyyy-mm-dd).
+1. Start date: the day I begin (any format; you convert it).
 2. Dated parts: every fixed event or due date (exams, quizzes, class sessions, mock interviews, project due dates), and for each one: what it is, the date, and whether it happens on that day (an event) or must be finished by that day (a due date). If my material already contains dates, list them back and ask me to confirm.
 3. Final deadline, if any.
-4. Goal: what I want to be able to do at the end, and how I will know I am done.
-5. Current level: what I already know, specifically.
-6. Time: about how many minutes per day I can study.
-7. Resources: anything I want to use or avoid, and whether everything must be free, and links to any videos, problem sets, flashcards (Quizlet) or docs I already have.
-8. Programming subjects: which language. Coding interview prep: whether I want one practice problem a day.
+4. Class calendar: Do you have a class calendar link? Paste it here, or say no. If I paste a calendar link, open it and use the classes, exams and due dates in it to build the plan around my class schedule. If you can't open it, say so and ask me to paste the upcoming dates instead. Never guess dates.
+5. Goal: what I want to be able to do at the end, and how I will know I am done.
+6. Current level: what I already know, specifically.
+7. Time: about how many minutes per day I can study.
+8. Resources: anything I want to use or avoid, and whether everything must be free, and links to any videos, problem sets, flashcards (Quizlet) or docs I already have.
+9. Programming subjects: which language. Coding interview prep: whether I want one practice problem a day.
 
 If I attached material (a syllabus, an existing plan, notes), use it as the backbone and still ask about anything missing.
 
 ## Step 2: write the plan
 
-Output a short Markdown overview for me (goal, the dates I gave you, your assumptions, a table of modules with hours), then exactly one ```json code block with the whole plan. No other code blocks, nothing after it. The JSON must be strict: no comments, no trailing commas.
+Output a short Markdown overview for me (goal, the dates I gave you, your assumptions, a table of modules with hours), then exactly one ```json code block with the whole plan. No other code blocks. After the block, write only: "Copy this whole reply and paste it into Kiln." (in a long plan, after every part but the last: "Copy this whole reply and paste it into Kiln. Then reply next for the rest of the plan.") The JSON must be strict: no comments, no trailing commas.
 
 Rules:
 
 - `"schedulingMode": "fixed"` and `startDate` set to my start date. Set the plan `deadline` only if I gave a final deadline.
 - Dates: use only dates I gave you. An event goes in `fixedDate` on its task. A due date goes in `deadline`. Work that must be ready before an event (studying for an exam) may get a `deadline` equal to that event's date. Every other task has no date.
 - Date sanity: every date is on or after `startDate` and on or before the plan `deadline`; a task's `fixedDate` is on or before its own `deadline`; a dated task is not before a dated task it depends on. Never put `notBeforeDay` on a task with a `fixedDate`.
-- Size: total `estimatedMinutes` should be about my daily minutes times the days available, minus 20% for the reviews Kiln adds. If the material does not fit, keep it but mark the least essential work `recommended` or `optional`, and say so in the overview.
+- Size: total `estimatedMinutes` should be about 90% of my daily minutes times the days available, leaving about 10% of the time free for catching up. If the material does not fit, keep it but mark the least essential work `recommended` or `optional`, and say so in the overview.
 - Sessions: every task is one sitting of 20 to 90 minutes (an exam or mock may be longer, up to 180). Split longer work into tasks ("Part 1 of 3") chained with `dependsOn`. Expand every day or week of a source plan into concrete tasks.
 - Realistic minutes for my level: include reading or watching (about 1.5x video length for a beginner), notes and exercises. Beginner coding problems: easy 30-45, medium 45-75, hard 75-90.
 - Fill every task completely. `description` says exactly what to do (which chapter, which video section, which exercises). Lessons get 2-4 `objectives`, `keyConcepts`, 2-4 `verificationQuestions`, `topics` and at least one resource. Add `tradeoffs` wherever the topic involves real choices. Every resource gets `minutes`.
@@ -38,7 +41,7 @@ Rules:
 - Links: give every video, problem set, flashcard deck (for example Quizlet) and documentation page a `url`, in any subject. Include a `url` only when you are confident the page exists at that address; never invent a link. When you are not sure, ask me for the link in your first message, before you write the plan, instead of leaving it out. If I cannot give one, omit `url` and give the title, author or channel, and `section` so I can find it.
 - Ids: lowercase slugs, unique across modules, tasks and sources, descriptive (`ci-for-means`, not `t7`). `order` starts at 1 in each module.
 - Topics: short kebab-case strings, reused exactly across tasks. For data structures and algorithms use these where they fit: arrays-hashing, two-pointers, sliding-window, stack, binary-search, linked-list, trees, tries, heap, backtracking, graphs, advanced-graphs, dp-1d, dp-2d, greedy, intervals, math-geometry, bit-manipulation.
-- Long plans: if the plan has more than 40 tasks, split it into parts of whole modules, at most 40 tasks each. Every part is a complete JSON block with the same `id`, `title`, `schedulingMode`, `startDate` and `"part": {"index": n, "total": N}`; `sources` and `dailyPractice` go in part 1 only; `dependsOn` may point to earlier parts. Write part 1, then stop and tell me to reply "next".
+- Long plans: if the plan has more than 40 tasks, split it into parts of whole modules, at most 40 tasks each. Every part is a complete JSON block with the same `id`, `title`, `schedulingMode`, `startDate` and `"part": {"index": n, "total": N}`; `sources` and `dailyPractice` go in part 1 only; `dependsOn` may point to earlier parts. Write part 1, then stop; after its block write only: "Copy this whole reply and paste it into Kiln. Then reply next for the rest of the plan."
 - Before you answer, check: ids unique, every `moduleId`, `dependsOn` and `sourceId` exists, no dependency cycles, all minutes are whole numbers, every date is one I gave you.
 
 ## Field reference
