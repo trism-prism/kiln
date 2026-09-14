@@ -1,7 +1,8 @@
 // Runs sync for the app: on demand from Settings and automatically (open, back online, tab visible).
 // Remembers the last run's summary so Settings can show it however the run started.
 import { useSyncExternalStore } from 'react'
-import { db } from '../data'
+import { db, topUpStudy } from '../data'
+import { toLocalISODate } from '../lib/date'
 import { getSyncStatus, syncNow, type SyncErrorKind, type SyncSummary } from '../sync'
 import { toasts } from '../ui/overlay'
 import { API_URL } from './env'
@@ -44,6 +45,8 @@ export async function runSyncNow(): Promise<SyncSummary | undefined> {
   try {
     const summary = await syncNow(db, fetch, API_URL)
     set({ running: false, last: summary, at: Date.now() })
+    // Today's study session is planned after the pull, so it counts sessions other devices already finished.
+    await topUpStudy(db, toLocalISODate(new Date())).catch(() => undefined)
     const kind = summary.error?.kind
     const toast = kind && TOAST[kind]
     if (kind && toast && !toasted.has(kind)) {
