@@ -16,6 +16,7 @@ export interface BadgeBreakdown {
  * "today's open + overdue"; due reviews are shown in the to-do list as items for today, so they
  * count too. Tasks with no scheduled date, done, skipped and deleted tasks do not count. Pass live reviews only.
  * Personal to-dos count like tasks by their `date`; undated and done ones do not. Calendar events never count.
+ * Study sessions are passed as tasks, today's open ones only (a past open session has expired, it is not overdue).
  */
 export function badgeBreakdown(
   tasks: { status: string; scheduledDate?: string; deleted?: boolean }[],

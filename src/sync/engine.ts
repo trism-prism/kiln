@@ -4,12 +4,14 @@ import { z } from 'zod'
 import { mergeRows, rowSchemas } from '../data/backup'
 import type { KilnDB } from '../data/db'
 import { TABLE_NAMES, type Base, type TableName } from '../data/types'
+import { addDaysISO, toLocalISODate } from '../lib/date'
 import {
   b64uDecode,
   b64uEncode,
   decryptRow,
   deriveKeys,
   encryptRow,
+  rowVersion,
   generateSyncKey,
   keyToMnemonic,
   keyToQrPayload,
@@ -243,11 +245,18 @@ const toError = (e: unknown) =>
 interface RetryEntry {
   wire: WireRow
   why: 'schema' | 'version'
+  /** The table inside the ciphertext (entries saved before this field have none). */
+  table?: TableName
 }
 type RetrySet = Map<string, RetryEntry>
 const retryId = (w: WireRow) => `${w.recordKey}:${w.updatedAt}`
 
-type Decoded = { ok: { table: TableName; row: Base } } | { defer: 'schema' | 'version' } | { bad: true }
+type Decoded = { ok: { table: TableName; row: Base } } | { defer: 'schema' | 'version'; table: TableName } | { bad: true } | { old: true }
+
+/** Study session tombstones dated more than this many days back are not kept (nor waited on): nothing reads them. */
+const STUDY_TOMBSTONE_DAYS = 60
+const oldSessionTombstone = (table: string, row: Record<string, unknown>) =>
+  table === 'studyItems' && row.deleted === true && typeof row.date === 'string' && row.date < addDaysISO(toLocalISODate(new Date()), -STUDY_TOMBSTONE_DAYS)
 
 async function decode(keys: SyncKeys, w: WireRow, schemas: ReturnType<typeof rowSchemas>): Promise<Decoded> {
   let d
@@ -256,10 +265,11 @@ async function decode(keys: SyncKeys, w: WireRow, schemas: ReturnType<typeof row
   } catch {
     return { bad: true }
   }
-  if (d.v > SYNC_VERSION) return { defer: 'version' }
+  if (oldSessionTombstone(d.table, d.row)) return { old: true }
+  if (d.v > SYNC_VERSION) return { defer: 'version', table: d.table }
   const schema = (schemas as Record<string, z.ZodType | undefined>)[d.table]
   const ok = schema?.safeParse(d.row)
-  return ok?.success ? { ok: { table: d.table, row: ok.data as Base } } : { defer: 'schema' }
+  return ok?.success ? { ok: { table: d.table, row: ok.data as Base } } : { defer: 'schema', table: d.table }
 }
 
 /** Decrypts and validates wire rows, sorting them into rows to merge, rows to retry, and rows to drop. */
@@ -276,14 +286,16 @@ async function ingest(keys: SyncKeys, wires: WireRow[], retry: RetrySet, seen: M
       seen.set(k, Math.max(seen.get(k) ?? 0, d.ok.row.updatedAt))
       byTable.set(d.ok.table, [...(byTable.get(d.ok.table) ?? []), d.ok.row])
     } else if ('defer' in d) {
-      retry.set(retryId(w), { wire: w, why: d.defer })
-    } else {
+      retry.set(retryId(w), { wire: w, why: d.defer, table: d.table })
+    } else if ('bad' in d) {
       s.invalid++
     }
   })
-  // Bounded: the oldest waiting rows are given up first.
+  // Bounded: study sessions are given up first (the scheduler makes them again), then the oldest waiting rows,
+  // so a plan row never makes way for its sessions.
   let chars = [...retry.values()].reduce((n, e) => n + e.wire.ciphertext.length, 0)
-  for (const [id, e] of retry) {
+  const order = [...retry].sort(([, a], [, b]) => Number(b.table === 'studyItems') - Number(a.table === 'studyItems'))
+  for (const [id, e] of order) {
     if (retry.size <= RETRY_MAX_ROWS && chars <= RETRY_MAX_CHARS) break
     retry.delete(id)
     chars -= e.wire.ciphertext.length
@@ -356,7 +368,7 @@ async function pushChanged(db: KilnDB, rawKey: string, keys: SyncKeys, post: Pos
   const blockedAt: Partial<Record<TableName, number>> = {}
   for (const { table, row } of changed) {
     if (row.updatedAt <= (seen.get(`${table}:${row.id}`) ?? -1)) continue
-    const wire = await encryptRow(keys, table, row)
+    const wire = await encryptRow(keys, table, row, rowVersion(table, row))
     if (wire.ciphertext.length > MAX_CIPHERTEXT) {
       s.tooLarge.push({ table, id: row.id })
       blockedAt[table] ??= row.updatedAt

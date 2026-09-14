@@ -157,15 +157,21 @@ export const planSchema = obj({
   deadline: date.optional().meta({ description: 'fixed mode only; not before startDate' }),
   sources: z.array(sourceSchema, { error: msg('must be a list of sources') }).max(50, { error: msg('must have at most 50 items') }).default([]),
   dailyPractice: dailyPracticeSchema.optional(),
+  studyMinutesPerWeek: int(15, 2400).optional().meta({
+    description: 'study time plan only: minutes per week, from which Kiln plans a daily session; leave out modules, tasks, sources, dailyPractice and part',
+  }),
   part: partSchema.optional(),
+  // "At least 1" is checked in semantic.ts: a study time plan has none.
   modules: z
     .array(moduleSchema, { error: msg('must be a list of modules') })
-    .min(1, { error: msg('must have at least 1 item') })
-    .max(100, { error: msg('must have at most 100 items') }),
+    .max(100, { error: msg('must have at most 100 items') })
+    .default([])
+    .meta({ description: 'at least 1 unless studyMinutesPerWeek is set' }),
   tasks: z
     .array(taskSchema, { error: msg('must be a list of tasks') })
-    .min(1, { error: msg('must have at least 1 item') })
-    .max(2000, { error: msg('must have at most 2000 items') }),
+    .max(2000, { error: msg('must have at most 2000 items') })
+    .default([])
+    .meta({ description: 'at least 1 unless studyMinutesPerWeek is set' }),
 })
 
 /** A parsed plan: defaults applied (lists are arrays, priority is set). */

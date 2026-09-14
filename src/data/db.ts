@@ -14,6 +14,7 @@ import type {
   ReviewCardRecord,
   ReviewLogRecord,
   SettingsRecord,
+  StudyItemRecord,
   TaskRecord,
 } from './types'
 
@@ -30,6 +31,7 @@ export class KilnDB extends Dexie {
   events!: EntityTable<EventRecord, 'id'>
   planVersions!: EntityTable<PlanVersionRecord, 'id'>
   feeds!: EntityTable<FeedRecord, 'id'>
+  studyItems!: EntityTable<StudyItemRecord, 'id'>
   meta!: EntityTable<MetaRecord, 'key'>
 
   constructor(name = 'kiln') {
@@ -93,6 +95,12 @@ export class KilnDB extends Dexie {
           p.weight = SHARE_WEIGHT[p.share]
         })
       })
+
+    // 5: study time plans (plans.studyMinutesPerWeek) and their generated sessions (studyItems, id
+    // `${planId}:${date}`). A new table and an optional field: nothing to migrate.
+    this.version(5).stores({
+      studyItems: 'id, planId, date, updatedAt',
+    })
   }
 }
 
