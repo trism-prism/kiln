@@ -86,6 +86,53 @@ export function parseLine(line: string, today: string): ParsedLine {
   return out
 }
 
+/** Minutes as people type them: "30", "45m", "1h", "1h30", "1h 30m", "1.5 hours". Undefined for anything else. */
+export function parseStudyMinutes(text: string): number | undefined {
+  const t = text.trim()
+  if (/^[0-9]+$/.test(t)) return Number(t)
+  // "1h30": hours, then bare minutes.
+  const hm = /^([0-9]+)\s*h\s*([0-9]{1,2})$/i.exec(t)
+  if (hm) return Number(hm[2]) < 60 ? Number(hm[1]) * 60 + Number(hm[2]) : undefined
+  // Quick add reads durations; the text must be nothing but a duration.
+  const p = parseLine(t, '2000-01-01')
+  return p.title === '' && p.minutes !== undefined && !p.due && !p.priority && p.links.length === 0 ? Number(p.minutes) : undefined
+}
+
+const WEEK_MARKER = /\s*(?:\b(?:a|per|each|every)\s+week|\/\s*(?:week|wk)|\bweekly)\s*$/i
+
+/**
+ * A study time line: a subject and a time per week, "Psychology 3h a week", "Spanish 2h weekly", "Biology 3h/week".
+ * The rest of the line must be a title and minutes only (no day, ! or ?, or link); a leading "study" is dropped.
+ * Undefined for any other line (it is a task line). `error` says why the time can't be used (outside 15 min to 40 h).
+ */
+export function parseStudyLine(line: string): StudyLine | undefined {
+  const body = line.replace(BULLET, '').trim()
+  if (!WEEK_MARKER.test(body)) return undefined
+  const p = parseLine(body.replace(WEEK_MARKER, ''), '2000-01-01')
+  if (p.minutes === undefined || p.due || p.priority || p.links.length > 0) return undefined
+  const subject = p.title.replace(/^study\s+/i, '').trim()
+  if (subject === '' || /^study$/i.test(subject)) return undefined
+  const minutesPerWeek = Number(p.minutes)
+  const error = studyTimeError(minutesPerWeek)
+  return error ? { subject, minutesPerWeek, error } : { subject, minutesPerWeek }
+}
+
+export interface StudyLine {
+  subject: string
+  minutesPerWeek: number
+  error?: string
+}
+
+/** A study time plan takes 15 minutes to 40 hours a week. The error for other times, or ''. */
+export function studyTimeError(minutes: number): string {
+  if (minutes < 15) return 'At least 15 min, like 3h or 90m'
+  if (minutes > 2400) return 'Up to 40 h a week'
+  return ''
+}
+
+/** "psychology" -> "Psychology": a plan title from a typed subject (the subject itself stays as typed). */
+export const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+
 export const hostOf = (url: string) => {
   try {
     return new URL(url).hostname.replace(/^www\./, '')
@@ -222,4 +269,15 @@ export function keptEdits<T>(
     else kept.push([uid, edit])
   }
   return { edits: Object.fromEntries(kept), changed, recounted }
+}
+
+/**
+ * Whether the text is a study time line. `study`: its only line is one (a Study time plan). `mixed`: a study line
+ * (as typed) sits among other lines, which can't go in one plan. Undefined: no study line, a task list.
+ */
+export function readStudyText(text: string): { study: StudyLine } | { mixed: string } | undefined {
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l !== '')
+  const first = lines.find((l) => parseStudyLine(l))
+  if (!first) return undefined
+  return lines.length === 1 ? { study: parseStudyLine(first)! } : { mixed: first }
 }

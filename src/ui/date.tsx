@@ -38,6 +38,8 @@ export interface DateFieldProps {
   /** yyyy-mm-dd bounds, inclusive. */
   min?: string
   max?: string
+  /** The error for a date before `min`, when the default ("Pick today or later", "Pick <date> or later") doesn't fit. */
+  minMessage?: string
   isInvalid?: boolean
   errorMessage?: string
   description?: string
@@ -68,6 +70,7 @@ export function DateField({
   onInvalidChange,
   min,
   max,
+  minMessage,
   isInvalid,
   errorMessage,
   description,
@@ -120,7 +123,7 @@ export function DateField({
   }
   const outOfRange = (iso: string) => {
     const today = toLocalISODate(new Date())
-    if (min && iso < min) return min === today ? 'Pick today or later' : `Pick ${formatDay(min, true)} or later`
+    if (min && iso < min) return minMessage ?? (min === today ? 'Pick today or later' : `Pick ${formatDay(min, true)} or later`)
     if (max && iso > max) return max === today ? 'Pick today or earlier' : `Pick a date by ${formatDay(max, true)}`
     return ''
   }
