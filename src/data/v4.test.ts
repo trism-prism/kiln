@@ -52,7 +52,7 @@ describe('migration to version 4', () => {
 
     const db = new KilnDB(name)
     await db.open()
-    expect(db.verno).toBe(4)
+    expect(db.verno).toBe(5)
     const plans = await db.plans.orderBy('key').toArray()
     expect(plans.map((p) => [p.key, p.share, p.weight])).toEqual([
       ['w1', 'less', 2],
