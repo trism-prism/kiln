@@ -251,3 +251,33 @@ describe('validatePlan', () => {
     expect(validatePlan([]).issues.map(formatIssue)).toEqual(['plan: must be an object'])
   })
 })
+
+describe('study time plans', () => {
+  const study = (extra: Record<string, unknown> = {}) => ({ schemaVersion: 1, id: 'study-psychology', title: 'Psychology', subject: 'Psychology', schedulingMode: 'auto', studyMinutesPerWeek: 180, ...extra })
+  const issues = (p: unknown) => validatePlan(p).issues.map(formatIssue).map((t) => t.replace(/^plan "[^"]*": /, ''))
+
+  it('is valid with no modules or tasks, which default to empty lists', () => {
+    const r = validatePlan(study())
+    expect(r.issues).toEqual([])
+    expect(r.plan).toMatchObject({ studyMinutesPerWeek: 180, modules: [], tasks: [], sources: [] })
+  })
+
+  it('may not have modules, tasks, sources, daily practice, parts or fixed dates', () => {
+    const p = basePlan()
+    expect(issues(study({ modules: p.modules, tasks: p.tasks }))).toEqual(expect.arrayContaining(['modules must be empty in a study time plan', 'tasks must be empty in a study time plan']))
+    expect(issues(study({ sources: [{ id: 'b', title: 'Book', kind: 'book' }] }))).toContain('sources is not allowed in a study time plan')
+    expect(issues(study({ dailyPractice: { source: 'neetcode' } }))).toContain('dailyPractice is not allowed in a study time plan')
+    expect(issues(study({ part: { index: 1, total: 1 } }))).toContain('part is not allowed in a study time plan')
+    expect(issues(study({ schedulingMode: 'fixed', startDate: '2026-11-09', deadline: '2026-12-01' }))).toEqual(['schedulingMode must be "auto" in a study time plan'])
+  })
+
+  it('a plan with neither tasks nor study time still needs at least one module and task', () => {
+    expect(issues({ schemaVersion: 1, id: 'x', title: 'X', schedulingMode: 'auto' })).toEqual(['modules must have at least 1 item', 'tasks must have at least 1 item'])
+    expect(issues({ ...basePlan(), tasks: [] })).toContain('tasks must have at least 1 item')
+  })
+
+  it('takes 15 to 2400 minutes a week', () => {
+    expect(issues(study({ studyMinutesPerWeek: 10 }))).toEqual(['studyMinutesPerWeek must be an integer from 15 to 2400'])
+    expect(issues(study({ studyMinutesPerWeek: 2401 }))).toEqual(['studyMinutesPerWeek must be an integer from 15 to 2400'])
+  })
+})

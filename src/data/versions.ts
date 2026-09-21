@@ -33,6 +33,7 @@ export function planFromRecords(plan: PlanRecord, modules: ModuleRecord[], tasks
     startDate: plan.schedulingMode === 'fixed' ? plan.startDate : undefined,
     sources: plan.sources,
     dailyPractice: plan.dailyPractice,
+    studyMinutesPerWeek: plan.studyMinutesPerWeek,
     modules: [...modules].sort((a, b) => a.order - b.order).map((m) => ({ id: m.key, title: m.title, order: m.order, summary: m.summary, notBeforeDay: m.notBeforeDay })),
     tasks: tasks
       .filter((t) => moduleKey.has(t.moduleId))

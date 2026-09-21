@@ -1,4 +1,5 @@
 import 'fake-indexeddb/auto'
+import Dexie from 'dexie'
 import { describe, expect, it, vi } from 'vitest'
 import { dueCards, tasksByStatus } from '../data'
 import { newDb } from '../data/test-db'
@@ -98,6 +99,28 @@ describe('readBreakdown (what the service worker counts)', () => {
     await db.personalTodos.bulkPut([todo('a', TODAY), todo('b', '2026-11-01'), todo('c', TODAY, true), todo('d', undefined), todo('e', '2026-11-10')])
     const r = await readBreakdown(indexedDB, NOW, db.name)
     expect([r.today - before.today, r.overdue - before.overdue]).toEqual([1, 1])
+  })
+
+  it("counts today's open study session of a live study plan, never a past open one or a done one", async () => {
+    const { db } = await seeded()
+    const before = await readBreakdown(indexedDB, NOW, db.name)
+    const plan = { id: 's1', key: 's1', title: 'Psychology', schedulingMode: 'auto' as const, sources: [], weight: 3, startDate: '2026-11-01', partTotal: 1, partsIn: [1], studyMinutesPerWeek: 180, deleted: false, updatedAt: 1, deviceId: 'd' }
+    const session = (planId: string, date: string, status: 'open' | 'done' = 'open') => ({ id: `${planId}:${date}`, planId, date, minutes: 25, status, deleted: false, updatedAt: 1, deviceId: 'd' })
+    await db.plans.bulkPut([plan, { ...plan, id: 's2', key: 's2', deleted: true }])
+    await db.studyItems.bulkPut([session('s1', TODAY), session('s1', '2026-11-08'), session('s2', TODAY), session('s1', '2026-11-10')])
+    const r = await readBreakdown(indexedDB, NOW, db.name)
+    expect([r.today - before.today, r.overdue - before.overdue]).toEqual([1, 0])
+    await db.studyItems.put(session('s1', TODAY, 'done'))
+    expect((await readBreakdown(indexedDB, NOW, db.name)).today).toBe(before.today)
+  })
+
+  it('reads a version 4 database, which has no study sessions', async () => {
+    const name = `v4-${Date.now()}`
+    const v4 = new Dexie(name)
+    v4.version(4).stores({ plans: 'id', tasks: 'id', practiceItems: 'id', personalTodos: 'id', reviewCards: 'id' })
+    await v4.table('tasks').add({ id: 't', status: 'open', scheduledDate: TODAY, deleted: false })
+    v4.close()
+    expect(await readBreakdown(indexedDB, NOW, name)).toMatchObject({ today: 1, total: 1 })
   })
 
   it('returns zeros and creates nothing when the app never ran', async () => {

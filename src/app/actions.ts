@@ -1,8 +1,10 @@
 // Writes the screens share. Each reports through a toast.
-import { db, insertRecord, type PersonalTodoRecord, revertWrite, scheduleAll, setPersonalTodoDone, skipTask, softDelete, unskipTask, updateRecord } from '../data'
+import { db, importPlan, insertRecord, listPlans, type PersonalTodoRecord, revertWrite, scheduleAll, setPersonalTodoDone, skipTask, softDelete, unskipTask, updateRecord } from '../data'
+import { formatIssue, validatePlan } from '../domain/plan-format'
 import { BACKLOG } from '../domain/scheduler'
 import { formatDay, toLocalISODate } from '../lib/date'
 import { toasts } from '../ui/overlay'
+import { slugify } from './import/slug'
 import { describeMoves } from './moveSummary'
 import { minutesText } from './parts'
 
@@ -217,4 +219,58 @@ export async function deletePersonalTodo(id: string, title: string): Promise<voi
   } catch (e) {
     fail(e)
   }
+}
+
+export interface StudyFields {
+  title: string
+  minutesPerWeek: number
+  /** yyyy-mm-dd; used when the plan is added. */
+  startDate: string
+  /** yyyy-mm-dd, or undefined for no end date. */
+  deadline?: string
+}
+
+/**
+ * Adds a study time plan (id "study-<subject>", "-2", "-3"... while taken) and plans its sessions. Returns the
+ * plan's record id, or undefined when nothing was saved (reported). A failed reschedule after the save is reported
+ * but still returns the id, so the sheet closes instead of adding a second copy.
+ */
+export async function addStudyPlan(f: StudyFields): Promise<string | undefined> {
+  let planId: string
+  try {
+    const keys = new Set((await listPlans(db)).map((p) => p.key))
+    const base = `study-${slugify(f.title, 50) || 'plan'}`
+    let id = base
+    for (let n = 2; keys.has(id); n++) id = `${base}-${n}`
+    const checked = validatePlan({ schemaVersion: 1, id, title: f.title, subject: f.title, schedulingMode: 'auto', studyMinutesPerWeek: f.minutesPerWeek, modules: [], tasks: [] })
+    if (!checked.plan) throw new Error(checked.issues.map(formatIssue)[0] ?? 'The plan is not valid')
+    planId = (await importPlan(db, checked.plan, { startDate: f.startDate, deadline: f.deadline })).planId
+  } catch (e) {
+    fail(e)
+    return undefined
+  }
+  try {
+    await scheduleAll(db, today(), { replanFuture: true })
+  } catch (e) {
+    fail(e, 'Could not reschedule')
+  }
+  toasts.add({ title: `Added "${f.title}"` })
+  return planId
+}
+
+/** Saves a study time plan's subject, weekly time and end date (no version: the plan has no modules or tasks). */
+export async function saveStudyPlan(planId: string, f: Omit<StudyFields, 'startDate'>): Promise<boolean> {
+  try {
+    if (!(await updateRecord(db, 'plans', planId, { title: f.title, subject: f.title, studyMinutesPerWeek: f.minutesPerWeek, deadline: f.deadline }))) throw new Error('The plan is missing or deleted')
+  } catch (e) {
+    fail(e)
+    return false
+  }
+  try {
+    await scheduleAll(db, today(), { replanFuture: true })
+  } catch (e) {
+    fail(e, 'Could not reschedule')
+  }
+  toasts.add({ title: `Saved "${f.title}"` })
+  return true
 }

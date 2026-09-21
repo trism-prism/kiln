@@ -26,6 +26,8 @@ export interface DraftModule {
 export interface Draft {
   title: string
   modules: DraftModule[]
+  /** A study time plan (one Quick add line like "Psychology 3h a week"): no modules or tasks. */
+  study?: { subject: string; minutesPerWeek: number }
 }
 
 // 60, not 64: room for the "-2" that keeps ids unique.
@@ -41,9 +43,14 @@ function unique(used: Set<string>, base: string): string {
 
 /**
  * The plan object for a draft. A due date makes the plan a fixed-mode plan, which needs
- * `startDate`; otherwise the plan is auto.
+ * `startDate`; otherwise the plan is auto. A study draft makes a study time plan.
  */
 export function buildPlan(draft: Draft, info: { id: string; goal?: string; startDate?: string }): Record<string, unknown> {
+  if (draft.study) {
+    const study: Record<string, unknown> = { schemaVersion: 1, id: info.id, title: draft.title.trim(), subject: draft.study.subject }
+    if (info.goal?.trim()) study.goal = info.goal.trim()
+    return { ...study, schedulingMode: 'auto', studyMinutesPerWeek: draft.study.minutesPerWeek, modules: [], tasks: [] }
+  }
   const used = new Set<string>()
   const moduleIds = draft.modules.map((m) => unique(used, slug(m.title) || 'module'))
   const taskIds = new Map<string, string>()

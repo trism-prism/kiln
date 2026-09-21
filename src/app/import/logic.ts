@@ -162,6 +162,10 @@ export function decideMatch(plan: Plan, existing: PlanRecord | undefined, choice
     }
     return { kind: 'new', choices: [], label: 'New plan' }
   }
+  // A plan never changes kind (study time or tasks): the other kind under the same id is always a copy.
+  if ((existing.studyMinutesPerWeek !== undefined) !== (plan.studyMinutesPerWeek !== undefined)) {
+    return { kind: 'copy', choices: [], label: `"${existing.title}" in Kiln is a different kind of plan. This one is added as a copy.` }
+  }
   if (index > 1) {
     return existing.partsIn.includes(index)
       ? { kind: 'update', choices: [], label: `Update part ${index} of ${part?.total} in "${existing.title}" (progress is kept)` }

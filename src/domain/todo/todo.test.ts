@@ -244,3 +244,26 @@ describe('todoView', () => {
     expect(todoView(items.filter((i) => i.id === 't7'), { from: TODAY, to: '2026-11-17' }, TODAY).days).toEqual([])
   })
 })
+
+describe('study sessions', () => {
+  const session = (date: string, status: 'open' | 'done' = 'open') => ({ id: `s1:${date}`, planId: 's1', date, minutes: 45, status })
+  const items = (sessions: ReturnType<typeof session>[]) =>
+    buildTodoItems(
+      { tasks: [task('t1', TODAY)], problems: [], studyItems: sessions, cards: [], planTitles: new Map([['p1', 'DSA'], ['s1', 'Psychology']]), practiceLanguages: new Map(), planLanguages: new Map(), cardTitle: () => '' },
+      TODAY,
+    )
+
+  it('lists "Study <plan>" linking to the plan, after tasks, never overdue, and drops an expired open one', () => {
+    const list = items([session('2026-11-10'), session('2026-11-09', 'done'), session(TODAY)])
+    expect(list.map((i) => i.key)).toEqual(['task:t1', 'study:s1:2026-11-09', `study:s1:${TODAY}`])
+    expect(list.find((i) => i.key === `study:s1:${TODAY}`)).toMatchObject({ kind: 'study', title: 'Study Psychology', planId: 's1', typeLabel: 'Study time', minutes: 45, done: false, overdue: false, href: '/plans/s1' })
+    expect(list.find((i) => i.key === 'study:s1:2026-11-09')).toMatchObject({ done: true, overdue: false })
+  })
+
+  it('follows "Favorite plans only" and "Show completed" like tasks', () => {
+    const list = items([session(TODAY), session('2026-11-09', 'done')])
+    expect(filterTodoItems(list, { ...DEFAULT_TODO_PREFS, favoriteOnly: true }, new Set(['p1'])).map((i) => i.kind)).toEqual(['task'])
+    expect(filterTodoItems(list, { ...DEFAULT_TODO_PREFS, favoriteOnly: true }, new Set(['s1'])).map((i) => i.kind)).toEqual(['study', 'study'])
+    expect(filterTodoItems(list, { ...DEFAULT_TODO_PREFS, completed: false }, new Set()).map((i) => i.key)).toEqual(['task:t1', `study:s1:${TODAY}`])
+  })
+})

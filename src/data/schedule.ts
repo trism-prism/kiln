@@ -6,6 +6,7 @@ import type { KilnDB } from './db'
 import { reviewsDue } from './mastery'
 import { planWeight, practiceConfig } from './plan-settings'
 import { persistPractice } from './practice'
+import { hasStudyPlan, persistStudy } from './study'
 import { getDeviceId, getSettings, stampAfter, isPlanComplete, listModules, listPlans, listTasks } from './repo'
 import type { TaskRecord } from './types'
 
@@ -17,13 +18,19 @@ export interface ScheduleAllOptions {
   skipOptional?: boolean
   /** Spaced reviews due per date. Default: the stored review cards (mastery.reviewsDue) from today for three years. */
   reviewsDue?: ScheduleInput['reviewsDue']
+  /**
+   * Place open, unpinned tasks dated after today again, as if they had no date. Used when study time plans change
+   * how much of each day is free: without it the tasks keep their dates and those days simply run over.
+   */
+  replanFuture?: boolean
 }
 
 /**
  * Reads plans, tasks and settings, runs the scheduler for `today` ("yyyy-mm-dd") and writes the
  * results in one transaction: `scheduledDate` for placed tasks, `backlog: true` (and no date) for
  * deferred ones. Plans with missing parts are left out. Returns the scheduler's output.
- * Generated daily problems are returned and also stored (practice.ts persistPractice), so they stay stable.
+ * Generated daily problems are returned and also stored (practice.ts persistPractice), so they stay stable;
+ * so are study time plans' sessions (study.ts persistStudy).
  */
 export async function scheduleAll(db: KilnDB, today: string, opts: ScheduleAllOptions = {}): Promise<ScheduleOutput> {
   const deviceId = await getDeviceId(db)
@@ -31,7 +38,7 @@ export async function scheduleAll(db: KilnDB, today: string, opts: ScheduleAllOp
   opts = { ...opts, reviewsDue: opts.reviewsDue ?? (await reviewsDue(db, today, addDaysISO(today, REVIEW_HORIZON_DAYS))) }
   // The callback must itself be an async function: Dexie only keeps the transaction alive across native
   // awaits when it can see that, and an arrow returning run()'s promise commits after the first await.
-  return db.transaction('rw', [db.plans, db.modules, db.tasks, db.practiceLog, db.practiceItems, db.settings, db.personalTodos], async () => run(db, deviceId, today, opts))
+  return db.transaction('rw', [db.plans, db.modules, db.tasks, db.practiceLog, db.practiceItems, db.settings, db.personalTodos, db.studyItems], async () => run(db, deviceId, today, opts))
 }
 
 async function run(db: KilnDB, deviceId: string, today: string, opts: ScheduleAllOptions): Promise<ScheduleOutput> {
@@ -49,6 +56,7 @@ async function run(db: KilnDB, deviceId: string, today: string, opts: ScheduleAl
       startDate: plan.startDate,
       deadline: plan.deadline,
       skipOptional: plan.skipOptional,
+      studyMinutesPerWeek: plan.studyMinutesPerWeek,
       dailyPractice: practice && {
         source: practice.source,
         perDay: practice.perDay ?? 1,
@@ -75,7 +83,7 @@ async function run(db: KilnDB, deviceId: string, today: string, opts: ScheduleAl
         pinnedDate: t.pinnedDate,
         deadline: t.deadline,
         status: t.status,
-        scheduledDate: t.scheduledDate,
+        scheduledDate: opts.replanFuture && t.status === 'open' && !t.pinnedDate && t.scheduledDate && t.scheduledDate > today ? undefined : t.scheduledDate,
         inBacklog: t.backlog,
         topics: t.topics,
         practice: t.practice?.provider === 'leetcode' && t.practice.slug ? { slug: t.practice.slug, difficulty: t.practice.difficulty } : undefined,
@@ -93,6 +101,8 @@ async function run(db: KilnDB, deviceId: string, today: string, opts: ScheduleAl
     if (!t.deleted && t.date && t.minutes) fixedMinutes[t.date] = (fixedMinutes[t.date] ?? 0) + t.minutes
   }
 
+  const studyDone = (await db.studyItems.toArray()).filter((r) => !r.deleted && r.status === 'done').map((r) => ({ planId: r.planId, date: r.date, minutes: r.minutes }))
+
   const out = schedule({
     plans: schedPlans,
     tasks: schedTasks,
@@ -105,6 +115,8 @@ async function run(db: KilnDB, deviceId: string, today: string, opts: ScheduleAl
     skipOptional: opts.skipOptional,
     reviewsDue: opts.reviewsDue,
     solved,
+    weekStartsOn: settings.weekStartsOn,
+    studyDone,
   })
 
   const changed: TaskRecord[] = []
@@ -117,5 +129,25 @@ async function run(db: KilnDB, deviceId: string, today: string, opts: ScheduleAl
   }
   await db.tasks.bulkPut(changed)
   await persistPractice(db, deviceId, today, out.practice, plans.map((p) => ({ id: p.id, generates: practiceConfig(p)?.source === 'neetcode' })), opts.mode === 'reschedule')
+  await persistStudy(db, deviceId, today, out.study, plans)
   return out
+}
+
+/** Runs the scheduler when a study time plan exists, so its sessions follow a changed budget. */
+export async function refreshStudy(db: KilnDB, today: string): Promise<void> {
+  if (await hasStudyPlan(db)) await scheduleAll(db, today, { replanFuture: true })
+}
+
+const META_TOP_UP = 'studyTopUp'
+
+/**
+ * The scheduler only runs after writes, so a new day would have no study session. Once a day (per device), when a
+ * study time plan exists, run it ('initial' never moves dated tasks) so today's session is there. Returns whether it ran.
+ */
+export async function topUpStudy(db: KilnDB, today: string): Promise<boolean> {
+  if ((await db.meta.get(META_TOP_UP))?.value === today) return false
+  if (!(await hasStudyPlan(db))) return false
+  await scheduleAll(db, today)
+  await db.meta.put({ key: META_TOP_UP, value: today })
+  return true
 }

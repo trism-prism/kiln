@@ -12,6 +12,8 @@ How plans get into Kiln: a Markdown file with one JSON block (spec: `docs/plan-f
 6. **Preview.** Module and task counts, total hours, hours by priority, projected finish date from the current budget, deadline status, and the first 14 days of the schedule.
 7. **Import.** Records are saved and the scheduler runs.
 
+A study time plan (a subject and a time per week, "Study time plans" in the spec) imports the same way: pasted from an AI chat, or typed in Quick add as one line like `Psychology 3h a week`. The review shows its weekly time and the first sessions instead of task counts. Spreadsheets can't make one.
+
 ## Error format
 
 ```

@@ -153,6 +153,12 @@
       ],
       "description": "The daily problem slot."
     },
+    "studyMinutesPerWeek": {
+      "description": "study time plan only: minutes per week, from which Kiln plans a daily session; leave out modules, tasks, sources, dailyPractice and part",
+      "type": "integer",
+      "minimum": 15,
+      "maximum": 2400
+    },
     "part": {
       "type": "object",
       "properties": {
@@ -175,7 +181,8 @@
       "description": "Present only when the plan is split across several files."
     },
     "modules": {
-      "minItems": 1,
+      "default": [],
+      "description": "at least 1 unless studyMinutesPerWeek is set",
       "maxItems": 100,
       "type": "array",
       "items": {
@@ -217,7 +224,8 @@
       }
     },
     "tasks": {
-      "minItems": 1,
+      "default": [],
+      "description": "at least 1 unless studyMinutesPerWeek is set",
       "maxItems": 2000,
       "type": "array",
       "items": {
@@ -477,8 +485,6 @@
     "schemaVersion",
     "id",
     "title",
-    "schedulingMode",
-    "modules",
-    "tasks"
+    "schedulingMode"
   ]
 }

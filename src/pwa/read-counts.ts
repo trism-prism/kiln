@@ -13,7 +13,7 @@ interface TaskRow extends Row {
   status: string
   scheduledDate?: string
 }
-interface PlanRow extends Row, Pick<PlanRecord, 'dailyPractice' | 'dailyPracticeOn' | 'reviewsOn'> {}
+interface PlanRow extends Row, Pick<PlanRecord, 'dailyPractice' | 'dailyPracticeOn' | 'reviewsOn' | 'studyMinutesPerWeek'> {}
 interface PracticeRow extends Row {
   planId: string
   status: string
@@ -59,12 +59,13 @@ export async function readBreakdown(idb: IDBFactory, now: Date, name = 'kiln'): 
   const db = await open(idb, name)
   if (!db) return badgeBreakdown([], [], today)
   try {
-    const [tasks, cards, problems, todos, plans] = await Promise.all([
+    const [tasks, cards, problems, todos, plans, sessions] = await Promise.all([
       all<TaskRow>(db, 'tasks'),
       all<CardRow>(db, 'reviewCards'),
       all<PracticeRow>(db, 'practiceItems'), // stored daily problems; absent in a version 2 database
       all<TodoRow>(db, 'personalTodos'), // absent before version 4
       all<PlanRow>(db, 'plans'),
+      all<PracticeRow>(db, 'studyItems'), // study sessions; absent before version 5
     ])
     // Daily problems and their review cards count only for plans whose daily practice setting is on (as in the app).
     const practicePlans = new Set(plans.filter((p) => !p.deleted && practiceOn(p)).map((p) => p.id))
@@ -83,7 +84,14 @@ export async function readBreakdown(idb: IDBFactory, now: Date, name = 'kiln'): 
       } else if (!practicePlans.has(c.planId)) continue
       if (!c.suspended) due.push(c)
     }
-    const items = [...live, ...problems.filter((p) => !p.deleted && practicePlans.has(p.planId)).map((p) => ({ status: p.status, scheduledDate: p.date }))]
+    // Today's open study session of each live study plan; a past open one has expired and never counts.
+    const studyPlans = new Set(plans.filter((p) => !p.deleted && p.studyMinutesPerWeek !== undefined).map((p) => p.id))
+    const study = sessions.filter((s) => !s.deleted && s.date === today && studyPlans.has(s.planId))
+    const items = [
+      ...live,
+      ...problems.filter((p) => !p.deleted && practicePlans.has(p.planId)).map((p) => ({ status: p.status, scheduledDate: p.date })),
+      ...study.map((s) => ({ status: s.status, scheduledDate: s.date })),
+    ]
     return badgeBreakdown(items, due, today, todos)
   } finally {
     db.close()

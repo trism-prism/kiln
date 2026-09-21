@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
 import { X } from 'lucide-react'
-import { db, listPlans, reviewsOn, updateSettings, type SettingsRecord } from '../../data'
+import { db, listPlans, refreshStudy, reviewsOn, updateSettings, type SettingsRecord } from '../../data'
 import { toLocalISODate } from '../../lib/date'
 import { Button, IconButton } from '../../ui/button'
 import { ListBoxItem, Select, TextField } from '../../ui/form'
@@ -30,6 +30,7 @@ export function BudgetSection({ settings, onChanged }: { settings: SettingsRecor
       return failed(e)
     }
     toasts.add({ title: 'Study time saved' }, { timeout: 4000 })
+    void refreshStudy(db, toLocalISODate(new Date())).catch(failed)
     onChanged()
   }
 
@@ -73,6 +74,8 @@ export function BlackoutSection({ settings, onChanged }: { settings: SettingsRec
       failed(e)
       return false
     }
+    // Study time plans' sessions follow the new days off.
+    void refreshStudy(db, toLocalISODate(new Date())).catch(failed)
     onChanged()
     return true
   }
