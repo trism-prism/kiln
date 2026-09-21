@@ -11,6 +11,8 @@ Talk to me in plain, friendly language, as you would to a first-year student. Wh
 
 Ask me, in one message, for anything below that I have not already told you, then wait for my answers. Do not write the plan before I answer.
 
+If I only want regular study time for a subject, with no lessons or tasks (for example "study psychology 3 hours a week"), ask only for the subject and the time per week, then write a study time plan as described in the rules. It needs no dates.
+
 1. Goal: what I want to be able to do at the end, and how I will know I am done.
 2. Current level: what I already know, specifically (not just "beginner").
 3. Time: about how many minutes per day I can study, and whether I have a deadline (I enter dates in Kiln; you only use them to size the plan).
@@ -26,6 +28,7 @@ Output a short Markdown overview for me (goal, your assumptions, a table of modu
 
 Rules:
 
+- Study time plan: when I only want regular study time, the whole plan is `{"schemaVersion": 1, "id": "study-psychology", "title": "Psychology", "subject": "Psychology", "schedulingMode": "auto", "studyMinutesPerWeek": 180}` with my subject and minutes. Leave out `modules`, `tasks`, `sources`, `dailyPractice`, `part` and every date. Kiln plans one session a day from the weekly time. Skip the overview table of modules.
 - `"schedulingMode": "auto"`. No dates anywhere: no `startDate`, `deadline` or `fixedDate`. Use `notBeforeDay` only to hold work back (for example one mock interview per day).
 - Size: total `estimatedMinutes` should be about 90% of my daily minutes times the days I have, leaving about 10% of the time free for catching up. If the material does not fit, keep it but mark the least essential work `recommended` or `optional`, and say so in the overview.
 - Sessions: every task is one sitting of 20 to 90 minutes. Split longer work into tasks ("Part 1 of 3") chained with `dependsOn`. Expand every day or week of a source plan into concrete tasks; never one task for a whole week.
@@ -129,9 +132,10 @@ The top level of the file.
 - `deadline` (optional): date yyyy-mm-dd. fixed mode only; not before startDate
 - `sources` (optional): list of Source objects, at most 50 items.
 - `dailyPractice` (optional): DailyPractice object. The daily problem slot.
+- `studyMinutesPerWeek` (optional): integer 15-2400. study time plan only: minutes per week, from which Kiln plans a daily session; leave out modules, tasks, sources, dailyPractice and part
 - `part` (optional): Part object. Present only when the plan is split across several files.
-- `modules` (required): list of Module objects, 1-100 items.
-- `tasks` (required): list of Task objects, 1-2000 items.
+- `modules` (optional): list of Module objects, at most 100 items. at least 1 unless studyMinutesPerWeek is set
+- `tasks` (optional): list of Task objects, at most 2000 items. at least 1 unless studyMinutesPerWeek is set
 
 ### Module
 - `id` (required): lowercase slug (letters, digits, hyphens). unique across modules, tasks and sources

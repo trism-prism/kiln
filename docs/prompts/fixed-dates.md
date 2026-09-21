@@ -11,6 +11,8 @@ Talk to me in plain, friendly language, as you would to a first-year student. Wh
 
 Ask me, in one message, for anything below that I have not already told you, then wait for my answers. You must have my answers to 1 and 2 before you write anything. Never invent, estimate or assume a date. If I write a date that could be read two ways, such as 03/04, ask me which I mean.
 
+If I only want regular study time for a subject, with no lessons or tasks (for example "study psychology 3 hours a week"), ask only for the subject and the time per week, then write a study time plan as described in the rules. It needs no dates.
+
 1. Start date: the day I begin (any format; you convert it).
 2. Dated parts: every fixed event or due date (exams, quizzes, class sessions, mock interviews, project due dates), and for each one: what it is, the date, and whether it happens on that day (an event) or must be finished by that day (a due date). If my material already contains dates, list them back and ask me to confirm.
 3. Final deadline, if any.
@@ -29,6 +31,7 @@ Output a short Markdown overview for me (goal, the dates I gave you, your assump
 
 Rules:
 
+- Study time plan: when I only want regular study time, the whole plan is `{"schemaVersion": 1, "id": "study-psychology", "title": "Psychology", "subject": "Psychology", "schedulingMode": "auto", "studyMinutesPerWeek": 180}` with my subject and minutes. Use "auto" here even though this prompt is for fixed dates. Leave out `modules`, `tasks`, `sources`, `dailyPractice`, `part` and every date. Kiln plans one session a day from the weekly time. Skip the overview table of modules.
 - `"schedulingMode": "fixed"` and `startDate` set to my start date. Set the plan `deadline` only if I gave a final deadline.
 - Dates: use only dates I gave you. An event goes in `fixedDate` on its task. A due date goes in `deadline`. Work that must be ready before an event (studying for an exam) may get a `deadline` equal to that event's date. Every other task has no date.
 - Date sanity: every date is on or after `startDate` and on or before the plan `deadline`; a task's `fixedDate` is on or before its own `deadline`; a dated task is not before a dated task it depends on. Never put `notBeforeDay` on a task with a `fixedDate`.
@@ -128,9 +131,10 @@ The top level of the file.
 - `deadline` (optional): date yyyy-mm-dd. fixed mode only; not before startDate
 - `sources` (optional): list of Source objects, at most 50 items.
 - `dailyPractice` (optional): DailyPractice object. The daily problem slot.
+- `studyMinutesPerWeek` (optional): integer 15-2400. study time plan only: minutes per week, from which Kiln plans a daily session; leave out modules, tasks, sources, dailyPractice and part
 - `part` (optional): Part object. Present only when the plan is split across several files.
-- `modules` (required): list of Module objects, 1-100 items.
-- `tasks` (required): list of Task objects, 1-2000 items.
+- `modules` (optional): list of Module objects, at most 100 items. at least 1 unless studyMinutesPerWeek is set
+- `tasks` (optional): list of Task objects, at most 2000 items. at least 1 unless studyMinutesPerWeek is set
 
 ### Module
 - `id` (required): lowercase slug (letters, digits, hyphens). unique across modules, tasks and sources
