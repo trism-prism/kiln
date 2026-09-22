@@ -1,7 +1,8 @@
 import { runCron, seedSentDate } from './cron'
 import { HttpError, json, readJson, safeEqual, sha256Hex } from './http'
 import { FEED_TIMEOUT_MS, fetchFeed } from './feed'
-import { cleanupSyncSpaces, handleSync } from './sync'
+import { cleanupPairings, handlePair, PAIR_OPS, type PairOp } from './pair'
+import { cleanupSyncSpaces, handleClose, handleSync } from './sync'
 import { isPushEndpoint, isSecretString, parsePing, parseSubscription } from './validate'
 
 export interface Env {
@@ -18,6 +19,8 @@ export interface Env {
   MAX_SYNC_BYTES?: string
   /** Rate limit for /feed/fetch (wrangler.toml [[ratelimits]]); the route is off without it. */
   FEED_LIMITER?: RateLimit
+  /** Rate limit for /pair/start, /pair/join, /pair/answer and /sync/close; those routes are off without it. */
+  PAIR_LIMITER?: RateLimit
 }
 
 const DEFAULT_MAX_SUBSCRIPTIONS = 50_000
@@ -111,6 +114,19 @@ async function route(req: Request, env: Env, url: URL): Promise<Response> {
     return handleSync(pathname === '/sync/push' ? 'push' : 'pull', await readJson(req, MAX_SYNC_BODY), env)
   }
 
+  if (pathname === '/sync/close') {
+    if (m !== 'POST') throw new HttpError(405, 'method not allowed')
+    return handleClose(await readJson(req, MAX_BODY), env, env.PAIR_LIMITER, req.headers.get('cf-connecting-ip') ?? 'unknown')
+  }
+
+  if (pathname.startsWith('/pair/')) {
+    const op = pathname.slice('/pair/'.length) as PairOp
+    if (!PAIR_OPS.includes(op)) throw new HttpError(404, 'not found')
+    if (m !== 'POST') throw new HttpError(405, 'method not allowed')
+    const clientKey = req.headers.get('cf-connecting-ip') ?? 'unknown'
+    return handlePair(op, await readJson(req, MAX_BODY), { db: env.DB, limiter: env.PAIR_LIMITER, clientKey })
+  }
+
   if (pathname === '/feed/fetch') {
     if (m !== 'POST') throw new HttpError(405, 'method not allowed')
     const key = req.headers.get('cf-connecting-ip') ?? 'unknown'
@@ -162,5 +178,6 @@ export default {
       ).then((r) => console.log('cron', JSON.stringify(r))),
     )
     ctx.waitUntil(cleanupSyncSpaces(env.DB, new Date()).then((n) => console.log('sync spaces removed', n)))
+    ctx.waitUntil(cleanupPairings(env.DB, Date.now()).then((n) => console.log('pairings removed', n)))
   },
 }
