@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 import { animationsDone, openSeeded } from './seed'
+import { mockWorker } from './worker-mock'
 
 for (const colorScheme of ['light', 'dark'] as const) {
   test.describe(`axe, ${colorScheme}`, () => {
@@ -120,6 +121,25 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.getByRole('button', { name: 'Cancel' }).click()
       await page.goto('/todo')
       await expect(page.getByRole('main').getByText('Study Psychology', { exact: true }).first()).toBeVisible()
+      expect(await seriousViolations(page)).toEqual([])
+    })
+  })
+}
+
+// Settings > Sync with the two pairing panels open.
+for (const colorScheme of ['light', 'dark'] as const) {
+  test.describe(`axe, sync pairing panels, ${colorScheme}`, () => {
+    test.use({ colorScheme })
+
+    test('the code panel and the join panel', async ({ page, context }) => {
+      await mockWorker(context)
+      await page.goto('/settings')
+      await page.getByRole('button', { name: 'Set up sync' }).click()
+      await expect(page.getByTestId('pair-code')).toBeVisible({ timeout: 20_000 })
+      expect(await seriousViolations(page)).toEqual([])
+      await page.getByRole('button', { name: 'Cancel' }).click()
+      await page.getByRole('button', { name: 'Join with a code' }).click()
+      await page.getByRole('textbox', { name: 'Code from your other device' }).fill('074821')
       expect(await seriousViolations(page)).toEqual([])
     })
   })

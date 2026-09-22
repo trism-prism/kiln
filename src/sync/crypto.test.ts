@@ -5,10 +5,6 @@ import {
   deriveKeys,
   encryptRow,
   generateSyncKey,
-  keyToMnemonic,
-  keyToQrPayload,
-  mnemonicToKey,
-  qrPayloadToKey,
   recordKey,
   rowVersion,
   SYNC_VERSION,
@@ -16,46 +12,17 @@ import {
 
 const row = (id: string, extra: Record<string, unknown> = {}) => ({ id, updatedAt: 1000, deleted: false, deviceId: 'd', ...extra })
 
-describe('sync key forms', () => {
-  it('round-trips through 24 words', () => {
-    const key = generateSyncKey()
-    const words = keyToMnemonic(key)
-    expect(words.split(' ')).toHaveLength(24)
-    expect(mnemonicToKey(words)).toEqual(key)
-  })
-
-  it('accepts any case and spacing', () => {
-    const key = generateSyncKey()
-    const messy = '  ' + keyToMnemonic(key).toUpperCase().split(' ').join(' \n ') + ' '
-    expect(mnemonicToKey(messy)).toEqual(key)
-  })
-
-  it('rejects a bad checksum, an unknown word and a wrong length', () => {
-    const words = keyToMnemonic(generateSyncKey()).split(' ')
-    // Changing the last word changes the checksum bits (a 1 in 256 chance it still matches, so try a few).
-    const swapped = ['abandon', 'zoo', 'about', 'ability'].filter((w) => w !== words[23]).map((w) => [...words.slice(0, 23), w].join(' '))
-    expect(swapped.some((s) => { try { mnemonicToKey(s); return false } catch { return true } })).toBe(true)
-    expect(() => mnemonicToKey([...words.slice(0, 23), 'notaword'].join(' '))).toThrow(/not a valid sync key/)
-    expect(() => mnemonicToKey(words.slice(0, 12).join(' '))).toThrow(/24 words/)
-    // The classic 24-word test phrase with a wrong final word is invalid.
-    expect(() => mnemonicToKey(Array(24).fill('abandon').join(' '))).toThrow(/not a valid sync key/)
-  })
-
-  it('round-trips through the QR payload and rejects other text', () => {
-    const key = generateSyncKey()
-    const qr = keyToQrPayload(key)
-    expect(qr.startsWith('kiln-sync:')).toBe(true)
-    expect(qrPayloadToKey(qr)).toEqual(key)
-    expect(() => qrPayloadToKey('https://example.com')).toThrow()
-    expect(() => qrPayloadToKey('kiln-sync:abc')).toThrow()
-  })
-})
-
 describe('derived secrets', () => {
-  it('are the same on two devices that share the key (words in, same ids out)', async () => {
-    const words = keyToMnemonic(generateSyncKey())
-    const a = await deriveKeys(mnemonicToKey(words))
-    const b = await deriveKeys(mnemonicToKey(words))
+  it('keep their values: a device that already syncs must keep its space (key of 32 zero bytes)', async () => {
+    const k = await deriveKeys(new Uint8Array(32))
+    expect(k.spaceId).toBe('lop4bkSWz0c_-TZaQ8-l48Ub1kOLjX8BLdekvos2KBo')
+    expect(k.token).toBe('bUrmm8tLSFw4lPutq77fqnZI6LY2ZGcsueJAhSOeqRw')
+  })
+
+  it('are the same on two devices that share the key', async () => {
+    const key = generateSyncKey()
+    const a = await deriveKeys(key)
+    const b = await deriveKeys(key)
     expect(a.spaceId).toBe(b.spaceId)
     expect(a.token).toBe(b.token)
     expect(await recordKey(a, 'tasks', 'x')).toBe(await recordKey(b, 'tasks', 'x'))

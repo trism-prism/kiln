@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { newDb } from '../../data/test-db'
 import { importPlan, listPlans, getDeviceId } from '../../data'
 import { fixtureTexts, validateParts } from '../../data/fixtures'
-import { enableSync, getSyncStatus, type SyncSummary } from '../../sync'
+import { enableSyncKey, generateSyncKey, getSyncStatus, type SyncSummary } from '../../sync'
 import { erase } from './erase'
 
 const ok: SyncSummary = { pulled: 0, applied: 0, pushed: 5, rejectedStale: 0, invalid: 0, retrying: 0, tooLarge: [] }
@@ -16,7 +16,7 @@ async function seeded() {
 describe('erase', () => {
   it('device: turns sync off, clears the data, keeps the device id', async () => {
     const db = await seeded()
-    await enableSync(db)
+    await enableSyncKey(db, generateSyncKey())
     const id = await getDeviceId(db)
     const sync = vi.fn()
     await erase(db, 'device', sync)

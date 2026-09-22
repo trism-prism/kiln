@@ -1,31 +1,24 @@
 import { describe, expect, it } from 'vitest'
-import { keyToQrPayload } from '../../sync'
 import type { SyncSummary } from '../../sync'
-import { checkKeyInput, summaryLines, syncErrorText } from './sync-text'
-
-// A valid 24-word phrase (BIP39 test vector: 32 bytes of zeros).
-const WORDS = Array(23).fill('abandon').concat('art').join(' ')
+import { clock, pairErrorText, summaryLines, syncErrorText, triesLeft } from './sync-text'
 
 const base: SyncSummary = { pulled: 0, applied: 0, pushed: 0, rejectedStale: 0, invalid: 0, retrying: 0, tooLarge: [] }
 
-describe('checkKeyInput', () => {
-  it('tells empty, partial, valid and invalid apart', () => {
-    expect(checkKeyInput('  ')).toEqual({ state: 'empty' })
-    expect(checkKeyInput('abandon abandon')).toEqual({ state: 'partial', words: 2 })
-    expect(checkKeyInput(WORDS)).toEqual({ state: 'valid', kind: 'words' })
-    expect(checkKeyInput(`  ${WORDS.toUpperCase()}\n`)).toEqual({ state: 'valid', kind: 'words' })
+describe('pairing text', () => {
+  it('tells every start failure apart', () => {
+    expect(pairErrorText('full')).toMatch(/Too many devices are pairing/)
+    expect(pairErrorText('slow')).toMatch(/Wait a minute/)
+    expect(pairErrorText('network')).toMatch(/Could not reach the server/)
+    expect(pairErrorText('server')).toMatch(/problem/)
   })
 
-  it('rejects a bad checksum and an unknown word', () => {
-    const wrongOrder = Array(24).fill('abandon').join(' ')
-    expect(checkKeyInput(wrongOrder)).toMatchObject({ state: 'invalid' })
-    expect(checkKeyInput(WORDS.replace('art', 'zzzzz'))).toMatchObject({ state: 'invalid' })
-  })
-
-  it('accepts the text a QR code holds and rejects a damaged one', () => {
-    const payload = keyToQrPayload(new Uint8Array(32))
-    expect(checkKeyInput(payload)).toEqual({ state: 'valid', kind: 'qr' })
-    expect(checkKeyInput('kiln-sync:abc')).toMatchObject({ state: 'invalid' })
+  it('formats the countdown and the tries left', () => {
+    expect(clock(161)).toBe('2:41')
+    expect(clock(180)).toBe('3:00')
+    expect(clock(0.2)).toBe('0:01')
+    expect(clock(-5)).toBe('0:00')
+    expect(triesLeft(1)).toBe('1 try left')
+    expect(triesLeft(2)).toBe('2 tries left')
   })
 })
 
@@ -51,10 +44,11 @@ describe('summaryLines', () => {
 
 describe('syncErrorText', () => {
   it('has plain wording for each kind', () => {
-    expect(syncErrorText('wrong-key', '')).toMatch(/does not match/)
+    expect(syncErrorText('wrong-key', '')).toMatch(/does not accept this device's sync link/)
     expect(syncErrorText('quota', '')).toMatch(/storage is full/)
     expect(syncErrorText('network', '')).toMatch(/Offline/)
     expect(syncErrorText('server', '')).toMatch(/problem/)
+    expect(syncErrorText('disconnected', '')).toBe('Sync was turned off from another device. Everything on this device stays here.')
     expect(syncErrorText('local', 'disk full')).toMatch(/disk full/)
   })
 })
