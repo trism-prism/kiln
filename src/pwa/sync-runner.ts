@@ -32,7 +32,8 @@ export const useSyncState = (): SyncState =>
 
 /** Errors the person has to act on get a toast, once per kind per page load. The rest show in Settings. */
 const TOAST: Partial<Record<SyncErrorKind, { title: string; description: string }>> = {
-  'wrong-key': { title: 'Sync key does not match', description: 'The server refused this key. Check it in Settings > Sync.' },
+  'wrong-key': { title: 'Sync link not accepted', description: 'Disconnect in Settings > Sync, then pair again.' },
+  disconnected: { title: 'Sync was turned off', description: 'Another device disconnected sync. Your data stays on this device.' },
   quota: { title: 'Sync storage is full', description: 'Kiln cannot upload more until you delete something.' },
   'update-required': { title: 'Update Kiln to see all changes', description: 'Another device saved data in a newer format.' },
 }
