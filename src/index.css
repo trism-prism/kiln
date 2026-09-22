@@ -13,6 +13,9 @@
   --kiln-surface: light-dark(#f7f4ee, #161513);
   --kiln-surface-raised: light-dark(#fdfbf7, #1e1c19);
   --kiln-surface-muted: light-dark(#efe9df, #2a2723);
+  /* Popovers and menus: one step above the cards they open over, with their own hover */
+  --kiln-surface-overlay: light-dark(#ffffff, #282521);
+  --kiln-surface-overlay-hover: light-dark(#efe9df, #302c27);
   --kiln-border: light-dark(#e2dbcf, #34302b);
   --kiln-border-strong: light-dark(#8c8377, #7d7569);
 
@@ -39,6 +42,8 @@
   --color-surface: var(--kiln-surface);
   --color-surface-raised: var(--kiln-surface-raised);
   --color-surface-muted: var(--kiln-surface-muted);
+  --color-surface-overlay: var(--kiln-surface-overlay);
+  --color-surface-overlay-hover: var(--kiln-surface-overlay-hover);
   --color-border: var(--kiln-border);
   --color-border-strong: var(--kiln-border-strong);
   --color-text: var(--kiln-text);
