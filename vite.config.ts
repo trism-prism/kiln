@@ -37,6 +37,8 @@ export default defineConfig({
       injectManifest: {
         // Shell, every lazy chunk, fonts and icons. The two plan templates are downloads, not part of the shell.
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2,webmanifest}'],
+        // The link-preview image is fetched by crawlers, never by the app.
+        globIgnores: ['og-image.png'],
       },
     }),
   ],
