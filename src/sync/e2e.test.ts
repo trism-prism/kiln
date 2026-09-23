@@ -706,9 +706,14 @@ describe('pairing with a code', () => {
     ok(await sync(b))
     expect(await slugs(b)).toEqual(['from-a'])
     // The server holds no password and no key (the sealed box stays until the code expires, so a lost response can be fetched again).
+    // The password digits are compared per column, not searched for in the serialized row: 4 random digits turn up by chance in random strings and timestamps.
     const row = pairingRow()!
     expect(row.box).toEqual(expect.any(String))
-    expect(JSON.stringify(row)).not.toContain(code.slice(2))
+    expect(row.slot).toBe(code.slice(0, 2))
+    for (const v of Object.values(row)) {
+      expect(String(v)).not.toBe(code)
+      expect(String(v)).not.toBe(code.slice(2))
+    }
     expect(JSON.stringify(row)).not.toContain(Buffer.from(key).toString('base64url'))
     // The code works once.
     expect((await join(code)).kind).toBe('expired')
