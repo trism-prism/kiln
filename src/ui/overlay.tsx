@@ -20,7 +20,7 @@ import {
   type PopoverProps,
 } from 'react-aria-components'
 import { Button } from './button'
-import { popoverClass } from './form'
+import { popoverClass, popoverOffset } from './classes'
 
 type SheetProps = Omit<ModalOverlayProps, 'className' | 'children'> & {
   title: string
@@ -101,7 +101,7 @@ export function FormSheet({ title, isOpen, onCancel, onDone, doneLabel = 'Done',
 /** Dropdown menu. Wrap the trigger and this in a MenuTrigger. */
 export function Menu<T extends object>({ placement, ...props }: Omit<MenuProps<T>, 'className'> & Pick<PopoverProps, 'placement'>) {
   return (
-    <Popover placement={placement} className={popoverClass}>
+    <Popover placement={placement} offset={popoverOffset} className={popoverClass}>
       <AriaMenu {...props} className="outline-none" />
     </Popover>
   )
@@ -111,7 +111,7 @@ export function MenuItem({ children, ...props }: Omit<MenuItemProps, 'className'
   return (
     <AriaMenuItem
       {...props}
-      className="flex h-9 cursor-default items-center gap-3 rounded-md px-3 text-sm text-text outline-none data-focused:bg-surface-muted data-focus-visible:outline-2 data-focus-visible:-outline-offset-2 [&_svg]:text-text-muted"
+      className="flex h-9 cursor-default items-center gap-3 rounded-md px-3 text-sm text-text outline-none data-focused:bg-surface-overlay-hover data-focus-visible:outline-2 data-focus-visible:-outline-offset-2 [&_svg]:text-text-muted"
     >
       {children}
     </AriaMenuItem>

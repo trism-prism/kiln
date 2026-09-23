@@ -39,10 +39,10 @@ export default function PrivacyPage() {
 
         <Section id="sync" title="Sync (only if you turn it on)">
           <p>
-            Sync copies your data between your own devices through the server. Everything is encrypted on your device with a key made from 24 words. The words never leave your devices, so the server stores only data it cannot read.
+            Sync copies your data between your own devices through the server. Everything is encrypted on your device with a secret key that is made on your device and never reaches the server in a form it can read. To connect a device, you type a 6-digit code shown on your other device. A code works for 3 minutes and for one device. The two devices use it to lock the key for each other, so the server, which only passes their messages along, cannot work out the key or the code. A server that tried to cheat by pretending to be one of your devices would have to guess the code, with at most 3 tries (about a 1 in 3,000 chance), and a failed try shows on your screen.
           </p>
           <p>
-            The server can see when something was saved, how large it is and how many items there are, but not what they say or which plan they belong to. If you lose the 24 words and every device that has them, the synced copy cannot be recovered.
+            The server can see when something was saved, how large it is and how many items there are, but not what they say. If you lose every device that syncs, the synced copy cannot be recovered.
           </p>
         </Section>
 
@@ -67,7 +67,7 @@ export default function PrivacyPage() {
               <strong className="font-medium">Reminders:</strong> turn them off under Settings &gt; Reminders. This asks the server to remove this device; if it cannot be reached, the server drops the device the next time a reminder cannot be delivered.
             </li>
             <li>
-              <strong className="font-medium">Sync:</strong> turn it off under Settings &gt; Sync to stop syncing. The encrypted copy stays on the server (it cannot be read without your key, and there is no delete button for it yet). To remove your data from every device, use &ldquo;Erase everywhere&rdquo; in the danger zone while sync is on.
+              <strong className="font-medium">Sync:</strong> Disconnect device under Settings &gt; Sync deletes the synced copy from the server and stops sync on all your devices; each keeps what it has. To remove your data from every device, use &ldquo;Erase everywhere&rdquo; in the danger zone while sync is on.
             </li>
             <li>
               <strong className="font-medium">This device:</strong> Settings &gt; Danger zone erases all local data and turns reminders off. Clearing the site&apos;s data in your browser does the same and also forgets the random device ID.

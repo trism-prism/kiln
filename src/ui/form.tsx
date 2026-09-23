@@ -22,7 +22,7 @@ import {
   type SwitchProps,
   type TextFieldProps,
 } from 'react-aria-components'
-import { controlClass as control, popoverClass as popover } from './classes'
+import { controlClass as control, popoverClass as popover, popoverOffset } from './classes'
 import { DateField, type DateFieldProps } from './date'
 
 // content-start: in a grid row next to a taller field (one showing an error), the rows stay at the top.
@@ -146,7 +146,7 @@ export function ListBoxItem({ children, ...props }: Omit<ListBoxItemProps, 'clas
     <AriaListBoxItem
       {...props}
       textValue={children}
-      className="group flex h-9 cursor-default items-center gap-2 rounded-md px-3 text-sm outline-none data-focused:bg-surface-muted data-focus-visible:outline-2 data-focus-visible:-outline-offset-2"
+      className="group flex h-9 cursor-default items-center gap-2 rounded-md px-3 text-sm outline-none data-focused:bg-surface-overlay-hover data-focus-visible:outline-2 data-focus-visible:-outline-offset-2"
     >
       <span className="flex-1">{children}</span>
       <Check size={16} className="text-accent opacity-0 group-data-selected:opacity-100" />
@@ -182,7 +182,7 @@ export function Select<T extends object>({
       </AriaButton>
       {description && <Text slot="description" className={help}>{description}</Text>}
       <FieldError className={error} />
-      <Popover className={popover}>
+      <Popover offset={popoverOffset} className={popover}>
         <ListBox>{children}</ListBox>
       </Popover>
     </AriaSelect>

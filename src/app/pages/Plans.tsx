@@ -14,7 +14,8 @@ export default function PlansPage() {
   // Share of study time is only a choice between task plans (a study time plan has its own weekly time).
   const taskPlans = plans?.filter((s) => !isStudyPlan(s.plan)).length ?? 0
   return (
-    <Page title="Plans" actions={<Link href="/import" variant="secondary">Import a plan</Link>}>
+    // With no plans the empty state carries the one import button, so the header doesn't repeat it.
+    <Page title="Plans" actions={plans?.length ? <Link href="/import" variant="secondary">Import a plan</Link> : undefined}>
       {!plans ? (
         <Skeleton className="h-40 w-full" />
       ) : plans.length === 0 ? (

@@ -126,8 +126,8 @@ describe('Settings reset dialog', () => {
   })
 
   it('with sync on, offers this-device-only and everywhere', async () => {
-    const { enableSync } = await import('../../sync')
-    await enableSync(db)
+    const { enableSyncKey, generateSyncKey } = await import('../../sync')
+    await enableSyncKey(db, generateSyncKey())
     const user = userEvent.setup()
     await open(user)
     expect(await screen.findByRole('radio', { name: /Erase on this device only \(turns sync off\)/ })).toBeTruthy()

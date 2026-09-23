@@ -1,12 +1,11 @@
 // Wording and input checks for Settings > Sync. Pure, so the states can be tested without a screen.
 import type { SyncErrorKind, SyncSummary } from '../../sync'
-import { mnemonicToKey, qrPayloadToKey } from '../../sync'
 
 /** What the person is told for each error kind (src/sync/README.md has the table). */
 export function syncErrorText(kind: SyncErrorKind, message: string): string {
   switch (kind) {
     case 'wrong-key':
-      return 'This key does not match the data on the server. Check the 24 words, or turn sync off and join again.'
+      return "The server does not accept this device's sync link. Disconnect, then pair again."
     case 'quota':
       return 'Sync storage is full. Delete something, then sync again.'
     case 'network':
@@ -15,6 +14,8 @@ export function syncErrorText(kind: SyncErrorKind, message: string): string {
       return 'The server had a problem. Try again later.'
     case 'update-required':
       return 'Update Kiln to see all changes. Another device saved data in a newer format; nothing is lost.'
+    case 'disconnected':
+      return 'Sync was turned off from another device. Everything on this device stays here.'
     case 'not-enabled':
       return 'Sync is off on this device.'
     case 'local':
@@ -35,26 +36,24 @@ export function summaryLines(s: SyncSummary): string[] {
   return lines
 }
 
-export type KeyCheck =
-  | { state: 'empty' }
-  | { state: 'partial'; words: number }
-  | { state: 'invalid'; message: string }
-  | { state: 'valid'; kind: 'words' | 'qr' }
-
-/** Checks typed or pasted key text: 24 words, or the `kiln-sync:` text a QR code holds. Needs no server. */
-export function checkKeyInput(text: string): KeyCheck {
-  const t = text.trim()
-  if (t === '') return { state: 'empty' }
-  try {
-    if (t.startsWith('kiln-sync:')) {
-      qrPayloadToKey(t)
-      return { state: 'valid', kind: 'qr' }
-    }
-    const words = t.split(/\s+/).length
-    if (words < 24) return { state: 'partial', words }
-    mnemonicToKey(t)
-    return { state: 'valid', kind: 'words' }
-  } catch (e) {
-    return { state: 'invalid', message: e instanceof Error ? e.message : String(e) }
+/** What a person is told when a pairing could not start or finish (host and join panels). */
+export function pairErrorText(reason: 'full' | 'slow' | 'network' | 'server'): string {
+  switch (reason) {
+    case 'full':
+      return 'Too many devices are pairing right now. Try again in a few minutes.'
+    case 'slow':
+      return 'Too many tries. Wait a minute and try again.'
+    case 'network':
+      return 'Could not reach the server. Check your connection and try again.'
+    case 'server':
+      return 'The server had a problem. Try again later.'
   }
 }
+
+/** "2:41" for a number of seconds (never negative). */
+export function clock(seconds: number): string {
+  const s = Math.max(0, Math.ceil(seconds))
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
+export const triesLeft = (n: number) => `${n} ${n === 1 ? 'try' : 'tries'} left`

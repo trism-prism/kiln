@@ -10,7 +10,8 @@ import {
   TextField as AriaTextField,
   useLocale,
 } from 'react-aria-components'
-import { controlClass, ListBox, ListBoxItem, popoverClass, SelectedText } from './form'
+import { controlClass, ListBox, ListBoxItem, SelectedText } from './form'
+import { popoverClass, popoverOffset } from './classes'
 
 const TIME = /^([01][0-9]|2[0-3]):([0-5][0-9])$/
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -139,7 +140,7 @@ export function TimeInput({
               <SelectedText />
               <ChevronDown size={16} className="text-text-muted" />
             </AriaButton>
-            <Popover className={popoverClass}>
+            <Popover offset={popoverOffset} className={popoverClass}>
               <ListBox>
                 <ListBoxItem id="am">AM</ListBoxItem>
                 <ListBoxItem id="pm">PM</ListBoxItem>

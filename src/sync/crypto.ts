@@ -1,6 +1,4 @@
 // Sync key handling and record encryption (WebCrypto). No network, no database.
-import { entropyToMnemonic, mnemonicToEntropy } from '@scure/bip39'
-import { wordlist } from '@scure/bip39/wordlists/english.js'
 import type { TableName } from '../data'
 
 export const KEY_BYTES = 32
@@ -18,7 +16,6 @@ export function rowVersion(table: TableName, row: object): number {
   if (table === 'plans' && (row as { studyMinutesPerWeek?: unknown }).studyMinutesPerWeek !== undefined) return 2
   return 1
 }
-export const QR_PREFIX = 'kiln-sync:'
 
 const enc = new TextEncoder()
 const dec = new TextDecoder()
@@ -40,34 +37,9 @@ export function b64uDecode(s: string): Uint8Array<ArrayBuffer> | null {
   }
 }
 
-// ---- the sync key and its two text forms ----
+// ---- the sync key ----
 
 export const generateSyncKey = (): Uint8Array<ArrayBuffer> => crypto.getRandomValues(new Uint8Array(KEY_BYTES))
-
-/** The 24 words shown to the user (BIP39 English, 256 bits plus checksum). */
-export const keyToMnemonic = (key: Uint8Array): string => entropyToMnemonic(key, wordlist)
-
-/** Parses typed words (any case or spacing). Throws a readable error on an unknown word or bad checksum. */
-export function mnemonicToKey(words: string): Uint8Array<ArrayBuffer> {
-  const normalized = words.trim().toLowerCase().split(/\s+/).join(' ')
-  if (normalized.split(' ').length !== 24) throw new Error('A sync key is 24 words')
-  try {
-    return new Uint8Array(mnemonicToEntropy(normalized, wordlist))
-  } catch {
-    throw new Error('These words are not a valid sync key (check spelling and word order)')
-  }
-}
-
-/** The text to put in the QR code: `kiln-sync:` plus the key as base64url. */
-export const keyToQrPayload = (key: Uint8Array): string => QR_PREFIX + b64uEncode(key)
-
-/** Reads what a scanned QR code holds. Throws if it is not a Kiln sync key. */
-export function qrPayloadToKey(text: string): Uint8Array<ArrayBuffer> {
-  const t = text.trim()
-  const key = t.startsWith(QR_PREFIX) ? b64uDecode(t.slice(QR_PREFIX.length)) : null
-  if (!key || key.length !== KEY_BYTES) throw new Error('This is not a Kiln sync key')
-  return key
-}
 
 // ---- derived secrets ----
 
