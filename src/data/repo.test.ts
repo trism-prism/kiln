@@ -72,6 +72,16 @@ describe('importPlan with the real fixtures', () => {
     expect(dsaTasks.every((t) => t.status === 'open' && !t.deleted && t.deviceId !== '')).toBe(true)
   })
 
+  it('resolves every resource sourceId of the DSA parts against the imported sources', async () => {
+    const db = newDb()
+    for (const p of dsa) await importPlan(db, p, opts)
+    const plan = (await listPlans(db)).find((p) => p.key === dsa[0]!.id)!
+    const ids = new Set(plan.sources.map((s) => s.id))
+    const used = dsa.flatMap((p) => p.tasks.flatMap((t) => t.resources.flatMap((r) => r.sourceId ?? [])))
+    expect(used.length).toBeGreaterThan(0)
+    expect(used.filter((id) => !ids.has(id))).toEqual([])
+  })
+
   it('refuses a later part before part 1', async () => {
     await expect(importPlan(newDb(), dsa[1]!, opts)).rejects.toThrow(/part 1/)
   })

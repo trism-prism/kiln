@@ -16,6 +16,13 @@
     {
       "id": "fiset-course",
       "title": "Data Structures Easy to Advanced Course (William Fiset)",
+      "url": "https://www.youtube.com/watch?v=RBSGKlAvoiM",
+      "kind": "video"
+    },
+    {
+      "id": "fiset-graph-course",
+      "title": "Graph Theory Algorithms Course (William Fiset)",
+      "url": "https://www.youtube.com/watch?v=09_LlHjoEiY",
       "kind": "video"
     },
     {
@@ -107,6 +114,7 @@
       "resources": [
         {
           "title": "Asymptotic Analysis & Big-O Notation",
+          "url": "https://www.youtube.com/watch?v=RBSGKlAvoiM&t=268s",
           "kind": "video",
           "minutes": 35,
           "sourceId": "fiset-course",
@@ -150,6 +158,7 @@
       "resources": [
         {
           "title": "Static and Dynamic Arrays Chapter",
+          "url": "https://www.youtube.com/watch?v=RBSGKlAvoiM&t=1020s",
           "kind": "video",
           "minutes": 30,
           "sourceId": "fiset-course",
@@ -311,6 +320,7 @@
       "resources": [
         {
           "title": "Singly and Doubly Linked Lists Chapter",
+          "url": "https://www.youtube.com/watch?v=RBSGKlAvoiM&t=2103s",
           "kind": "video",
           "minutes": 40,
           "sourceId": "fiset-course",
@@ -428,6 +438,7 @@
       "resources": [
         {
           "title": "Stacks and Queues Chapter",
+          "url": "https://www.youtube.com/watch?v=RBSGKlAvoiM&t=3506s",
           "kind": "video",
           "minutes": 35,
           "sourceId": "fiset-course",
@@ -756,6 +767,7 @@
       "resources": [
         {
           "title": "Hash Tables Chapter",
+          "url": "https://www.youtube.com/watch?v=RBSGKlAvoiM&t=14366s",
           "kind": "video",
           "minutes": 35,
           "sourceId": "fiset-course",
@@ -874,6 +886,7 @@
       "resources": [
         {
           "title": "Binary Trees and BST Chapter",
+          "url": "https://www.youtube.com/watch?v=RBSGKlAvoiM&t=11034s",
           "kind": "video",
           "minutes": 40,
           "sourceId": "fiset-course",
@@ -1079,6 +1092,7 @@
       "resources": [
         {
           "title": "Binary Search Trees Chapter",
+          "url": "https://www.youtube.com/watch?v=RBSGKlAvoiM&t=11757s",
           "kind": "video",
           "minutes": 35,
           "sourceId": "fiset-course",
