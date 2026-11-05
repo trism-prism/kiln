@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "typecheck": "tsc -b",
     "test": "vitest run",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "schema": "node scripts/write-schema.ts"
   },
   "dependencies": {
     "react": "19.3.1",

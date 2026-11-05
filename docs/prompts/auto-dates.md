@@ -1,6 +1,6 @@
 # Prompt: Kiln assigns the dates
 
-The "Copy prompt (Kiln assigns dates)" button copies everything between the `prompt:start` and `prompt:end` HTML comment markers below (each appears exactly once), with `{{SCHEMA_REFERENCE}}` replaced by the field reference generated from the plan schema, so the prompt and the schema cannot drift. The hand-written copy of that reference at the bottom of this file is for reading only and is not copied. The user pastes the prompt into any chat LLM together with their goal or source material. Spec: `docs/plan-format.md`.
+The "Copy prompt (Kiln assigns dates)" button copies everything between the `prompt:start` and `prompt:end` HTML comment markers below (each appears exactly once), with `{{SCHEMA_REFERENCE}}` replaced by the field reference generated from the plan schema, so the prompt and the schema cannot drift. The generated copy of that reference at the bottom of this file is for reading only and is not copied; `npm run schema` refreshes it. The user pastes the prompt into any chat LLM together with their goal or source material. Spec: `docs/plan-format.md`.
 
 <!-- prompt:start -->
 You are helping me create a study plan that I will import into Kiln, a study-plan tracker. Kiln puts the tasks on my calendar from my daily time budget, so you write no dates at all.
@@ -107,17 +107,97 @@ Rules:
 ```
 <!-- prompt:end -->
 
-## Field reference (hand-written copy, not copied)
+## Field reference (generated copy, not copied)
 
-<!-- schema-reference:hand -->
-This is what `{{SCHEMA_REFERENCE}}` expands to. Once the schema code exists, the generated text replaces it and this copy can be checked against it.
+<!-- schema-reference:start -->
+### Plan
+The top level of the file.
 
-- Plan: `schemaVersion` 1 (required); `id` (required); `title` (required, at most 120 chars); `description`; `goal`; `subject`; `level` beginner | intermediate | advanced; `audience`; `schedulingMode` auto | fixed (required); `startDate` yyyy-mm-dd (fixed: required; auto: not allowed); `deadline` yyyy-mm-dd (fixed only); `sources[]`; `dailyPractice`; `part`; `modules[]` (required); `tasks[]` (required).
-- Module: `id`, `title`, `order` (integer from 1, unique) required; `summary`; `notBeforeDay` (integer from 1, plan day; never earlier than a previous module's).
-- Task: `id`, `moduleId`, `order` (integer from 1, unique in its module), `title`, `type` lesson | practice | review | project | milestone | assessment, `estimatedMinutes` (integer 5-180; milestone 0-180; keep at most 90) required; `priority` core | recommended | optional (default core); `topics[]`; `description`; `objectives[]`; `keyConcepts[]`; `tradeoffs[]`; `verificationQuestions[]`; `resources[]` (at most 10); `practice` (practice and assessment tasks only); `dependsOn[]` (task ids of the same or higher priority, no cycles); `notBeforeDay` (not with fixedDate; not before its module's); `fixedDate` yyyy-mm-dd (fixed only); `deadline` yyyy-mm-dd (fixed only).
-- Resource: `title`, `kind` video | article | book | course | docs | tool | visualizer | problem | other required; `url` (absolute http or https, only if certain); `minutes` (integer); `required` (boolean, default true); `section`; `sourceId`.
-- Source: `id`, `title`, `kind` required; `url`.
-- Practice: `provider` leetcode | other, `title`, `difficulty` easy | medium | hard required; `slug` (required for leetcode); `url` (required for other).
-- dailyPractice: `source` neetcode | plan (required); `perDay` 1-5 (default 1); `language`; `startDifficulty` easy | medium | hard (default easy); `topicFollowsLessons` boolean (default true).
-- part: `index`, `total` (integers, 1-20).
-- Ids: lowercase letters, digits and hyphens, at most 64 chars, unique across modules, tasks and sources. Text is plain (no Markdown). Lists hold at most 10-20 short items.
+- `schemaVersion` (required): must be 1.
+- `id` (required): lowercase slug (letters, digits, hyphens). stable plan id
+- `title` (required): text, at most 120 characters.
+- `description` (optional): text, at most 2000 characters.
+- `goal` (optional): text, at most 500 characters.
+- `subject` (optional): text, at most 120 characters.
+- `level` (optional): one of beginner | intermediate | advanced.
+- `audience` (optional): text, at most 300 characters.
+- `schedulingMode` (required): one of auto | fixed. auto: the file has no dates; fixed: startDate and at least one date are required
+- `startDate` (optional): date yyyy-mm-dd. fixed mode only (required there); day 1 of the plan
+- `deadline` (optional): date yyyy-mm-dd. fixed mode only; not before startDate
+- `sources` (optional): list of Source objects, at most 50 items.
+- `dailyPractice` (optional): DailyPractice object. The daily problem slot.
+- `part` (optional): Part object. Present only when the plan is split across several files.
+- `modules` (required): list of Module objects, 1-100 items.
+- `tasks` (required): list of Task objects, 1-2000 items.
+
+### Module
+- `id` (required): lowercase slug (letters, digits, hyphens). unique across modules, tasks and sources
+- `title` (required): text, at most 120 characters.
+- `order` (required): integer 1-1000. unique among modules; gaps allowed
+- `summary` (optional): text, at most 1000 characters.
+- `notBeforeDay` (optional): integer 1-3650. plan day (day 1 is the start date); never earlier than a previous module has
+
+### Task
+- `id` (required): lowercase slug (letters, digits, hyphens). unique across modules, tasks and sources
+- `moduleId` (required): lowercase slug (letters, digits, hyphens). id of a module
+- `order` (required): integer 1-10000. unique within the module
+- `title` (required): text, at most 120 characters. for a problem, its name
+- `type` (required): one of lesson | practice | review | project | assessment | milestone.
+- `estimatedMinutes` (required): integer 0-180. all time for the session; every type except milestone needs at least 5; keep at most 90 except for assessments
+- `priority` (optional): one of core | recommended | optional, default core. what may be deferred when time runs short
+- `topics` (optional): list of text, at most 40 characters each, at most 10 items. kebab-case tags, reused exactly across tasks
+- `description` (optional): text, at most 4000 characters. exactly what to do in this session
+- `objectives` (optional): list of text, at most 300 characters each, at most 12 items.
+- `keyConcepts` (optional): list of text, at most 300 characters each, at most 20 items.
+- `tradeoffs` (optional): list of text, at most 300 characters each, at most 10 items.
+- `verificationQuestions` (optional): list of text, at most 300 characters each, at most 12 items.
+- `resources` (optional): list of Resource objects, at most 10 items.
+- `practice` (optional): Practice object. practice and assessment tasks only
+- `dependsOn` (optional): list of lowercase slug (letters, digits, hyphens) each, at most 20 items. task ids of the same or higher priority; no cycles
+- `notBeforeDay` (optional): integer 1-3650. plan day; not with fixedDate; not before its module has
+- `fixedDate` (optional): date yyyy-mm-dd. fixed mode only
+- `deadline` (optional): date yyyy-mm-dd. fixed mode only
+
+### Resource
+- `title` (required): text, at most 200 characters.
+- `url` (optional): absolute http(s) URL. only if you are certain the page exists; never guess
+- `kind` (required): one of video | article | book | course | docs | tool | visualizer | problem | other.
+- `minutes` (optional): integer 0-600. time this resource alone takes
+- `required` (optional): true or false, default true. false marks extra reading
+- `section` (optional): text, at most 200 characters. which part, e.g. "Chapter 5" or "1:02:00-1:30:00"
+- `sourceId` (optional): lowercase slug (letters, digits, hyphens). id of an entry in sources
+
+### Practice
+practice and assessment tasks only
+
+- `provider` (required): one of leetcode | other.
+- `slug` (optional): lowercase slug (letters, digits, hyphens). required for leetcode; the official slug from the problem URL
+- `url` (optional): absolute http(s) URL. required for provider other
+- `title` (required): text, at most 120 characters. the problem's name
+- `difficulty` (required): one of easy | medium | hard.
+
+### Source
+A whole work the plan draws on, such as a course or a book.
+
+- `id` (required): lowercase slug (letters, digits, hyphens). unique across modules, tasks and sources
+- `title` (required): text, at most 200 characters.
+- `url` (optional): absolute http(s) URL.
+- `kind` (required): one of video | article | book | course | docs | tool | visualizer | problem | other.
+
+### DailyPractice
+The daily problem slot.
+
+- `source` (required): one of neetcode | plan. neetcode tops up from the NeetCode list; plan uses only problems in the plan
+- `perDay` (optional): integer 1-5, default 1. problems per study day
+- `language` (optional): text, at most 30 characters. e.g. python
+- `startDifficulty` (optional): one of easy | medium | hard, default easy.
+- `topicFollowsLessons` (optional): true or false, default true. true: generated problems match the most recent lesson topics
+
+### Part
+Present only when the plan is split across several files.
+
+- `index` (required): integer 1-20.
+- `total` (required): integer 1-20. at least index
+
+Text is plain text, not Markdown. Leave out optional fields you have nothing for instead of writing null or an empty string.
+<!-- schema-reference:end -->
