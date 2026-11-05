@@ -33,7 +33,7 @@ One row per task. Headers are matched case-insensitively and in any order; unkno
 
 ### Module columns
 
-Repeated on every row of the module. The first row of a module defines it; later rows may leave these blank, but a different non-blank value is an error.
+`moduleId` is repeated on every row of the module (it is how rows are grouped). The first row of a module defines it; on later rows the other module columns (`moduleTitle`, `moduleOrder`, `moduleSummary`, `moduleNotBeforeDay`) may be left blank, but a different non-blank value is an error.
 
 | Column | Required | Notes |
 |---|---|---|

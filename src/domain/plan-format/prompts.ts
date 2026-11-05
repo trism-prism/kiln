@@ -15,6 +15,6 @@ export function buildPrompt(markdown: string): string {
   const body = markdown.slice(a + START.length, b).replace(/\r\n/g, '\n').trim()
   if (!body.includes(PLACEHOLDER)) throw new Error(`${PLACEHOLDER} not found in the prompt`)
   const reference = schemaReference(planJsonSchema())
-  // A function, so "$" in the reference is not read as a replacement pattern.
-  return body.replace(PLACEHOLDER, () => reference)
+  // split/join: every occurrence, and "$" in the reference is not read as a replacement pattern.
+  return body.split(PLACEHOLDER).join(reference)
 }

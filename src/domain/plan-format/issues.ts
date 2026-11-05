@@ -37,6 +37,11 @@ export interface RawIssue {
 
 export const LABEL_LENGTH = 40
 
+/** A title cut to LABEL_LENGTH characters, without splitting a surrogate pair. */
+export function truncateLabel(title: string): string {
+  return [...title].slice(0, LABEL_LENGTH).join('')
+}
+
 /** `tasks[13].resources[2]` from ['tasks', 13, 'resources', 2]; 'plan' for the top level. */
 export function formatPath(segments: Segment[]): string {
   if (segments.length === 0) return 'plan'
@@ -72,7 +77,7 @@ export function valueAt(root: unknown, segs: readonly Segment[]): unknown {
 export function renderIssue(raw: RawIssue, root: unknown): Issue {
   const where = formatPath(raw.loc)
   const title = valueAt(valueAt(root, raw.loc), ['title'])
-  const label = typeof title === 'string' && title !== '' ? ` "${title.slice(0, LABEL_LENGTH)}"` : ''
+  const label = typeof title === 'string' && title !== '' ? ` "${truncateLabel(title)}"` : ''
   const body = raw.field === '' ? raw.rest : `${raw.field} ${raw.rest}`
   const fieldPath = raw.field === '' || raw.loc.length === 0 ? where : `${where}.${raw.field}`
   return { path: raw.field !== '' && /^[A-Za-z]+$/.test(raw.field) ? fieldPath : where, message: `${where}${label}: ${body}`, severity: raw.severity }

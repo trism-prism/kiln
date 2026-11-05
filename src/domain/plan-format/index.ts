@@ -1,6 +1,6 @@
 // Public entry of the plan format module. Everything outside src/domain/plan-format imports from here.
-export { extractPlanJson, parsePlanJson } from './extract'
-export { formatIssue, renderIssue, LABEL_LENGTH } from './issues'
+export { extractPlanJson, parsePlanJson, MAX_INPUT_CHARS } from './extract'
+export { formatIssue, renderIssue, truncateLabel, inputIssue, LABEL_LENGTH } from './issues'
 export type { Issue, RawIssue, Severity } from './issues'
 export { buildPrompt } from './prompts'
 export { schemaReference } from './reference'

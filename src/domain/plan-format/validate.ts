@@ -70,14 +70,17 @@ function clean(value: unknown, kind: Kind, loc: Segment[], warnings: RawIssue[])
     if (v === null || v === '') continue
     const child = CHILDREN[kind]?.[key]
     if (child === undefined) {
-      out[key] = Array.isArray(v) ? v.map((x) => (typeof x === 'string' ? x.trim() : x)) : v
+      // List items: trimmed; empty and null items are dropped.
+      out[key] = Array.isArray(v) ? v.map((x) => (typeof x === 'string' ? x.trim() : x)).filter((x) => x !== '' && x !== null) : v
     } else if (child[1]) {
       out[key] = Array.isArray(v) ? v.map((x, i) => clean(x, child[0], [...loc, key, i], warnings)) : v
     } else {
       out[key] = clean(v, child[0], [...loc, key], warnings)
     }
     if (kind === 'task' && key === 'topics' && Array.isArray(out[key])) {
-      out[key] = [...new Set((out[key] as unknown[]).map((t) => (typeof t === 'string' ? normalizeTopic(t) : t)))]
+      // A topic that normalizes to nothing is dropped; topics that collide are kept once.
+      const topics = (out[key] as unknown[]).map((t) => (typeof t === 'string' ? normalizeTopic(t) : t))
+      out[key] = [...new Set(topics.filter((t) => t !== ''))]
     }
   }
   return out
@@ -97,7 +100,22 @@ function fromZod(path: readonly PropertyKey[], message: string, root: unknown): 
   return { severity: 'error', loc, field, rest }
 }
 
-/** Where an issue sits in the file, as numbers to compare: key position or list index at each step. */
+/** The kind of object at a location, to know its schema key order. */
+function kindAt(loc: Segment[]): Kind | undefined {
+  const [a, , b] = loc
+  if (loc.length === 0) return 'plan'
+  if (a === 'tasks' && loc.length === 4 && b === 'resources') return 'resource'
+  if (a === 'tasks' && loc.length === 3 && b === 'practice') return 'practice'
+  if (loc.length === 2 && (a === 'tasks' || a === 'modules' || a === 'sources')) return a === 'tasks' ? 'task' : a === 'modules' ? 'module' : 'source'
+  if (loc.length === 1 && (a === 'dailyPractice' || a === 'part')) return a
+  return undefined
+}
+
+/**
+ * Where an issue sits in the file, as numbers to compare: key position or list index at each step,
+ * then the field's position and a trailing list index. A missing field sorts at the place its
+ * schema position would have in the object (just after the nearest present field before it).
+ */
 function fileOrder(input: unknown, issue: RawIssue): number[] {
   const out: number[] = []
   let cur = input
@@ -105,7 +123,22 @@ function fileOrder(input: unknown, issue: RawIssue): number[] {
     out.push(typeof seg === 'number' ? seg : isObj(cur) ? Object.keys(cur).indexOf(seg) : -1)
     cur = isObj(cur) || Array.isArray(cur) ? (cur as Obj)[seg] : undefined
   }
-  out.push(isObj(cur) ? Object.keys(cur).indexOf(issue.field.split(/[.[]/)[0] ?? '') : -1)
+  const name = issue.field.split(/[.[]/)[0] ?? ''
+  const keys = isObj(cur) ? Object.keys(cur) : []
+  let pos = keys.indexOf(name)
+  if (pos < 0) {
+    const kind = kindAt(issue.loc)
+    const order = kind === undefined ? [] : Object.keys(SCHEMAS[kind].shape)
+    const at = order.indexOf(name)
+    pos = -0.5
+    keys.forEach((k, i) => {
+      const before = order.indexOf(k)
+      if (before >= 0 && before < at) pos = i + 0.5
+    })
+  }
+  out.push(pos)
+  const index = /\[([0-9]+)\]$/.exec(issue.field)
+  if (index?.[1] !== undefined) out.push(Number(index[1]))
   return out
 }
 

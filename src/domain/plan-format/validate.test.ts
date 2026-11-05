@@ -184,6 +184,60 @@ describe('validatePlan', () => {
     expect(r.plan).toBeUndefined()
   })
 
+  it('orders list-item problems by index', () => {
+    const out = texts((p) => {
+      p.tasks[0]!.id = 'a'
+      p.tasks[0]!.dependsOn = ['a', 'Bad Id']
+    })
+    const own = out.filter((t) => t.startsWith('tasks[0]') && t.includes('dependsOn'))
+    expect(own).toHaveLength(3)
+    expect(own[0]).toContain('dependsOn[0]')
+    expect(own.slice(1).every((t) => t.includes('dependsOn[1]'))).toBe(true)
+  })
+
+  it('puts a missing required field where the schema has it, not first', () => {
+    const out = texts((p) => {
+      delete p.tasks[0]!.type
+      p.tasks[0]!.estimatedMinutes = 'x'
+      p.tasks[0]!.id = 'Bad Id'
+    })
+    const fields = out.map((t) => /: (\w+)/.exec(t)?.[1])
+    expect(fields.slice(0, 3)).toEqual(['id', 'type', 'estimatedMinutes'])
+  })
+
+  it('drops empty and null list items, and topics that normalize to nothing', () => {
+    const r = validatePlan(
+      (() => {
+        const p = basePlan()
+        const t = (p.tasks as Record<string, unknown>[])[0]!
+        t.objectives = ['Know it', '  ', null, '']
+        t.topics = ['Basics', '!!!', 'basics']
+        return p
+      })(),
+    )
+    expect(r.issues).toEqual([])
+    expect(r.plan?.tasks[0]?.objectives).toEqual(['Know it'])
+    expect(r.plan?.tasks[0]?.topics).toEqual(['basics'])
+  })
+
+  it('keeps the 0-to-180 wording for milestones and 5-to-180 for other types', () => {
+    const out = texts((p) => {
+      p.tasks.push({ id: 'done', moduleId: 'm1', order: 3, title: 'Phase done', type: 'milestone', estimatedMinutes: 200 })
+      p.tasks[0]!.estimatedMinutes = 200
+    })
+    expect(out).toContain('tasks[2] "Phase done": estimatedMinutes must be an integer from 0 to 180')
+    expect(out).toContain('tasks[0] "Intro": estimatedMinutes must be an integer from 5 to 180')
+  })
+
+  it('cuts labels at 40 characters without splitting an emoji', () => {
+    const emoji = String.fromCodePoint(0x1f600)
+    const out = texts((p) => {
+      p.tasks[0]!.title = emoji.repeat(45)
+      delete p.tasks[0]!.type
+    })
+    expect(out).toEqual([`tasks[0] "${emoji.repeat(40)}": type is required`])
+  })
+
   it('rejects a non-object top level', () => {
     expect(validatePlan([]).issues.map(formatIssue)).toEqual(['plan: must be an object'])
   })

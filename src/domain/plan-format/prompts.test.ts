@@ -37,6 +37,9 @@ describe('buildPrompt', () => {
     expect(() => buildPrompt('no markers')).toThrow('markers')
     expect(() => buildPrompt('<!-- prompt:start -->no placeholder<!-- prompt:end -->')).toThrow('SCHEMA_REFERENCE')
     expect(buildPrompt('<!-- prompt:start -->\r\nA {{SCHEMA_REFERENCE}} B\r\n<!-- prompt:end -->')).toMatch(/^A ### Plan/)
+    const twice = buildPrompt('<!-- prompt:start -->{{SCHEMA_REFERENCE}} and {{SCHEMA_REFERENCE}}<!-- prompt:end -->')
+    expect(twice).not.toContain('{{SCHEMA_REFERENCE}}')
+    expect(twice.split('### Plan')).toHaveLength(3)
   })
 })
 
