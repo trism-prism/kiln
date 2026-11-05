@@ -1,5 +1,26 @@
 import { describe, expect, it } from 'vitest'
-import { detectDelimiter, parseCsv } from './csv'
+import { CsvError, detectDelimiter, parseCsv } from './csv'
+
+describe('CSV edge cases', () => {
+  it('reports the row where an unclosed quote opened', () => {
+    const text = 'a,b\n1,2\n3,"never closed\n4,5'
+    expect(() => parseCsv(text)).toThrow(CsvError)
+    expect(() => parseCsv(text)).toThrow('never closed')
+    try {
+      parseCsv(text)
+    } catch (e) {
+      expect((e as CsvError).row).toBe(3)
+    }
+  })
+
+  it('picks the delimiter that yields the most known column names', () => {
+    const known = ['moduleId', 'id', 'title']
+    expect(detectDelimiter('moduleId;id;title,extra', known)).toBe(';')
+    expect(detectDelimiter('moduleId\tid\ttitle', known)).toBe('\t')
+    expect(detectDelimiter('a;b;c', known)).toBe(',')
+    expect(detectDelimiter('"moduleId,x";id;title', known)).toBe(';')
+  })
+})
 
 describe('parseCsv', () => {
   it('reads plain rows with LF, CRLF and no final newline', () => {

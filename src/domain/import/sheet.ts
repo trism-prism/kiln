@@ -1,11 +1,13 @@
 // Sheet import (docs/plan-import.md): rows of cells -> plan JSON -> the same validation as a JSON file,
 // with problem locations shown as spreadsheet rows (the header is row 1).
-import { parseCsv } from './csv'
+import { CsvError, parseCsv } from './csv'
 import {
   collectIssues,
-  LABEL_LENGTH,
+  MAX_INPUT_CHARS,
+  truncateLabel,
   renderIssue,
   MAX_ISSUES,
+  inputIssue,
   type Issue,
   type RawIssue,
   type SemanticOptions,
@@ -44,14 +46,29 @@ type Obj = Record<string, unknown>
 
 /** True when the first line of pasted text holds the required column headers. */
 export function looksLikeSheet(text: string): boolean {
-  const first = text.trimStart().split('\n', 1)[0] ?? ''
-  const headers = (parseCsv(first)[0] ?? []).map((h) => h.trim().toLowerCase())
-  return REQUIRED_COLUMNS.every((c) => headers.includes(c.toLowerCase()))
+  const first = sheetText(text).split('\n', 1)[0] ?? ''
+  try {
+    const headers = (parseCsv(first, COLUMNS)[0] ?? []).map((h) => h.trim().toLowerCase())
+    return REQUIRED_COLUMNS.every((c) => headers.includes(c.toLowerCase()))
+  } catch {
+    return false
+  }
 }
+
+/** Pasted text as both looksLikeSheet and importSheetText read it (leading whitespace and BOM removed). */
+const sheetText = (text: string) => text.trimStart()
+
+export const tooBig = (what: string): ValidationResult => ({ issues: [inputIssue('input', `${what} is larger than 5 MB`)] })
 
 /** Pasted sheet text or the content of a .csv file. */
 export function importSheetText(text: string, info: SheetPlanInfo, opts: SemanticOptions = {}): ValidationResult {
-  return importSheetRows(parseCsv(text), info, opts)
+  if (text.length > MAX_INPUT_CHARS) return tooBig('text')
+  try {
+    return importSheetRows(parseCsv(sheetText(text), COLUMNS), info, opts)
+  } catch (e) {
+    if (!(e instanceof CsvError)) throw e
+    return { issues: [{ path: `row ${e.row}`, message: `row ${e.row}: ${e.message}`, severity: 'error' }] }
+  }
 }
 
 const slug = (s: string) =>
@@ -80,7 +97,7 @@ interface SheetIssue {
 export function importSheetRows(rows: string[][], info: SheetPlanInfo, opts: SemanticOptions = {}): ValidationResult {
   const found: SheetIssue[] = []
   const add = (row: number, severity: Issue['severity'], label: string, message: string) => {
-    const where = label === '' ? `row ${row}` : `row ${row} "${label.slice(0, LABEL_LENGTH)}"`
+    const where = label === '' ? `row ${row}` : `row ${row} "${truncateLabel(label)}"`
     found.push({ row, issue: { path: `row ${row}`, message: `${where}: ${message}`, severity } })
   }
 
@@ -149,7 +166,7 @@ export function importSheetRows(rows: string[][], info: SheetPlanInfo, opts: Sem
     for (const c of ['objectives', 'keyConcepts', 'tradeoffs', 'verificationQuestions'] as const) put(task, c, list(get(c)))
 
     const resources = (list(get('resources')) ?? []).map((item, k): Obj => {
-      const f = item.split(/\s+;(?=\s|$)/).map((x) => x.trim())
+      const f = item.split(/\s;(?=\s|$)/).map((x) => x.trim())
       if (f.length > 6) problem(`resources item ${k + 1}: has ${f.length} fields; the most is 6 (title ; url ; kind ; minutes ; section ; required)`)
       const res: Obj = {}
       put(res, 'title', f[0] || undefined)
@@ -226,7 +243,7 @@ function toRow(
 
   const row = (kind === 'tasks' ? taskRows : moduleRows)[index as number] ?? 0
   const title = root[kind][index as number]?.title
-  const label = typeof title === 'string' && title !== '' ? ` "${title.slice(0, LABEL_LENGTH)}"` : ''
+  const label = typeof title === 'string' && title !== '' ? ` "${truncateLabel(title)}"` : ''
   const body = field === '' ? raw.rest : `${field} ${raw.rest}`
   const message = `row ${row}${label}: ${prefix}${body}`
   return { row, issue: { path: `row ${row}`, message, severity: raw.severity } }

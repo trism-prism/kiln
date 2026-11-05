@@ -29,6 +29,46 @@ describe('readXlsxRows', () => {
   })
 })
 
+describe('readXlsxRows details', () => {
+  it('reads dates in the 1904 date system', () => {
+    const sheet = XLSX.utils.aoa_to_sheet([['d']])
+    sheet['A2'] = { t: 'n', v: Date.UTC(2026, 10, 20) / 86400000 + 25569 - 1462, z: 'yyyy-mm-dd' }
+    sheet['!ref'] = 'A1:A2'
+    const book = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(book, sheet, 'tasks')
+    book.Workbook = { WBProps: { date1904: true } }
+    const data = new Uint8Array(XLSX.write(book, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer)
+    expect(readXlsxRows(data)).toEqual([['d'], ['2026-11-20']])
+  })
+
+  it('rounds binary noise in numbers and keeps the text of time-only cells', () => {
+    const sheet = XLSX.utils.aoa_to_sheet([['n', 't']])
+    sheet['A2'] = { t: 'n', v: 0.1 + 0.2 }
+    sheet['B2'] = { t: 'n', v: 0.5, z: 'h:mm', w: '12:00' }
+    sheet['!ref'] = 'A1:B2'
+    expect(readXlsxRows(workbook({ tasks: sheet }))).toEqual([['n', 't'], ['0.3', '12:00']])
+  })
+
+  it('trims the extent to the cells that exist when the declared range is larger', () => {
+    const sheet = XLSX.utils.aoa_to_sheet([['a', 'b']])
+    sheet['!ref'] = 'A1:J200'
+    expect(readXlsxRows(workbook({ tasks: sheet }))).toEqual([['a', 'b']])
+  })
+
+  it('rejects sheets over 5000 rows or 64 columns, and files over 5 MB', () => {
+    const tall = XLSX.utils.aoa_to_sheet([['a']])
+    tall['A5001'] = { t: 's', v: 'x' }
+    tall['!ref'] = 'A1:A5001'
+    const wide = XLSX.utils.aoa_to_sheet([['a']])
+    wide['BM1'] = { t: 's', v: 'x' }
+    wide['!ref'] = 'A1:BM1'
+    const info = { title: 'T' }
+    expect(importXlsx(workbook({ tasks: tall }), info).issues.map(formatIssue)).toEqual(['input: the sheet has more than 5000 rows'])
+    expect(importXlsx(workbook({ tasks: wide }), info).issues.map(formatIssue)).toEqual(['input: the sheet has more than 64 columns'])
+    expect(importXlsx(new Uint8Array(5 * 1024 * 1024 + 1), info).issues.map(formatIssue)).toEqual(['input: file is larger than 5 MB'])
+  })
+})
+
 describe('importXlsx', () => {
   it('imports a sheet with an Excel date cell as a fixed plan', () => {
     const sheet = XLSX.utils.aoa_to_sheet([HEADER, ['m', 'Module', 'exam', 'Exam', 'assessment', 60, 'Closed book', 't', '']])

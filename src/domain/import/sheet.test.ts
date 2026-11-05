@@ -139,6 +139,38 @@ describe('importSheetText', () => {
     expect(errorsOf(early)).toEqual(['row 2 "Exam": fixedDate 2026-12-11 is before startDate (2026-12-20)'])
   })
 
+  it('reads text with leading blank lines the way the detector does', () => {
+    const text = `\n  \n${HEADER}\n${lesson}`
+    expect(looksLikeSheet(text)).toBe(true)
+    expect(importSheetText(text, info).plan?.tasks).toHaveLength(1)
+  })
+
+  it('reports an unclosed quote at the row where it opened, and rejects huge text', () => {
+    const r = importSheetText(`${HEADER}\n${lesson}\n"open,x,y\nmore`, info)
+    expect(r.issues.map(formatIssue)).toEqual(['row 3: a quoted cell is never closed'])
+    expect(looksLikeSheet('"moduleId,id')).toBe(false)
+    const big = importSheetText('x'.repeat(5 * 1024 * 1024 + 1), info)
+    expect(big.issues.map(formatIssue)).toEqual(['input: text is larger than 5 MB'])
+  })
+
+  it('splits resource fields on a separator surrounded by whitespace, in linear time', () => {
+    const start = Date.now()
+    const r = run([
+      row({
+        moduleId: 'a', moduleTitle: 'A', id: 'a1', title: 'A1', type: 'review', estimatedMinutes: '20',
+        resources: `T${' '.repeat(50000)}x`,
+      }),
+    ])
+    expect(Date.now() - start).toBeLessThan(2000)
+    expect(r.text.join('\n')).not.toContain('is larger')
+  })
+
+  it('cuts row labels at 40 characters without splitting an emoji', () => {
+    const emoji = String.fromCodePoint(0x1f600)
+    const r = run([row({ moduleId: 'a', moduleTitle: 'A', id: 'a1', title: emoji.repeat(45), type: 'review', estimatedMinutes: '1' })])
+    expect(r.text).toContain(`row 2 "${emoji.repeat(40)}": estimatedMinutes must be an integer from 5 to 180`)
+  })
+
   it('needs a plan title', () => {
     const r = importSheetText([HEADER, lesson].join('\n'), { title: '  ' })
     expect(r.issues.map(formatIssue)).toContain('plan: title is required')
