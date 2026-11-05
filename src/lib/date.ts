@@ -5,3 +5,22 @@ export function toLocalISODate(d: Date): string {
   const day = String(d.getDate()).padStart(2, '0')
   return `${y}-${m}-${day}`
 }
+
+const ISO_DATE = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/
+
+/** True for a real calendar date written as yyyy-mm-dd ("2026-02-30" is false). */
+export function isRealISODate(s: string): boolean {
+  const m = ISO_DATE.exec(s)
+  if (!m) return false
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])]
+  const t = new Date(Date.UTC(y, mo - 1, d))
+  return t.getUTCFullYear() === y && t.getUTCMonth() === mo - 1 && t.getUTCDate() === d
+}
+
+/** Adds whole days to a yyyy-mm-dd date. Calendar arithmetic only, so no time zone or DST effects. */
+export function addDaysISO(s: string, days: number): string {
+  const m = ISO_DATE.exec(s)
+  if (!m) throw new Error(`not a yyyy-mm-dd date: ${s}`)
+  const t = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + days))
+  return t.toISOString().slice(0, 10)
+}
