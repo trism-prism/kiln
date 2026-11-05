@@ -26,7 +26,7 @@ A plan file can describe any subject (algorithms, a language, music theory, a un
 3. Otherwise collect the fenced code blocks (three or more backticks or tildes). A block is a candidate when its info string is `json` (any case), or when it has no info string and its content starts with `{`.
 4. Exactly one candidate: parse it. None: error `input: no json block found`. More than one: error `input: found 3 json blocks; expected exactly 1`.
 
-Input over 5 MB is rejected before parsing.
+Input over 5 MB is rejected before parsing with `input: text is larger than 5 MB`. A JSON syntax error is reported as `json: line L, column C: ...` with the line counted in the pasted text.
 
 ## Decisions
 
@@ -285,7 +285,7 @@ Validation runs in two passes: shape (types, required fields, enums, ranges, len
 
 ### Errors (meaning)
 
-- `schemaVersion` is not 1.
+- `schemaVersion` is not 1 (a higher number: `schemaVersion is 2; this plan was made for a newer version of Kiln`).
 - Ids: an id does not match the id pattern; an id is used twice among modules, tasks and sources.
 - Order: two modules share an `order`; two tasks in the same module share an `order`.
 - References: `moduleId`, `dependsOn` or `sourceId` does not match an id of the right kind (a module id in `dependsOn` is an error).
@@ -299,7 +299,7 @@ Validation runs in two passes: shape (types, required fields, enums, ranges, len
 
 ### Warnings
 
-- Unknown field (dropped) or derived field such as `totalEstimate` (ignored).
+- Unknown field (dropped): `week is not a known field and was dropped`. Derived field such as `totalEstimate` (ignored): `totalEstimate is derived by Kiln and was ignored`.
 - `estimatedMinutes` over 90 on any type except `assessment`: split into sessions.
 - A lesson without `objectives`, `verificationQuestions`, `resources` or `topics`; a practice or assessment task without `description` or `topics`.
 - A resource without `minutes`; required resource minutes add up to more than `estimatedMinutes`.

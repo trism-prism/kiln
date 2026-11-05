@@ -25,11 +25,11 @@ row 15 "Two Sum": resources item 2: kind must be one of: video, article, book, c
 warning: row 9 "Edit Distance": estimatedMinutes is 120; split work over 90 minutes into sessions
 ```
 
-JSON locations are 0-based paths (`tasks[13]`, `tasks[13].resources[2]`, `plan` for the top level). Sheet locations are spreadsheet row numbers with the header as row 1, so the number matches what Excel shows. The label is the object's title, cut to 40 characters, and is omitted when there is none. Messages use the JSON field names, which are also the column headers. Full rules: "Validation" in the spec.
+JSON locations are 0-based paths (`tasks[13]`, `tasks[13].resources[2]`, `plan` for the top level). Sheet locations are spreadsheet row numbers with the header as row 1, so the number matches what Excel shows. The label is the object's title, cut to 40 characters, and is omitted when there is none. Messages use the JSON field names, which are also the column headers. Other sheet messages: `row 1: required column "moduleId" is missing` (error) and `row 1: column "foo" is not a known column and was ignored` (warning). Full rules: "Validation" in the spec.
 
 ## CSV/XLSX template
 
-One row per task. Headers are matched case-insensitively and in any order; unknown columns are a warning and ignored. Templates: `kiln-plan-template.csv` and `kiln-plan-template.xlsx` (header row plus the example rows below), downloadable from the import screen.
+One row per task. Headers are matched case-insensitively and in any order; unknown columns are a warning and ignored. Templates: `kiln-plan-template.csv` and `kiln-plan-template.xlsx` in `public/` (header row plus the example rows below), downloadable from the import screen. The CSV is the source; `npm run templates` rebuilds the XLSX from it.
 
 ### Module columns
 
