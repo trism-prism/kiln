@@ -1,6 +1,6 @@
 # Kiln progress
 
-Resume: Continue Kiln: read C:\Work\Code\Projects\SWE Study Tracker\kiln\PROGRESS.md
+Resume: read this file, then continue from "Next exact step".
 
 Plan: docs/plan.md (added in stage 1 scaffold branch).
 
@@ -37,6 +37,4 @@ Open the PR for `feat/scaffold`, merge when CI is green, then mark stage 1 done.
 - iPhone install test: push and badge while the device is asleep (stage 13 checkpoint).
 
 ## Authorizations
-Source of truth: C:\Work\Vault\Authorizations\kiln.md
-
 - 2026-11-05: "Private, you may merge when CI is green" (trism-dev/kiln, merge stage PRs once CI passes; no force-push, no deploys).

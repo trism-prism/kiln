@@ -3,7 +3,7 @@
 ## Context
 Tristan is a full-time student and intern who wants to go from novice to interview-ready in DSA and System Design with a few hours a day, and currently does zero LeetCode. Kiln turns any study plan into a scheduled, Canvas-style to-do list with a badge count, reminders, mastery reviews and one LeetCode problem a day. Difficulty ramps with his level. Free to run, private repo for now. It will later be published publicly (resume: "deployed app, N weekly active devices") and wrapped for the app stores.
 
-Source material: `Downloads\dsa-study-tracker-spec.md` (16-week DSA, day topics + ~60 LC problems) and `Downloads\system-design-study-plan.md`. The SD plan is being replaced by a new, less compressed one. Both plans will be regenerated in Gemini using Kiln's own prompt. The current DSA doc is converted only as dev test data.
+Source material: a 16-week DSA study-plan doc (day topics + ~60 LC problems) and a system design study plan. The SD plan is being replaced by a new, less compressed one. Both plans will be regenerated in Gemini using Kiln's own prompt. The current DSA doc is converted only as dev test data.
 
 ## Decisions (from grilling, 2026-11-05)
 | Area | Decision |
@@ -24,7 +24,7 @@ Source material: `Downloads\dsa-study-tracker-spec.md` (16-week DSA, day topics 
 | v1 screens | To Do (Today / next 7 / next 28 / past 7 / past 28), task page (completed = greyed but fully openable), dashboard cards + progress, plan/modules page, calendar month/week with drag-to-reschedule, streak heatmap, brush-up list, import/create, settings |
 | Analytics | Cloudflare Web Analytics (cookieless) + anonymous daily active-device ping. Privacy page |
 | Name / repo | Kiln, `github.com/trism-dev/kiln`, PRIVATE |
-| Merges | User grant: "Private, you may merge when CI is green" (record in Vault\Authorizations\kiln.md) |
+| Merges | User grant: "Private, you may merge when CI is green" |
 | Execution | One Workflow per stage (implement, test, review), PR, merge on green CI, update PROGRESS.md, then stop for the user's review |
 | Timeline | No rush: full v1, then use |
 
@@ -47,31 +47,25 @@ Not in v1 (logged as later): Capacitor store build, per-task notes and time log,
 Input: plans, tasks, per-weekday capacity, start date, blackout dates, completion and review state. Day by day: (1) pinned/fixed-date tasks; (2) FSRS reviews due, up to the cap; (3) the daily practice slot; (4) ready tasks (deps done, `notBeforeDay` reached) in plan order, interleaved across plans by priority weight; overflow goes to the next day. Deadline violations are reported, not hidden. Runs on import and on explicit Reschedule only (dates are otherwise stable). The LC ramp starts at Easy; it moves to Medium after 5 Easy problems rated Good/Easy (≥2 in the current topic), and adds Hard only after 10 Mediums or in the plan's final 2 weeks. The topic follows the most recent lesson; problems the plan names explicitly come first.
 
 ## Stages
-Every stage: read `PROGRESS.md` + Known Errors (`TypeScript`, `JavaScript`, `HtmlCss` indexes) → feature branch `feat/<slug>` in a worktree → implement → Vitest/Playwright via `runner` → `reviewer` (haiku, diff only) → fix → PR → merge on green CI (per grant) → update `PROGRESS.md` + Vault session note → stop for the user's review.
+Every stage: read `PROGRESS.md` → feature branch `feat/<slug>` → implement → unit and e2e tests → review the diff → fix → PR → merge on green CI → update `PROGRESS.md` → stop for the user's review.
 
-| # | Stage | Delivers | Model / effort | Agents |
-|---|---|---|---|---|
-| 1 | Repo + setup | Record grant in `Vault\Authorizations\kiln.md`; check kiln domain options (user buys); `gh repo create trism-dev/kiln --private`; Vite/TS/Tailwind/Vitest/Playwright/ESLint scaffold; GitHub Actions CI; `PROGRESS.md`; `docs/plan.md` (this file); `.gitignore` for CLAUDE.md/.claude; Vault domain entry | Sonnet / low | runner (haiku) |
-| 2 | Plan format + prompts | Zod schema, JSON Schema, `docs/plan-format.md`, both LLM prompts, block extractor + validator with path errors, CSV/XLSX template, DSA doc → fixture. **User checkpoint: regenerate DSA + new SD plans in Gemini** | Opus design / Sonnet impl, high | Plan, reviewer |
-| 3 | Data layer | Dexie schema, sync-ready record shape, migrations, backup export/import | Sonnet / medium | reviewer |
-| 4 | Scheduler + LC ramp | `scheduler`, `practice`, NeetCode pool snapshot; table-driven tests (capacity, deps, fixed dates, overflow, reschedule, deadlines, ramp) | Opus design / Sonnet impl, high | reviewer |
-| 5 | Mastery | ts-fsrs wrapper, rating → review tasks, mastery % per topic, brush-up query | Sonnet / medium | reviewer |
-| 6 | Design system + shell | /unslop pass, Kiln brand + tokens (light/dark), nav rail with To Do badge, layouts, a11y baseline. **User checkpoint: design approval** | Opus / high | reviewer |
-| 7 | Core screens | To Do views (±1/7/28), task page (greyed done), dashboard cards, plan/modules page, brush-up, rating sheet | Sonnet / medium | reviewer |
-| 8 | Calendar + streaks | Month/week calendar, drag reschedule (React Aria DnD), heatmap + streak | Sonnet / medium | reviewer |
-| 9 | Import + create | Paste/clipboard/file, preview + validation report + schedule preview, manual builder with date pinning, copy-prompt buttons (2) | Sonnet / medium | reviewer |
-| 10 | PWA | Manifest, SW, offline, install prompt, Badging API, onboarding (budget, start date, reminder time, load plan) | Sonnet / medium | reviewer |
-| 11 | Worker: push + analytics | D1 schema, VAPID push (verify a Workers-compatible Web Push lib; else WebCrypto VAPID), 15-min cron, SW push handler, ping, Web Analytics | Sonnet / high | reviewer |
-| 12 | Sync | Sync key/QR, E2E crypto, push/pull, LWW + tombstones, multi-device conflict tests | Opus design / Sonnet impl, high | reviewer |
-| 13 | Production | Pages + Worker deploy, domain, privacy page, Lighthouse + axe audit, e2e against the real deployment. **User checkpoint: install on iPhone, confirm push + badge while asleep** | Sonnet / medium | runner |
+| # | Stage | Delivers |
+|---|---|---|
+| 1 | Repo + setup | Check kiln domain options (user buys); `gh repo create trism-dev/kiln --private`; Vite/TS/Tailwind/Vitest/Playwright/ESLint scaffold; GitHub Actions CI; `PROGRESS.md`; `docs/plan.md` (this file) |
+| 2 | Plan format + prompts | Zod schema, JSON Schema, `docs/plan-format.md`, both LLM prompts, block extractor + validator with path errors, CSV/XLSX template, DSA doc → fixture. **User checkpoint: regenerate DSA + new SD plans in Gemini** |
+| 3 | Data layer | Dexie schema, sync-ready record shape, migrations, backup export/import |
+| 4 | Scheduler + LC ramp | `scheduler`, `practice`, NeetCode pool snapshot; table-driven tests (capacity, deps, fixed dates, overflow, reschedule, deadlines, ramp) |
+| 5 | Mastery | ts-fsrs wrapper, rating → review tasks, mastery % per topic, brush-up query |
+| 6 | Design system + shell | /unslop pass, Kiln brand + tokens (light/dark), nav rail with To Do badge, layouts, a11y baseline. **User checkpoint: design approval** |
+| 7 | Core screens | To Do views (±1/7/28), task page (greyed done), dashboard cards, plan/modules page, brush-up, rating sheet |
+| 8 | Calendar + streaks | Month/week calendar, drag reschedule (React Aria DnD), heatmap + streak |
+| 9 | Import + create | Paste/clipboard/file, preview + validation report + schedule preview, manual builder with date pinning, copy-prompt buttons (2) |
+| 10 | PWA | Manifest, SW, offline, install prompt, Badging API, onboarding (budget, start date, reminder time, load plan) |
+| 11 | Worker: push + analytics | D1 schema, VAPID push (verify a Workers-compatible Web Push lib; else WebCrypto VAPID), 15-min cron, SW push handler, ping, Web Analytics |
+| 12 | Sync | Sync key/QR, E2E crypto, push/pull, LWW + tombstones, multi-device conflict tests |
+| 13 | Production | Pages + Worker deploy, domain, privacy page, Lighthouse + axe audit, e2e against the real deployment. **User checkpoint: install on iPhone, confirm push + badge while asleep** |
 
 User-only actions: create the Cloudflare account + `wrangler login`; buy the domain; regenerate plans in Gemini; the phone install test.
-
-## Handoffs (two accounts, same machine)
-- `PROGRESS.md` in the repo is the source of truth: stage table with status, current branch, the exact next step, open questions, active grants (link to `Vault\Authorizations\kiln.md`). Committed and pushed at every stage end and before any stop.
-- Mirror to `Vault\Sessions\<date>-kiln-<stage>.md`; `Vault\Domains\Code-Projects.md` links the project.
-- On a usage limit: commit WIP to the stage branch, write the exact next command/step in PROGRESS.md, stop all workflows. The new account starts with: "Continue Kiln: read C:\Work\Code\Projects\SWE Study Tracker\kiln\PROGRESS.md".
-- Plan copy saved to `Vault\Plans\kiln.md` after approval.
 
 ## Verification
 - Unit: Vitest on plan-format, import, scheduler, practice ramp, mastery, sync merge (CI-gated).
