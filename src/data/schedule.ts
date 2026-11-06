@@ -46,6 +46,7 @@ async function run(db: KilnDB, deviceId: string, today: string, opts: ScheduleAl
       weight: plan.weight,
       startDate: plan.startDate,
       deadline: plan.deadline,
+      skipOptional: plan.skipOptional,
       dailyPractice: plan.dailyPractice && {
         source: plan.dailyPractice.source,
         perDay: plan.dailyPractice.perDay ?? 1,

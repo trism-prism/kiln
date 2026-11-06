@@ -32,6 +32,8 @@ export interface PlanRecord extends Base {
   /** Day 1 of the plan. */
   startDate: string
   deadline?: string
+  /** Keep this plan's optional tasks in the backlog. */
+  skipOptional?: boolean
   // Part progress
   /** How many files the plan is split into (1 when not split). */
   partTotal: number

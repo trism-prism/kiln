@@ -49,6 +49,7 @@ export function rowSchemas(now: number) {
         weight: int.min(1).max(5),
         startDate: day,
         deadline: day.optional(),
+        skipOptional: z.boolean().optional(),
         partTotal: int.min(1).max(20),
         partsIn: z.array(int.min(1).max(20)),
       }),
