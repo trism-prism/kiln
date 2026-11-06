@@ -33,6 +33,16 @@ export function useToday(): string {
   return today
 }
 
+/** Changes once a minute, to refresh views that depend on the current time. */
+export function useMinute(): number {
+  const [m, setM] = useState(() => Math.floor(Date.now() / 60_000))
+  useEffect(() => {
+    const id = setInterval(() => setM(Math.floor(Date.now() / 60_000)), 60_000)
+    return () => clearInterval(id)
+  }, [])
+  return m
+}
+
 const alive = <T extends { deleted: boolean }>(rows: T[]) => rows.filter((r) => !r.deleted)
 
 /** The badge: open tasks and daily problems today or overdue, plus reviews due. */

@@ -6,7 +6,7 @@ import { Button, Link } from '../../ui/button'
 import { Badge, EmptyState, Meter, Skeleton } from '../../ui/surface'
 import { Page } from '../Page'
 import { LeetCodeLink, percent } from '../parts'
-import { useToday } from '../queries'
+import { useMinute, useToday } from '../queries'
 import { useCompleter } from '../rating'
 
 const humanize = (topic: string) => {
@@ -44,10 +44,11 @@ function Entry({ e, onReview }: { e: BrushUpEntry; onReview: () => void }) {
 
 export default function BrushUpPage() {
   const today = useToday()
+  const minute = useMinute()
   const data = useLiveQuery(async () => {
     const now = Date.now()
     return { entries: await brushUp(db, now), topics: await masteryByTopic(db, now) }
-  }, [today])
+  }, [today, minute])
   const { complete, sheet } = useCompleter()
 
   const topics = data ? Object.entries(data.topics).sort(([a, x], [b, y]) => x.mastery - y.mastery || a.localeCompare(b)) : []

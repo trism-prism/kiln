@@ -105,15 +105,36 @@ export async function complete(item: Completable, rating: RatingName) {
 
 /**
  * `complete(item)` asks for a rating when the item gets a review card and completes straight away
- * ("good", ignored) otherwise. Render `sheet` once on the page.
+ * ("good", ignored) otherwise. Render `sheet` once on the page. `pending(id)` is true while that
+ * item's write is in flight, so its checkbox can be disabled (no double completion).
  */
-export function useCompleter(): { complete: (item: Completable) => void; rate: (title: string, onRate: (r: RatingName) => void) => void; sheet: ReactNode } {
+export function useCompleter(): {
+  complete: (item: Completable) => void
+  pending: (id: string) => boolean
+  sheet: ReactNode
+} {
   const [request, setRequest] = useState<Request | null>(null)
+  const [busy, setBusy] = useState<ReadonlySet<string>>(new Set())
   const close = useCallback(() => setRequest(null), [])
-  const rate = useCallback((title: string, onRate: (r: RatingName) => void) => setRequest({ title, onRate }), [])
+  const run = async (item: Completable, rating: RatingName) => {
+    setBusy((b) => new Set(b).add(item.id))
+    try {
+      await complete(item, rating)
+    } finally {
+      setBusy((b) => {
+        const n = new Set(b)
+        n.delete(item.id)
+        return n
+      })
+    }
+  }
   return {
-    complete: (item) => (item.rates ? rate(item.title, (r) => void complete(item, r)) : void complete(item, 'good')),
-    rate,
+    complete: (item) => {
+      if (busy.has(item.id)) return
+      if (item.rates) setRequest({ title: item.title, onRate: (r) => void run(item, r) })
+      else void run(item, 'good')
+    },
+    pending: (id) => busy.has(id),
     sheet: <RatingSheet request={request} onClose={close} />,
   }
 }

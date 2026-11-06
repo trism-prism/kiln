@@ -10,11 +10,11 @@ import { useToday, useTodoItems } from '../queries'
 import { useCompleter, type Completable } from '../rating'
 import { formatDay } from '../../lib/date'
 
-function Row({ item, onComplete }: { item: TodoItem; onComplete: (i: Completable) => void }) {
+function Row({ item, onComplete, pending }: { item: TodoItem; onComplete: (i: Completable) => void; pending: boolean }) {
   const muted = item.done
   return (
     <li className="flex items-start gap-3 py-3">
-      <Checkbox isSelected={item.done} isDisabled={item.done} onChange={() => onComplete(item)} className="mt-0.5">
+      <Checkbox isSelected={item.done} isDisabled={item.done || pending} onChange={() => onComplete(item)} className="mt-0.5">
         <span className="sr-only">{item.kind === 'review' ? `Rate the review of ${item.title.replace('Review: ', '')}` : `Mark done: ${item.title}`}</span>
       </Checkbox>
       <div className="min-w-0 flex-1">
@@ -43,7 +43,7 @@ function Row({ item, onComplete }: { item: TodoItem; onComplete: (i: Completable
   )
 }
 
-function Group({ id, heading, sub, tone, items, onComplete }: { id: string; heading: string; sub?: string; tone?: 'danger'; items: TodoItem[]; onComplete: (i: Completable) => void }) {
+function Group({ id, heading, sub, tone, items, onComplete, pending }: { id: string; heading: string; sub?: string; tone?: 'danger'; items: TodoItem[]; onComplete: (i: Completable) => void; pending: (id: string) => boolean }) {
   return (
     <section aria-labelledby={id} className="grid gap-1">
       <div className="flex items-baseline gap-3">
@@ -54,14 +54,14 @@ function Group({ id, heading, sub, tone, items, onComplete }: { id: string; head
       </div>
       <ul className="divide-y divide-border rounded-lg border border-border bg-surface-raised px-4 shadow-sm">
         {items.map((i) => (
-          <Row key={i.key} item={i} onComplete={onComplete} />
+          <Row key={i.key} item={i} onComplete={onComplete} pending={pending(i.id)} />
         ))}
       </ul>
     </section>
   )
 }
 
-function RangePanel({ range, items, today, onComplete }: { range: (typeof TODO_RANGES)[number]; items: TodoItem[]; today: string; onComplete: (i: Completable) => void }) {
+function RangePanel({ range, items, today, onComplete, pending }: { range: (typeof TODO_RANGES)[number]; items: TodoItem[]; today: string; onComplete: (i: Completable) => void; pending: (id: string) => boolean }) {
   const view = todoView(items, range.id, today)
   if (view.overdue.length === 0 && view.days.length === 0) {
     return (
@@ -75,10 +75,10 @@ function RangePanel({ range, items, today, onComplete }: { range: (typeof TODO_R
   return (
     <div className="grid gap-8">
       {view.overdue.length > 0 && (
-        <Group id="overdue" heading={`Overdue (${view.overdue.length})`} tone="danger" items={view.overdue} onComplete={onComplete} />
+        <Group id="overdue" heading={`Overdue (${view.overdue.length})`} tone="danger" items={view.overdue} onComplete={onComplete} pending={pending} />
       )}
       {view.days.map((d) => (
-        <Group key={d.date} id={`day-${d.date}`} heading={d.label} sub={d.label === d.dateText ? undefined : d.dateText} items={d.items} onComplete={onComplete} />
+        <Group key={d.date} id={`day-${d.date}`} heading={d.label} sub={d.label === d.dateText ? undefined : d.dateText} items={d.items} onComplete={onComplete} pending={pending} />
       ))}
     </div>
   )
@@ -87,7 +87,7 @@ function RangePanel({ range, items, today, onComplete }: { range: (typeof TODO_R
 export default function TodoPage() {
   const today = useToday()
   const data = useTodoItems(today)
-  const { complete, sheet } = useCompleter()
+  const { complete, pending, sheet } = useCompleter()
   const [range, setRange] = useState<TodoRange>('today')
 
   return (
@@ -112,7 +112,7 @@ export default function TodoPage() {
           </TabList>
           {TODO_RANGES.map((r) => (
             <TabPanel key={r.id} id={r.id}>
-              <RangePanel range={r} items={data.items} today={today} onComplete={complete} />
+              <RangePanel range={r} items={data.items} today={today} onComplete={complete} pending={pending} />
             </TabPanel>
           ))}
         </Tabs>

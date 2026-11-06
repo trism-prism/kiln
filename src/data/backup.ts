@@ -152,6 +152,7 @@ function backupSchema(now: number) {
       reviewCards: list(r.reviewCards),
       reviewLogs: list(r.reviewLogs),
       practiceLog: list(r.practiceLog),
+      practiceItems: list(r.practiceItems),
       settings: list(r.settings),
     }),
   })
