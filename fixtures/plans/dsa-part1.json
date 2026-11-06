@@ -1,0 +1,1156 @@
+{
+  "schemaVersion": 1,
+  "id": "dsa-zero-to-hero-python",
+  "title": "DSA Zero to Hero in Python",
+  "description": "Comprehensive 16-week DSA curriculum for Python developers preparing for tech interviews. Part 1 covers foundations, arrays, linked lists, stacks, queues, binary search, sliding window, hash tables, and binary trees.",
+  "goal": "Master core data structures, visual mental models, and solve foundational LeetCode Easy and Medium problems in Python.",
+  "subject": "Data Structures & Algorithms",
+  "level": "beginner",
+  "audience": "Software engineering intern and new-grad candidates learning DSA in Python.",
+  "schedulingMode": "auto",
+  "part": {
+    "index": 1,
+    "total": 3
+  },
+  "sources": [
+    {
+      "id": "fiset-course",
+      "title": "Data Structures Easy to Advanced Course (William Fiset)",
+      "kind": "video"
+    },
+    {
+      "id": "neetcode-roadmap",
+      "title": "NeetCode DSA Roadmap & Practice",
+      "url": "https://neetcode.io/roadmap",
+      "kind": "course"
+    },
+    {
+      "id": "tech-interview-handbook",
+      "title": "Tech Interview Handbook & Grind 75",
+      "url": "https://www.techinterviewhandbook.org/",
+      "kind": "article"
+    },
+    {
+      "id": "visualgo",
+      "title": "VisuAlgo Interactive Algorithm Visualizer",
+      "url": "https://visualgo.net/",
+      "kind": "visualizer"
+    }
+  ],
+  "dailyPractice": {
+    "source": "neetcode",
+    "perDay": 1,
+    "language": "python",
+    "startDifficulty": "easy",
+    "topicFollowsLessons": true
+  },
+  "modules": [
+    {
+      "id": "foundations-complexity",
+      "title": "Foundations, Big-O & Array Memory",
+      "order": 1,
+      "summary": "Asymptotic time and space complexity, static vs dynamic memory allocation, and array mechanics."
+    },
+    {
+      "id": "linked-lists-stacks",
+      "title": "Linked Lists, Stacks & Monotonic Patterns",
+      "order": 2,
+      "summary": "Pointer-based lists, LIFO/FIFO structures, call stacks, and monotonic stack patterns.",
+      "notBeforeDay": 8
+    },
+    {
+      "id": "searching-hashing",
+      "title": "Binary Search, Sliding Window & Hash Tables",
+      "order": 3,
+      "summary": "Logarithmic range reduction, two-pointer sliding windows, and hash collision resolution.",
+      "notBeforeDay": 22
+    },
+    {
+      "id": "trees-bst",
+      "title": "Binary Trees, BSTs & Traversals",
+      "order": 4,
+      "summary": "Tree hierarchy, DFS/BFS traversals, BST invariants, and binary tree problem patterns.",
+      "notBeforeDay": 36
+    }
+  ],
+  "tasks": [
+    {
+      "id": "big-o-time-complexity",
+      "moduleId": "foundations-complexity",
+      "order": 1,
+      "title": "Big-O Time Complexity Foundations",
+      "type": "lesson",
+      "estimatedMinutes": 60,
+      "priority": "core",
+      "topics": [
+        "arrays-hashing"
+      ],
+      "description": "Watch the asymptotic notation chapter of William Fiset's course. Learn definitions for O(1), O(log n), O(n), O(n log n), O(n^2), and O(2^n). Practice simplifying complexity expressions by dropping constant factors and keeping dominant terms.",
+      "objectives": [
+        "Explain asymptotic upper bounds using Big-O notation",
+        "Simplify complexity expressions using constant dropping and dominant term rules",
+        "Identify the time complexity of single loops, nested loops, and binary search operations"
+      ],
+      "keyConcepts": [
+        "Asymptotic analysis",
+        "Worst-case upper bound",
+        "Dominant terms",
+        "Constant factors"
+      ],
+      "tradeoffs": [
+        "Worst-case Big-O gives upper-bound guarantees vs average-case behavior which reflects typical inputs"
+      ],
+      "verificationQuestions": [
+        "Why do we drop constant multipliers like 3n into O(n)?",
+        "What is the time complexity of nested loops where the inner loop runs n times and outer loop runs n times?"
+      ],
+      "resources": [
+        {
+          "title": "Asymptotic Analysis & Big-O Notation",
+          "kind": "video",
+          "minutes": 35,
+          "sourceId": "fiset-course",
+          "section": "Abstract Data Types & Big-O"
+        }
+      ]
+    },
+    {
+      "id": "space-complexity-memory",
+      "moduleId": "foundations-complexity",
+      "order": 2,
+      "title": "Space Complexity & Array Memory Layouts",
+      "type": "lesson",
+      "estimatedMinutes": 50,
+      "priority": "core",
+      "topics": [
+        "arrays-hashing"
+      ],
+      "dependsOn": [
+        "big-o-time-complexity"
+      ],
+      "description": "Learn auxiliary space complexity and contiguous memory layout of static vs dynamic arrays. Understand how CPU cache locality benefits sequential array indexing and analyze the amortized O(1) time complexity of dynamic array capacity doubling.",
+      "objectives": [
+        "Differentiate auxiliary space complexity from total space complexity",
+        "Explain contiguous memory layout and indexing offset arithmetic",
+        "Derive the amortized O(1) time bound for dynamic array resizing"
+      ],
+      "keyConcepts": [
+        "Contiguous memory allocation",
+        "Cache locality",
+        "Amortized O(1) analysis",
+        "Capacity doubling"
+      ],
+      "tradeoffs": [
+        "Contiguous arrays provide O(1) random access via indexing but require contiguous memory reallocation during resizes"
+      ],
+      "verificationQuestions": [
+        "Why is index lookup in an array an O(1) operation?",
+        "What happens to memory when a dynamic array exceeds its capacity?"
+      ],
+      "resources": [
+        {
+          "title": "Static and Dynamic Arrays Chapter",
+          "kind": "video",
+          "minutes": 30,
+          "sourceId": "fiset-course",
+          "section": "Arrays & Dynamic Arrays"
+        },
+        {
+          "title": "VisuAlgo Array Module",
+          "url": "https://visualgo.net/",
+          "kind": "visualizer",
+          "minutes": 15,
+          "sourceId": "visualgo",
+          "section": "Array / Vector Section"
+        }
+      ]
+    },
+    {
+      "id": "two-sum",
+      "moduleId": "foundations-complexity",
+      "order": 3,
+      "title": "Two Sum",
+      "type": "practice",
+      "estimatedMinutes": 40,
+      "priority": "core",
+      "topics": [
+        "arrays-hashing"
+      ],
+      "dependsOn": [
+        "space-complexity-memory"
+      ],
+      "description": "Solve Two Sum in Python. Start with the O(n^2) brute force solution, then optimize to O(n) time using a Python dictionary (hash map) to store values and their indices in a single pass.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "two-sum",
+        "title": "Two Sum",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "id": "contains-duplicate",
+      "moduleId": "foundations-complexity",
+      "order": 4,
+      "title": "Contains Duplicate",
+      "type": "practice",
+      "estimatedMinutes": 30,
+      "priority": "recommended",
+      "topics": [
+        "arrays-hashing"
+      ],
+      "dependsOn": [
+        "space-complexity-memory"
+      ],
+      "description": "Solve Contains Duplicate in Python. Compare an O(n log n) sorting solution against an O(n) hash set solution in terms of time and space trade-offs.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "contains-duplicate",
+        "title": "Contains Duplicate",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "id": "valid-anagram",
+      "moduleId": "foundations-complexity",
+      "order": 5,
+      "title": "Valid Anagram",
+      "type": "practice",
+      "estimatedMinutes": 35,
+      "priority": "recommended",
+      "topics": [
+        "arrays-hashing"
+      ],
+      "dependsOn": [
+        "contains-duplicate"
+      ],
+      "description": "Solve Valid Anagram in Python. Implement character frequency counting using a hash map or fixed-size array of size 26.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "valid-anagram",
+        "title": "Valid Anagram",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "id": "valid-palindrome",
+      "moduleId": "foundations-complexity",
+      "order": 6,
+      "title": "Valid Palindrome",
+      "type": "practice",
+      "estimatedMinutes": 35,
+      "priority": "core",
+      "topics": [
+        "two-pointers"
+      ],
+      "dependsOn": [
+        "space-complexity-memory"
+      ],
+      "description": "Solve Valid Palindrome using the two-pointer technique in Python. Initialize left and right pointers at opposite ends of the string and converge toward the center while filtering alphanumeric characters.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "valid-palindrome",
+        "title": "Valid Palindrome",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "id": "two-sum-ii-input-array-is-sorted",
+      "moduleId": "foundations-complexity",
+      "order": 7,
+      "title": "Two Sum II - Input Array Is Sorted",
+      "type": "practice",
+      "estimatedMinutes": 45,
+      "priority": "recommended",
+      "topics": [
+        "two-pointers"
+      ],
+      "dependsOn": [
+        "valid-palindrome"
+      ],
+      "description": "Solve Two Sum II on a sorted array using left and right pointers to achieve O(n) time and O(1) space complexity.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "two-sum-ii-input-array-is-sorted",
+        "title": "Two Sum II - Input Array Is Sorted",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "linked-list-fundamentals",
+      "moduleId": "linked-lists-stacks",
+      "order": 1,
+      "title": "Singly and Doubly Linked List Mechanics",
+      "type": "lesson",
+      "estimatedMinutes": 65,
+      "priority": "core",
+      "topics": [
+        "linked-list"
+      ],
+      "dependsOn": [
+        "space-complexity-memory"
+      ],
+      "description": "Watch William Fiset's chapter on Singly and Doubly Linked Lists. Study node structures, head/tail pointer tracking, O(1) prepending/appending, and O(n) traversal. Implement a custom Singly Linked List class in Python.",
+      "objectives": [
+        "Implement a node class and linked list class with head and tail pointers",
+        "Compare time complexities of array vs linked list operations",
+        "Perform pointer reversals without losing reference to neighboring nodes"
+      ],
+      "keyConcepts": [
+        "Node pointer",
+        "Head and Tail",
+        "Singly vs Doubly Linked",
+        "Null pointer edge cases"
+      ],
+      "tradeoffs": [
+        "Linked lists allow O(1) insertions/deletions at known positions without memory shift but lack O(1) random access and incur pointer memory overhead"
+      ],
+      "verificationQuestions": [
+        "Why is search in a linked list O(n) while in a static array it is O(1) by index?",
+        "How does a doubly linked list enable O(1) deletion of a node given its reference?"
+      ],
+      "resources": [
+        {
+          "title": "Singly and Doubly Linked Lists Chapter",
+          "kind": "video",
+          "minutes": 40,
+          "sourceId": "fiset-course",
+          "section": "Linked Lists"
+        },
+        {
+          "title": "VisuAlgo Linked List Animation",
+          "url": "https://visualgo.net/",
+          "kind": "visualizer",
+          "minutes": 15,
+          "sourceId": "visualgo",
+          "section": "Linked List Module"
+        }
+      ]
+    },
+    {
+      "id": "reverse-linked-list",
+      "moduleId": "linked-lists-stacks",
+      "order": 2,
+      "title": "Reverse Linked List",
+      "type": "practice",
+      "estimatedMinutes": 40,
+      "priority": "core",
+      "topics": [
+        "linked-list"
+      ],
+      "dependsOn": [
+        "linked-list-fundamentals"
+      ],
+      "description": "Solve Reverse Linked List in Python both iteratively (using prev, curr, next pointers) and recursively. Verify space complexities O(1) iterative vs O(n) call stack recursive.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "reverse-linked-list",
+        "title": "Reverse Linked List",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "id": "merge-two-sorted-lists",
+      "moduleId": "linked-lists-stacks",
+      "order": 3,
+      "title": "Merge Two Sorted Lists",
+      "type": "practice",
+      "estimatedMinutes": 40,
+      "priority": "core",
+      "topics": [
+        "linked-list"
+      ],
+      "dependsOn": [
+        "linked-list-fundamentals"
+      ],
+      "description": "Solve Merge Two Sorted Lists in Python using a dummy head node and pointer comparison loops.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "merge-two-sorted-lists",
+        "title": "Merge Two Sorted Lists",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "id": "linked-list-cycle",
+      "moduleId": "linked-lists-stacks",
+      "order": 4,
+      "title": "Linked List Cycle",
+      "type": "practice",
+      "estimatedMinutes": 45,
+      "priority": "recommended",
+      "topics": [
+        "linked-list"
+      ],
+      "dependsOn": [
+        "linked-list-fundamentals"
+      ],
+      "description": "Solve Linked List Cycle using Floyd's Tortoise and Hare two-pointer algorithm in Python to achieve O(n) time and O(1) space.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "linked-list-cycle",
+        "title": "Linked List Cycle",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "id": "stacks-and-queues",
+      "moduleId": "linked-lists-stacks",
+      "order": 5,
+      "title": "Stacks & Queues (LIFO & FIFO Mechanics)",
+      "type": "lesson",
+      "estimatedMinutes": 60,
+      "priority": "core",
+      "topics": [
+        "stack"
+      ],
+      "dependsOn": [
+        "linked-list-fundamentals"
+      ],
+      "description": "Watch William Fiset's Stacks and Queues chapters. Study Last-In First-Out (LIFO) stack operations and First-In First-Out (FIFO) queue operations. Implement a stack using Python lists and a queue using collections.deque.",
+      "objectives": [
+        "Explain LIFO and FIFO invariants and their runtime complexities",
+        "Identify real-world stack applications including call stacks and expression parsing",
+        "Implement stacks and queues using Python collections"
+      ],
+      "keyConcepts": [
+        "LIFO stack invariant",
+        "FIFO queue invariant",
+        "Call stack",
+        "collections.deque"
+      ],
+      "tradeoffs": [
+        "Python list as a stack is fast for append/pop at end, but inefficient O(n) for queue pop(0) due to memory shifts; deque provides O(1) at both ends"
+      ],
+      "verificationQuestions": [
+        "Why should you use collections.deque instead of a standard list for queue operations in Python?",
+        "How does recursion rely on an implicit call stack?"
+      ],
+      "resources": [
+        {
+          "title": "Stacks and Queues Chapter",
+          "kind": "video",
+          "minutes": 35,
+          "sourceId": "fiset-course",
+          "section": "Stacks & Queues"
+        }
+      ]
+    },
+    {
+      "id": "valid-parentheses",
+      "moduleId": "linked-lists-stacks",
+      "order": 6,
+      "title": "Valid Parentheses",
+      "type": "practice",
+      "estimatedMinutes": 35,
+      "priority": "core",
+      "topics": [
+        "stack"
+      ],
+      "dependsOn": [
+        "stacks-and-queues"
+      ],
+      "description": "Solve Valid Parentheses using a stack and a hash map for matching closing brackets to opening brackets in Python.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "valid-parentheses",
+        "title": "Valid Parentheses",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "id": "min-stack",
+      "moduleId": "linked-lists-stacks",
+      "order": 7,
+      "title": "Min Stack",
+      "type": "practice",
+      "estimatedMinutes": 45,
+      "priority": "core",
+      "topics": [
+        "stack"
+      ],
+      "dependsOn": [
+        "valid-parentheses"
+      ],
+      "description": "Design a stack that supports getMin() in O(1) time using an auxiliary minimum stack to track minimum values alongside main stack pushes.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "min-stack",
+        "title": "Min Stack",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "evaluate-reverse-polish-notation",
+      "moduleId": "linked-lists-stacks",
+      "order": 8,
+      "title": "Evaluate Reverse Polish Notation",
+      "type": "practice",
+      "estimatedMinutes": 50,
+      "priority": "recommended",
+      "topics": [
+        "stack"
+      ],
+      "dependsOn": [
+        "valid-parentheses"
+      ],
+      "description": "Evaluate postfix mathematical expressions using a stack in Python, handling integer division truncation rules.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "evaluate-reverse-polish-notation",
+        "title": "Evaluate Reverse Polish Notation",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "daily-temperatures",
+      "moduleId": "linked-lists-stacks",
+      "order": 9,
+      "title": "Daily Temperatures",
+      "type": "practice",
+      "estimatedMinutes": 60,
+      "priority": "recommended",
+      "topics": [
+        "stack"
+      ],
+      "dependsOn": [
+        "min-stack"
+      ],
+      "description": "Solve Daily Temperatures using a monotonic decreasing stack in Python to find the number of days until a warmer temperature in O(n) time.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "daily-temperatures",
+        "title": "Daily Temperatures",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "binary-search-mechanics",
+      "moduleId": "searching-hashing",
+      "order": 1,
+      "title": "Binary Search Principles & Integer Overflow",
+      "type": "lesson",
+      "estimatedMinutes": 55,
+      "priority": "core",
+      "topics": [
+        "binary-search"
+      ],
+      "dependsOn": [
+        "space-complexity-memory"
+      ],
+      "description": "Study logarithmic range reduction algorithm for sorted arrays. Understand midpoint calculation mid = left + (right - left) // 2 to prevent overflow, and learn boundary adjustments for exact search vs lower/upper bound insertion points.",
+      "objectives": [
+        "Explain logarithmic time complexity O(log n) derivation",
+        "Implement bug-free binary search loops avoiding infinite loops",
+        "Identify sorted array properties that allow binary search applicability"
+      ],
+      "keyConcepts": [
+        "Search space reduction",
+        "Midpoint calculation",
+        "Inclusive vs exclusive boundaries",
+        "Logarithmic depth"
+      ],
+      "tradeoffs": [
+        "Binary search requires O(n log n) initial sorting overhead but yields fast O(log n) lookups across dynamic queries"
+      ],
+      "verificationQuestions": [
+        "Why does binary search require a sorted input array?",
+        "How do you update left and right pointers when target > nums[mid]?"
+      ],
+      "resources": [
+        {
+          "title": "NeetCode Binary Search Guide",
+          "kind": "course",
+          "minutes": 30,
+          "sourceId": "neetcode-roadmap",
+          "section": "Binary Search Module"
+        }
+      ]
+    },
+    {
+      "id": "binary-search",
+      "moduleId": "searching-hashing",
+      "order": 2,
+      "title": "Binary Search",
+      "type": "practice",
+      "estimatedMinutes": 35,
+      "priority": "core",
+      "topics": [
+        "binary-search"
+      ],
+      "dependsOn": [
+        "binary-search-mechanics"
+      ],
+      "description": "Solve standard Binary Search on a sorted array of integers in Python.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "binary-search",
+        "title": "Binary Search",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "id": "search-a-2d-matrix",
+      "moduleId": "searching-hashing",
+      "order": 3,
+      "title": "Search a 2D Matrix",
+      "type": "practice",
+      "estimatedMinutes": 45,
+      "priority": "recommended",
+      "topics": [
+        "binary-search"
+      ],
+      "dependsOn": [
+        "binary-search"
+      ],
+      "description": "Treat an m x n matrix as a virtual 1D sorted array and apply binary search using index mapping row = mid // n and col = mid % n.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "search-a-2d-matrix",
+        "title": "Search a 2D Matrix",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "search-in-rotated-sorted-array",
+      "moduleId": "searching-hashing",
+      "order": 4,
+      "title": "Search in Rotated Sorted Array",
+      "type": "practice",
+      "estimatedMinutes": 60,
+      "priority": "core",
+      "topics": [
+        "binary-search"
+      ],
+      "dependsOn": [
+        "binary-search"
+      ],
+      "description": "Apply modified binary search to identify which half of the rotated array is sorted and determine if the target lies within the sorted half.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "search-in-rotated-sorted-array",
+        "title": "Search in Rotated Sorted Array",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "sliding-window-fundamentals",
+      "moduleId": "searching-hashing",
+      "order": 5,
+      "title": "Sliding Window Pattern & Two Pointers",
+      "type": "lesson",
+      "estimatedMinutes": 55,
+      "priority": "core",
+      "topics": [
+        "sliding-window"
+      ],
+      "dependsOn": [
+        "valid-palindrome"
+      ],
+      "description": "Study fixed-size and dynamic-size sliding window techniques. Learn how maintaining running window counts converts naive O(n^2) subarray problems into optimal O(n) solutions.",
+      "objectives": [
+        "Identify contiguous subarray and substring problems suitable for sliding window",
+        "Implement fixed-size window movement",
+        "Implement dynamic window expansion and contraction based on condition bounds"
+      ],
+      "keyConcepts": [
+        "Contiguous window",
+        "Running total",
+        "Window expansion & contraction",
+        "State map tracking"
+      ],
+      "tradeoffs": [
+        "Sliding window reduces O(n^2) brute force nested loops to O(n) linear scans by tracking state changes at window boundaries"
+      ],
+      "verificationQuestions": [
+        "When should you shrink the left pointer of a sliding window?",
+        "What is the difference between fixed and variable size sliding windows?"
+      ],
+      "resources": [
+        {
+          "title": "NeetCode Sliding Window Chapter",
+          "kind": "course",
+          "minutes": 30,
+          "sourceId": "neetcode-roadmap",
+          "section": "Sliding Window"
+        }
+      ]
+    },
+    {
+      "id": "best-time-to-buy-and-sell-stock",
+      "moduleId": "searching-hashing",
+      "order": 6,
+      "title": "Best Time to Buy and Sell Stock",
+      "type": "practice",
+      "estimatedMinutes": 35,
+      "priority": "core",
+      "topics": [
+        "sliding-window"
+      ],
+      "dependsOn": [
+        "sliding-window-fundamentals"
+      ],
+      "description": "Track the minimum price seen so far and calculate maximum profit achievable in a single pass O(n) time.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "best-time-to-buy-and-sell-stock",
+        "title": "Best Time to Buy and Sell Stock",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "id": "longest-substring-without-repeating-characters",
+      "moduleId": "searching-hashing",
+      "order": 7,
+      "title": "Longest Substring Without Repeating Characters",
+      "type": "practice",
+      "estimatedMinutes": 55,
+      "priority": "core",
+      "topics": [
+        "sliding-window"
+      ],
+      "dependsOn": [
+        "sliding-window-fundamentals"
+      ],
+      "description": "Use a dynamic sliding window with a set or dictionary to maintain a substring of unique characters in O(n) time.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "longest-substring-without-repeating-characters",
+        "title": "Longest Substring Without Repeating Characters",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "hash-table-mechanics",
+      "moduleId": "searching-hashing",
+      "order": 8,
+      "title": "Hash Table Collisions & Load Factors",
+      "type": "lesson",
+      "estimatedMinutes": 60,
+      "priority": "core",
+      "topics": [
+        "arrays-hashing"
+      ],
+      "dependsOn": [
+        "space-complexity-memory"
+      ],
+      "description": "Watch William Fiset's Hash Tables chapter. Study hash functions, bucket arrays, separate chaining (linked lists), and open addressing (linear/quadratic probing). Understand load factor limits and table resizing.",
+      "objectives": [
+        "Explain separate chaining vs open addressing collision strategies",
+        "Define load factor alpha = n / k and how it triggers table expansion",
+        "Analyze average O(1) vs worst-case O(n) hash table operations"
+      ],
+      "keyConcepts": [
+        "Hash function",
+        "Separate chaining",
+        "Open addressing & probing",
+        "Load factor",
+        "Rehashing"
+      ],
+      "tradeoffs": [
+        "Separate chaining handles high load factors gracefully using extra pointer memory; open addressing keeps memory contiguous but degrades quickly if load factor exceeds 0.7"
+      ],
+      "verificationQuestions": [
+        "Why does a high load factor degrade hash table performance?",
+        "What is a hash collision and how does separate chaining resolve it?"
+      ],
+      "resources": [
+        {
+          "title": "Hash Tables Chapter",
+          "kind": "video",
+          "minutes": 35,
+          "sourceId": "fiset-course",
+          "section": "Hash Tables"
+        },
+        {
+          "title": "VisuAlgo Hash Table Module",
+          "url": "https://visualgo.net/",
+          "kind": "visualizer",
+          "minutes": 15,
+          "sourceId": "visualgo",
+          "section": "Hash Table Animations"
+        }
+      ]
+    },
+    {
+      "id": "group-anagrams",
+      "moduleId": "searching-hashing",
+      "order": 9,
+      "title": "Group Anagrams",
+      "type": "practice",
+      "estimatedMinutes": 50,
+      "priority": "core",
+      "topics": [
+        "arrays-hashing"
+      ],
+      "dependsOn": [
+        "hash-table-mechanics"
+      ],
+      "description": "Group words by their character count tuple key using a Python collections.defaultdict in O(n * k) time.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "group-anagrams",
+        "title": "Group Anagrams",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "top-k-frequent-elements",
+      "moduleId": "searching-hashing",
+      "order": 10,
+      "title": "Top K Frequent Elements",
+      "type": "practice",
+      "estimatedMinutes": 55,
+      "priority": "recommended",
+      "topics": [
+        "arrays-hashing"
+      ],
+      "dependsOn": [
+        "group-anagrams"
+      ],
+      "description": "Count element frequencies using a hash map, then use Bucket Sort array indices to collect top K frequent numbers in O(n) time.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "top-k-frequent-elements",
+        "title": "Top K Frequent Elements",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "longest-consecutive-sequence",
+      "moduleId": "searching-hashing",
+      "order": 11,
+      "title": "Longest Consecutive Sequence",
+      "type": "practice",
+      "estimatedMinutes": 60,
+      "priority": "recommended",
+      "topics": [
+        "arrays-hashing"
+      ],
+      "dependsOn": [
+        "hash-table-mechanics"
+      ],
+      "description": "Convert array to a hash set, then identify sequence starts (num - 1 not in set) to build consecutive sequences in O(n) overall time.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "longest-consecutive-sequence",
+        "title": "Longest Consecutive Sequence",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "binary-trees-and-dfs",
+      "moduleId": "trees-bst",
+      "order": 1,
+      "title": "Binary Tree Structure & DFS Traversals",
+      "type": "lesson",
+      "estimatedMinutes": 65,
+      "priority": "core",
+      "topics": [
+        "trees"
+      ],
+      "dependsOn": [
+        "linked-list-fundamentals"
+      ],
+      "description": "Watch William Fiset's Binary Trees chapter. Learn tree terminology (root, leaf, height, depth) and DFS recursive traversals: Pre-order (Root, Left, Right), In-order (Left, Root, Right), and Post-order (Left, Right, Root).",
+      "objectives": [
+        "Define node height, depth, and binary tree invariants",
+        "Implement recursive Pre-order, In-order, and Post-order traversals in Python",
+        "Recognize how In-order traversal visits nodes of a BST in sorted order"
+      ],
+      "keyConcepts": [
+        "Tree root & leaves",
+        "Pre-order traversal",
+        "In-order traversal",
+        "Post-order traversal",
+        "Call stack recursion"
+      ],
+      "tradeoffs": [
+        "Recursive DFS traversals are intuitive and use implicit call stack memory O(h), but risk StackOverflow on deep skewed trees"
+      ],
+      "verificationQuestions": [
+        "In what order does an In-order traversal visit nodes in a Binary Search Tree?",
+        "What is the space complexity of tree recursion on a completely skewed tree vs a balanced tree?"
+      ],
+      "resources": [
+        {
+          "title": "Binary Trees and BST Chapter",
+          "kind": "video",
+          "minutes": 40,
+          "sourceId": "fiset-course",
+          "section": "Binary Trees"
+        },
+        {
+          "title": "VisuAlgo BST & Tree Animations",
+          "url": "https://visualgo.net/",
+          "kind": "visualizer",
+          "minutes": 15,
+          "sourceId": "visualgo",
+          "section": "BST Traversals"
+        }
+      ]
+    },
+    {
+      "id": "invert-binary-tree",
+      "moduleId": "trees-bst",
+      "order": 2,
+      "title": "Invert Binary Tree",
+      "type": "practice",
+      "estimatedMinutes": 35,
+      "priority": "core",
+      "topics": [
+        "trees"
+      ],
+      "dependsOn": [
+        "binary-trees-and-dfs"
+      ],
+      "description": "Swap left and right subtrees recursively for every node in a binary tree in Python.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "invert-binary-tree",
+        "title": "Invert Binary Tree",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "id": "maximum-depth-of-binary-tree",
+      "moduleId": "trees-bst",
+      "order": 3,
+      "title": "Maximum Depth of Binary Tree",
+      "type": "practice",
+      "estimatedMinutes": 35,
+      "priority": "core",
+      "topics": [
+        "trees"
+      ],
+      "dependsOn": [
+        "binary-trees-and-dfs"
+      ],
+      "description": "Calculate maximum depth of a binary tree using post-order DFS: 1 + max(depth(left), depth(right)).",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "maximum-depth-of-binary-tree",
+        "title": "Maximum Depth of Binary Tree",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "id": "diameter-of-binary-tree",
+      "moduleId": "trees-bst",
+      "order": 4,
+      "title": "Diameter of Binary Tree",
+      "type": "practice",
+      "estimatedMinutes": 45,
+      "priority": "recommended",
+      "topics": [
+        "trees"
+      ],
+      "dependsOn": [
+        "maximum-depth-of-binary-tree"
+      ],
+      "description": "Compute the longest path between any two nodes by updating a global maximum left_height + right_height during DFS traversal.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "diameter-of-binary-tree",
+        "title": "Diameter of Binary Tree",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "id": "balanced-binary-tree",
+      "moduleId": "trees-bst",
+      "order": 5,
+      "title": "Balanced Binary Tree",
+      "type": "practice",
+      "estimatedMinutes": 45,
+      "priority": "recommended",
+      "topics": [
+        "trees"
+      ],
+      "dependsOn": [
+        "maximum-depth-of-binary-tree"
+      ],
+      "description": "Check height balance condition abs(left - right) <= 1 bottom-up in O(n) time by returning -1 on imbalance.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "balanced-binary-tree",
+        "title": "Balanced Binary Tree",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "id": "bfs-level-order-traversal",
+      "moduleId": "trees-bst",
+      "order": 6,
+      "title": "BFS Level-Order Traversal Mechanics",
+      "type": "lesson",
+      "estimatedMinutes": 55,
+      "priority": "core",
+      "topics": [
+        "trees"
+      ],
+      "dependsOn": [
+        "stacks-and-queues",
+        "binary-trees-and-dfs"
+      ],
+      "description": "Learn Breadth-First Search (BFS) level-order traversal on trees using a FIFO queue (collections.deque). Track level sizes during iterations to group nodes level by level.",
+      "objectives": [
+        "Explain queue-based level order traversal algorithm",
+        "Process tree nodes level by level using queue snapshot sizes",
+        "Contrast memory requirements of BFS vs DFS on wide vs deep trees"
+      ],
+      "keyConcepts": [
+        "Breadth-First Search",
+        "FIFO Queue traversal",
+        "Level snapshot",
+        "Queue memory bound"
+      ],
+      "tradeoffs": [
+        "BFS requires O(w) queue space bounded by maximum tree width, whereas DFS requires O(h) space bounded by tree height"
+      ],
+      "verificationQuestions": [
+        "How do you ensure nodes from different levels are separated into distinct lists during level-order traversal?",
+        "When would BFS be preferable to DFS on a tree structure?"
+      ],
+      "resources": [
+        {
+          "title": "Tree Traversals & BFS",
+          "kind": "course",
+          "minutes": 30,
+          "sourceId": "neetcode-roadmap",
+          "section": "Trees & BFS"
+        }
+      ]
+    },
+    {
+      "id": "binary-tree-level-order-traversal",
+      "moduleId": "trees-bst",
+      "order": 7,
+      "title": "Binary Tree Level Order Traversal",
+      "type": "practice",
+      "estimatedMinutes": 45,
+      "priority": "core",
+      "topics": [
+        "trees"
+      ],
+      "dependsOn": [
+        "bfs-level-order-traversal"
+      ],
+      "description": "Implement level-order traversal using collections.deque in Python to return a list of values grouped level by level.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "binary-tree-level-order-traversal",
+        "title": "Binary Tree Level Order Traversal",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "bst-invariants-and-search",
+      "moduleId": "trees-bst",
+      "order": 8,
+      "title": "BST Invariants, Search & Validation",
+      "type": "lesson",
+      "estimatedMinutes": 60,
+      "priority": "core",
+      "topics": [
+        "trees"
+      ],
+      "dependsOn": [
+        "binary-trees-and-dfs"
+      ],
+      "description": "Study Binary Search Tree property: all_left < node.val < all_right. Learn range-based validation [min_val, max_val] and logarithmic O(log n) search and insertion on balanced BSTs.",
+      "objectives": [
+        "State the global BST invariant across subtrees",
+        "Validate BST correctness using range boundaries min_val and max_val",
+        "Explain why naive validation (node.left < node < node.right) fails for invalid BSTs"
+      ],
+      "keyConcepts": [
+        "BST invariant",
+        "Subtree bounds",
+        "In-order BST property",
+        "Logarithmic search"
+      ],
+      "tradeoffs": [
+        "Balanced BSTs offer O(log n) search, insertion, and deletion, but degenerate to O(n) linked lists if keys are inserted in sorted order without rebalancing"
+      ],
+      "verificationQuestions": [
+        "Why is checking left.val < root.val < right.val insufficient to validate a BST?",
+        "What is the in-order traversal result of a valid BST?"
+      ],
+      "resources": [
+        {
+          "title": "Binary Search Trees Chapter",
+          "kind": "video",
+          "minutes": 35,
+          "sourceId": "fiset-course",
+          "section": "Binary Search Trees"
+        }
+      ]
+    },
+    {
+      "id": "validate-binary-search-tree",
+      "moduleId": "trees-bst",
+      "order": 9,
+      "title": "Validate Binary Search Tree",
+      "type": "practice",
+      "estimatedMinutes": 55,
+      "priority": "core",
+      "topics": [
+        "trees"
+      ],
+      "dependsOn": [
+        "bst-invariants-and-search"
+      ],
+      "description": "Validate BST property using DFS with min and max bounds passed down recursion branches in Python.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "validate-binary-search-tree",
+        "title": "Validate Binary Search Tree",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "lowest-common-ancestor-of-a-binary-search-tree",
+      "moduleId": "trees-bst",
+      "order": 10,
+      "title": "Lowest Common Ancestor of a Binary Search Tree",
+      "type": "practice",
+      "estimatedMinutes": 45,
+      "priority": "core",
+      "topics": [
+        "trees"
+      ],
+      "dependsOn": [
+        "bst-invariants-and-search"
+      ],
+      "description": "Find LCA in a BST by leveraging node values: if both p and q are smaller than root, move left; if larger, move right; otherwise root is LCA.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "lowest-common-ancestor-of-a-binary-search-tree",
+        "title": "Lowest Common Ancestor of a Binary Search Tree",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "kth-smallest-element-in-a-bst",
+      "moduleId": "trees-bst",
+      "order": 11,
+      "title": "Kth Smallest Element in a BST",
+      "type": "practice",
+      "estimatedMinutes": 50,
+      "priority": "recommended",
+      "topics": [
+        "trees"
+      ],
+      "dependsOn": [
+        "validate-binary-search-tree"
+      ],
+      "description": "Perform an iterative or recursive In-order traversal on a BST to find the K-th visited element in O(k) time.",
+      "practice": {
+        "provider": "leetcode",
+        "slug": "kth-smallest-element-in-a-bst",
+        "title": "Kth Smallest Element in a BST",
+        "difficulty": "medium"
+      }
+    }
+  ]
+}
