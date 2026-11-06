@@ -16,7 +16,7 @@ export default function ImportPage() {
         <Tabs className="data-focus-visible:outline-none">
           <TabList aria-label="How to add a plan">
             <Tab id="import">Import a plan</Tab>
-            <Tab id="build">Build by hand</Tab>
+            <Tab id="build">Quick add</Tab>
           </TabList>
           <TabPanel id="import" shouldForceMount>
             <div className={keep}>

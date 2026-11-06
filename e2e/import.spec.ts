@@ -145,35 +145,39 @@ test('Paste from clipboard shows a hint when the browser refuses', async ({ page
   await expect(page.getByLabel('Plan text')).toBeFocused()
 })
 
-test('builds a plan by hand and imports it', async ({ page }) => {
-  await page.goto('/import')
-  await page.getByRole('tab', { name: 'Build by hand' }).click()
-  await page.getByLabel('Plan title').fill('Hand made')
-  await page.getByLabel('Module 1 title').fill('Basics')
-  const task = page.getByRole('group', { name: 'Task 1.1' })
-  await task.getByLabel('Title').fill('Read chapter one')
-  await task.getByLabel('Minutes').fill('45')
-  await page.getByRole('button', { name: 'Add task to module 1' }).click()
-  const second = page.getByRole('group', { name: 'Task 1.2' })
-  await second.getByLabel('Title').fill('Two Sum')
-  await second.getByLabel('Minutes').fill('30')
-  await second.getByRole('button', { name: /Type/ }).click()
-  await page.getByRole('option', { name: 'practice' }).click()
-  await second.getByLabel('LeetCode problem (optional)').fill('two-sum')
-  await page.getByRole('button', { name: 'Review plan' }).click()
-  await expect(page.getByRole('heading', { name: 'Preview' })).toBeVisible()
-  await expect(page.getByLabel('Plan id')).toHaveValue('hand-made')
-  await importIt(page)
-})
+const QUICK_ADD = [
+  '# Cells',
+  'Read chapter 1 45m',
+  'Watch the cell video https://www.youtube.com/watch?v=abc 20m',
+  'Flashcards https://quizlet.com/123/cells ?',
+  'Practice quiz 1h',
+  '## Genetics',
+  'Read chapter 2 1h30m !',
+  'Punnett squares 40m',
+  'Lab write-up',
+  '# Exam prep',
+  'Mock exam 1h30m',
+  'Final exam tomorrow',
+].join('\n')
 
-test('the builder reports a missing duration', async ({ page }) => {
+test('quick add: 12 lines become a plan that imports', async ({ page }) => {
   await page.goto('/import')
-  await page.getByRole('tab', { name: 'Build by hand' }).click()
-  await page.getByLabel('Plan title').fill('Hand made')
-  await page.getByLabel('Module 1 title').fill('Basics')
-  await page.getByRole('group', { name: 'Task 1.1' }).getByLabel('Title').fill('Read')
-  await page.getByRole('button', { name: 'Review plan' }).click()
-  await expect(page.getByText(/^tasks\[0\] "Read": estimatedMinutes is required$/)).toBeVisible()
+  await page.getByRole('tab', { name: 'Quick add' }).click()
+  const panel = page.getByRole('tabpanel', { name: 'Quick add' })
+  await panel.getByRole('textbox', { name: 'Plan title' }).fill('Biology')
+  await panel.getByRole('textbox', { name: 'Tasks, one per line' }).fill(QUICK_ADD)
+  await expect(panel.getByRole('textbox', { name: /^Task \d+ title$/ })).toHaveCount(9)
+  await expect(panel.getByRole('textbox', { name: 'Task 2 links' })).toHaveValue('https://www.youtube.com/watch?v=abc')
+  await expect(panel.getByRole('combobox', { name: 'Task 3 priority' })).toHaveValue('optional')
+  await expect(panel.getByRole('textbox', { name: 'Task 7 minutes' })).toHaveValue('30')
+  // Fix two rows in the preview: the exams become an exam and a milestone.
+  await panel.getByRole('combobox', { name: 'Task 8 type' }).selectOption('assessment')
+  await panel.getByRole('combobox', { name: 'Task 9 type' }).selectOption('milestone')
+  await panel.getByRole('textbox', { name: 'Task 9 minutes' }).fill('0')
+  await panel.getByRole('button', { name: 'Review plan' }).click()
+  await expect(page.getByRole('heading', { name: 'Preview' })).toBeVisible()
+  await expect(page.getByLabel('Plan id')).toHaveValue('biology')
+  await importIt(page)
 })
 
 test('a changed study budget persists and offers a reschedule', async ({ page }) => {
@@ -268,10 +272,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await check(page)
     })
 
-    test('/import, build by hand', async ({ page }) => {
+    test('/import, quick add', async ({ page }) => {
       await page.goto('/import')
-      await page.getByRole('tab', { name: 'Build by hand' }).click()
-      await page.getByLabel('Module 1 title').fill('Basics')
+      await page.getByRole('tab', { name: 'Quick add' }).click()
+      await page.getByRole('tabpanel', { name: 'Quick add' }).getByRole('textbox', { name: 'Tasks, one per line' }).fill('Read 45m')
       await page.getByRole('button', { name: 'Review plan' }).click()
       await expect(page.getByText(/errors? blocks?/)).toBeVisible()
       await check(page)

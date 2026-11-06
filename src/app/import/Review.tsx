@@ -60,7 +60,10 @@ export function Review({ input }: { input: Input }) {
   const today = toLocalISODate(new Date())
   // Onboarding remembers the start date the person chose; it is the default while it is still today or later.
   const chosen0 = useLiveQuery(() => db.meta.get(META_START_DATE))?.value
-  const tomorrow = chosen0 !== undefined && /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(chosen0) && chosen0 >= today ? chosen0 : addDaysISO(today, 1)
+  const chosenStart = chosen0 !== undefined && /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(chosen0) && chosen0 >= today ? chosen0 : addDaysISO(today, 1)
+  // A built plan with a task due before that day starts on that day instead (a task due today starts today).
+  const firstDue = input.kind === 'build' ? input.draft.modules.flatMap((m) => m.tasks.map((t) => t.due)).filter((d) => d >= today).sort()[0] : undefined
+  const tomorrow = firstDue !== undefined && firstDue < chosenStart ? firstDue : chosenStart
   const [title, setTitle] = useState('')
   const [id, setId] = useState<string | null>(null)
   const [goal, setGoal] = useState('')
