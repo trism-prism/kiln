@@ -9,7 +9,7 @@ Plan: docs/plan.md.
 |---|---|---|
 | 1 | Repo + setup | done (bb8ed9e) |
 | 2 | Plan format + prompts | done (09cc8d0) |
-| 3 | Data layer | pending |
+| 3 | Data layer | done (PR pending) |
 | 4 | Scheduler + LC ramp | pending |
 | 5 | Mastery | pending |
 | 6 | Design system + shell | pending |
@@ -22,10 +22,10 @@ Plan: docs/plan.md.
 | 13 | Production | pending |
 
 ## Current branch
-main. Stage 2 merged from `feat/plan-format` (PR 2, 09cc8d0).
+`feat/data-layer` (stage 3, PR pending). Stage 2 merged from `feat/plan-format` (PR 2, 09cc8d0).
 
 ## Next exact step
-User checkpoint: regenerate the DSA and new System Design plans in Gemini with the prompts in `docs/prompts/`, then import-check them with `validatePlan`. Then start stage 3: data layer.
+Stage 4: scheduler + LC ramp (`feat/scheduler`).
 
 ## Open questions
 - Domain name (user buys, ~$10-12/yr).
