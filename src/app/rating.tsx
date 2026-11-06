@@ -98,7 +98,7 @@ export async function complete(item: Completable, rating: RatingName) {
   const done = await run(item, rating)
   if (!done) return
   toasts.add(
-    { title: done.text, action: { label: 'Undo', onPress: () => void done.r.undo().catch(fail) } },
+    { title: done.text, action: { label: 'Undo', onPress: () => void done.r.undo().then((ok) => ok || toasts.add({ title: 'Not undone', description: 'It was changed after that.' }, { timeout: 6000 })).catch(fail) } },
     { timeout: 8000 },
   )
 }

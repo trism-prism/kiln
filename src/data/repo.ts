@@ -108,20 +108,27 @@ export async function softDeletePlan(db: KilnDB, planId: string): Promise<void> 
 
 /**
  * Undo for a multi-record write: puts the earlier copies back (with a fresh updatedAt, so the undo
- * also wins a sync) and tombstones the records the write created. All or nothing.
+ * also wins a sync) and tombstones the records the write created. All or nothing. Each restore names
+ * the `updatedAt` the write left on the record; if the record changed since (another rating, a pin,
+ * a sync), nothing is undone and this returns false, so an old undo cannot overwrite newer work.
  */
 export async function revertWrite(
   db: KilnDB,
-  change: { restore?: [Exclude<TableName, 'settings'>, Base][]; remove?: [Exclude<TableName, 'settings'>, string][] },
-): Promise<void> {
+  change: { restore?: [Exclude<TableName, 'settings'>, Base, number][]; remove?: [Exclude<TableName, 'settings'>, string][] },
+): Promise<boolean> {
   const restore = change.restore ?? []
   const remove = change.remove ?? []
   const deviceId = await getDeviceId(db)
   const now = Date.now()
   const names = [...new Set([...restore, ...remove].map(([n]) => n))]
-  await db.transaction('rw', names.map((n) => db.table(n)), async () => {
+  return db.transaction('rw', names.map((n) => db.table(n)), async () => {
+    for (const [n, rec, after] of restore) {
+      const cur = (await db.table(n).get(rec.id)) as Base | undefined
+      if (!cur || cur.updatedAt !== after) return false
+    }
     for (const [n, rec] of restore) await db.table(n).put({ ...rec, updatedAt: now, deviceId })
     for (const [n, id] of remove) await softDelete(db, n, id)
+    return true
   })
 }
 

@@ -3,7 +3,7 @@ import { addDaysISO } from '../lib/date'
 import { fixtureTexts, validateParts } from './fixtures'
 import { brushUp, completeTask, dueCards } from './mastery'
 import { completePractice } from './practice'
-import { importPlan, listTasks, softDeletePlan } from './repo'
+import { importPlan, listTasks, softDeletePlan, updateRecord } from './repo'
 import { scheduleAll } from './schedule'
 import { newDb } from './test-db'
 
@@ -71,6 +71,15 @@ describe('daily practice persistence', () => {
     await completePractice(db, first.id, 'good', NOON, NO_FUZZ)
     await scheduleAll(db, TODAY)
     expect((await live(db)).filter((i) => i.date === TODAY)).toHaveLength(1)
+  })
+
+  it('removes the open problems of a plan that no longer generates any', async () => {
+    const { db, planId } = await seeded()
+    const done = (await live(db)).find((i) => i.date === TODAY)!
+    await completePractice(db, done.id, 'good', NOON, NO_FUZZ)
+    await updateRecord(db, 'plans', planId, { dailyPractice: undefined })
+    await scheduleAll(db, TODAY)
+    expect((await live(db)).map((i) => i.id)).toEqual([done.id])
   })
 
   it('tombstones a deleted plan\'s items', async () => {
@@ -144,5 +153,17 @@ describe('completeTask undo', () => {
     await b.undo()
     expect(await db.reviewCards.get(a.card!.id)).toMatchObject({ reps: 1, due: a.card!.due, deleted: false })
     expect(card1.id).not.toBe(a.card!.id)
+  })
+
+  it('does not undo over a later change: rate again, then undo the first completion', async () => {
+    const { db, planId } = await seeded()
+    const lesson = (await listTasks(db, planId)).find((t) => t.type === 'lesson')!
+    const first = await completeTask(db, lesson.id, 'good', NOON, NO_FUZZ)
+    const second = await completeTask(db, lesson.id, 'easy', NOON + 60_000, NO_FUZZ)
+    expect(await first.undo()).toBe(false)
+    expect(await db.reviewCards.get(first.card!.id)).toMatchObject({ reps: 2 })
+    expect((await db.reviewLogs.toArray()).filter((l) => !l.deleted)).toHaveLength(2)
+    expect(await second.undo()).toBe(true)
+    expect(await db.reviewCards.get(first.card!.id)).toMatchObject({ reps: 1 })
   })
 })

@@ -108,6 +108,6 @@ async function run(db: KilnDB, deviceId: string, today: string, opts: ScheduleAl
     if (next.scheduledDate !== t.scheduledDate || next.backlog !== t.backlog) changed.push({ ...next, updatedAt: now, deviceId })
   }
   await db.tasks.bulkPut(changed)
-  await persistPractice(db, deviceId, today, out.practice, plans.map((p) => p.id), opts.mode === 'reschedule')
+  await persistPractice(db, deviceId, today, out.practice, plans.map((p) => ({ id: p.id, generates: p.dailyPractice?.source === 'neetcode' })), opts.mode === 'reschedule')
   return out
 }

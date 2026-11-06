@@ -9,6 +9,15 @@ function fail(e: unknown) {
   toasts.add({ title: 'Could not save', description: e instanceof Error ? e.message : String(e) }, { timeout: 8000 })
 }
 
+/** Runs a write and reports a failure in a toast instead of losing it. */
+export async function safely(fn: () => Promise<unknown>): Promise<void> {
+  try {
+    await fn()
+  } catch (e) {
+    fail(e)
+  }
+}
+
 /** Moves overdue open tasks (all plans share the daily budget) to the next days with room. */
 export async function rescheduleOverdue(): Promise<void> {
   try {

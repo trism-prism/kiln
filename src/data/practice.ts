@@ -21,7 +21,7 @@ const key = (r: { date: string; slug: string }) => `${r.date}|${r.slug}`
 export const leetcodeUrl = (slug: string) => `https://leetcode.com/problems/${slug}/`
 
 /**
- * Stores the scheduler's generated problems for `planIds`. Call inside a transaction that includes
+ * Stores the scheduler's generated problems for `plans`. Call inside a transaction that includes
  * practiceItems. Rules:
  * - Finished items and items before `today` are never touched (except open past ones when
  *   `dropOverdue` is set, which a reschedule uses: it generates fresh problems from today).
@@ -36,17 +36,18 @@ export async function persistPractice(
   deviceId: string,
   today: string,
   generated: GeneratedPractice[],
-  planIds: string[],
+  plans: { id: string; generates: boolean }[],
   dropOverdue: boolean,
 ): Promise<void> {
   const stamp = { updatedAt: Date.now(), deviceId }
   const all = (await db.practiceItems.toArray()).filter((r) => !r.deleted)
   const out: PracticeItemRecord[] = []
-  for (const planId of planIds) {
+  for (const { id: planId, generates } of plans) {
     const mine = all.filter((r) => r.planId === planId)
     const wanted = generated.filter((g) => g.planId === planId && g.date >= today)
     const wantedKeys = new Set(wanted.map(key))
-    const reach = wanted.reduce((m, g) => (g.date > m ? g.date : m), '')
+    // A plan with no generated problems at all (daily practice removed or not from NeetCode) keeps none.
+    const reach = generates ? wanted.reduce((m, g) => (g.date > m ? g.date : m), '') : '9999-12-31'
     const kept = new Set<string>()
     const hasToday = mine.some((r) => r.date === today)
     for (const r of mine) {
@@ -82,7 +83,7 @@ export interface PracticeResult {
   card: ReviewCardRecord
   log: ReviewLogRecord
   /** Puts the item, the practice log row and the card back as they were. */
-  undo: () => Promise<void>
+  undo: () => Promise<boolean>
 }
 
 /**
@@ -134,7 +135,7 @@ export async function completePractice(
     }
     const undo = () =>
       revertWrite(db, {
-        restore: existing ? [['practiceItems', before], ['reviewCards', existing]] : [['practiceItems', before]],
+        restore: existing ? [['practiceItems', before, item.updatedAt], ['reviewCards', existing, rec.updatedAt]] : [['practiceItems', before, item.updatedAt]],
         remove: [
           ['reviewLogs', logRec.id],
           ...(existing ? [] : [['reviewCards', rec.id] as ['reviewCards', string]]),

@@ -36,8 +36,8 @@ export interface CompleteResult {
   /** Undefined when the task type gets no review card (see cardMinutes). */
   card?: ReviewCardRecord
   log?: ReviewLogRecord
-  /** Puts everything back as it was before this call (task state, card, review log). */
-  undo: () => Promise<void>
+  /** Puts everything back as it was before this call (task state, card, review log). False, and nothing changes, if a record was changed since. */
+  undo: () => Promise<boolean>
 }
 
 /**
@@ -60,7 +60,7 @@ export async function completeTask(
     const before = await db.tasks.get(taskId)
     const task = await setTaskStatus(db, taskId, 'done')
     if (!task || !before) throw new Error(`Task ${taskId} not found`)
-    const restoreTask: ['tasks', TaskRecord] = ['tasks', before]
+    const restoreTask: ['tasks', TaskRecord, number] = ['tasks', before, task.updatedAt]
     const minutes = cardMinutes(task)
     if (minutes === undefined) return { task, undo: () => revertWrite(db, { restore: [restoreTask] }) }
 
@@ -82,7 +82,7 @@ export async function completeTask(
     const logRec = await logReview(db, rec.id, log)
     const undo = () =>
       revertWrite(db, {
-        restore: existing ? [restoreTask, ['reviewCards', existing]] : [restoreTask],
+        restore: existing ? [restoreTask, ['reviewCards', existing, rec.updatedAt]] : [restoreTask],
         remove: existing ? [['reviewLogs', logRec.id]] : [['reviewLogs', logRec.id], ['reviewCards', rec.id]],
       })
     return { task, card: rec, log: logRec, undo }
@@ -96,7 +96,7 @@ export async function reviewCard(
   rating: RatingName,
   now: number,
   opts: SchedulerOptions = APP_OPTS,
-): Promise<{ card: ReviewCardRecord; log: ReviewLogRecord; undo: () => Promise<void> }> {
+): Promise<{ card: ReviewCardRecord; log: ReviewLogRecord; undo: () => Promise<boolean> }> {
   await getDeviceId(db)
   return db.transaction('rw', db.reviewCards, db.reviewLogs, async () => {
     const old = await db.reviewCards.get(cardId)
@@ -104,7 +104,7 @@ export async function reviewCard(
     const { card, log } = rate(old, rating, now, opts)
     const rec = (await updateRecord(db, 'reviewCards', cardId, card))!
     const logRec = await logReview(db, cardId, log)
-    return { card: rec, log: logRec, undo: () => revertWrite(db, { restore: [['reviewCards', old]], remove: [['reviewLogs', logRec.id]] }) }
+    return { card: rec, log: logRec, undo: () => revertWrite(db, { restore: [['reviewCards', old, rec.updatedAt]], remove: [['reviewLogs', logRec.id]] }) }
   })
 }
 

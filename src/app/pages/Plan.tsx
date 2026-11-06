@@ -6,7 +6,7 @@ import { Button, Link } from '../../ui/button'
 import { ListBoxItem, Select, Switch, TextField } from '../../ui/form'
 import { Sheet, toasts } from '../../ui/overlay'
 import { Badge, Card, EmptyState, ProgressBar, Skeleton } from '../../ui/surface'
-import { rescheduleOverdue, scheduleBacklogAgain } from '../actions'
+import { rescheduleOverdue, safely, scheduleBacklogAgain } from '../actions'
 import { Page } from '../Page'
 import { minutesText, TitleLink } from '../parts'
 import { usePlanDetail, useToday, type PlanDetail } from '../queries'
@@ -65,9 +65,9 @@ function Modules({ detail, today }: { detail: PlanDetail; today: string }) {
 function Settings({ detail }: { detail: PlanDetail }) {
   const { plan } = detail
   const [deadline, setDeadline] = useState(plan.deadline ?? '')
+  // A half-typed date reads as empty, so only a complete date is saved; Clear removes the deadline.
   const commitDeadline = () => {
-    if (deadline === (plan.deadline ?? '')) return
-    if (deadline === '' || isRealISODate(deadline)) void updateRecord(db, 'plans', plan.id, { deadline: deadline || undefined })
+    if (deadline !== plan.deadline && isRealISODate(deadline)) void safely(() => updateRecord(db, 'plans', plan.id, { deadline: deadline }))
   }
   return (
     <Card className="grid h-fit gap-5">
@@ -76,7 +76,7 @@ function Settings({ detail }: { detail: PlanDetail }) {
         label="Weight"
         description="How much of each day this plan gets compared with the others (1 to 5)."
         selectedKey={String(plan.weight)}
-        onSelectionChange={(k) => void updateRecord(db, 'plans', plan.id, { weight: Number(k) })}
+        onSelectionChange={(k) => void safely(() => updateRecord(db, 'plans', plan.id, { weight: Number(k) }))}
       >
         {['1', '2', '3', '4', '5'].map((w) => (
           <ListBoxItem key={w} id={w}>
@@ -86,10 +86,12 @@ function Settings({ detail }: { detail: PlanDetail }) {
       </Select>
       <Switch
         isSelected={!!plan.skipOptional}
-        onChange={async (on) => {
-          await updateRecord(db, 'plans', plan.id, { skipOptional: on })
-          await scheduleAll(db, toLocalISODate(new Date()))
-        }}
+        onChange={(on) =>
+          void safely(async () => {
+            await updateRecord(db, 'plans', plan.id, { skipOptional: on })
+            await scheduleAll(db, toLocalISODate(new Date()))
+          })
+        }
       >
         Skip optional work
       </Switch>
@@ -101,6 +103,18 @@ function Settings({ detail }: { detail: PlanDetail }) {
         onBlur={commitDeadline}
         description="Optional. The scheduler warns when the projected finish is later."
       />
+      {plan.deadline && (
+        <Button
+          variant="quiet"
+          className="w-fit"
+          onPress={() => {
+            setDeadline('')
+            void safely(() => updateRecord(db, 'plans', plan.id, { deadline: undefined }))
+          }}
+        >
+          Clear deadline
+        </Button>
+      )}
       <p className="text-sm text-text-muted">Weight and deadline apply the next time you reschedule.</p>
     </Card>
   )
@@ -121,12 +135,14 @@ function DeleteDialog({ detail, isOpen, onOpenChange }: { detail: PlanDetail; is
             </Button>
             <Button
               variant="danger"
-              onPress={async () => {
-                await softDeletePlan(db, detail.plan.id)
-                close()
-                toasts.add({ title: `Deleted ${detail.plan.title}` }, { timeout: 5000 })
-                navigate('/plans')
-              }}
+              onPress={() =>
+                void safely(async () => {
+                  await softDeletePlan(db, detail.plan.id)
+                  close()
+                  toasts.add({ title: `Deleted ${detail.plan.title}` }, { timeout: 5000 })
+                  navigate('/plans')
+                })
+              }
             >
               Delete plan
             </Button>

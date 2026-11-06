@@ -56,6 +56,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await expect(page.getByRole('navigation', { name: 'Breadcrumb' })).toBeVisible()
       expect(await seriousViolations(page)).toEqual([])
       await page.getByRole('button', { name: 'Mark done' }).click()
+      await expect(page.getByRole('dialog', { name: 'How did it go?' })).toBeVisible()
+      await page.waitForTimeout(800) // let the sheet finish its entrance before axe reads its colors
       await page.keyboard.press('4')
       await expect(page.getByText(/^Completed /)).toBeVisible()
       expect(await seriousViolations(page)).toEqual([])

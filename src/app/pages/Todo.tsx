@@ -15,7 +15,7 @@ function Row({ item, onComplete }: { item: TodoItem; onComplete: (i: Completable
   return (
     <li className="flex items-start gap-3 py-3">
       <Checkbox isSelected={item.done} isDisabled={item.done} onChange={() => onComplete(item)} className="mt-0.5">
-        <span className="sr-only">{item.kind === 'review' ? item.title : `Mark done: ${item.title}`}</span>
+        <span className="sr-only">{item.kind === 'review' ? `Rate the review of ${item.title.replace('Review: ', '')}` : `Mark done: ${item.title}`}</span>
       </Checkbox>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
