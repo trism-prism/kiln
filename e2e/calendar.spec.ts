@@ -126,6 +126,19 @@ test('"Move to…" in the day panel reschedules by keyboard', async ({ page }) =
   await expect(panel.getByRole('link', { name: title })).toBeVisible()
 })
 
+test('the day panel adds a to-do on that day', async ({ page }) => {
+  await openSeeded(page, '/calendar')
+  await page.locator('[data-day="2026-11-12"]').focus()
+  await page.keyboard.press('Enter')
+  const panel = page.getByRole('dialog', { name: 'Thu, Nov 12, 2026' })
+  await panel.getByRole('button', { name: 'Add to-do' }).click()
+  const form = page.getByRole('dialog', { name: 'Add to-do' })
+  await expect(form.getByLabel('Day (optional)')).toHaveValue('2026-11-12')
+  await form.getByLabel('Title').fill('Read chapter 3')
+  await form.getByRole('button', { name: 'Add to-do' }).click()
+  await expect(panel.getByRole('listitem').filter({ hasText: 'Read chapter 3' })).toBeVisible()
+})
+
 test('the streak is 1 after completing an item, on the calendar and the dashboard', async ({ page }) => {
   await openSeeded(page, '/calendar')
   await expect(page.getByRole('region', { name: 'Streak' }).getByText('0 days').first()).toBeVisible()

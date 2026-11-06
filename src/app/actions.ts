@@ -1,5 +1,5 @@
 // Writes the screens share. Each reports through a toast.
-import { db, revertWrite, scheduleAll, skipTask, unskipTask, updateRecord } from '../data'
+import { db, insertRecord, revertWrite, scheduleAll, setPersonalTodoDone, skipTask, softDelete, unskipTask, updateRecord } from '../data'
 import { BACKLOG } from '../domain/scheduler'
 import { formatDay, toLocalISODate } from '../lib/date'
 import { toasts } from '../ui/overlay'
@@ -114,6 +114,62 @@ export async function moveItem(item: { kind: 'task' | 'practice'; id: string; ti
       { timeout: 8000 },
     )
     if (warnings.length) toasts.add({ title: 'Dependency warning', description: warnings.join(' ') }, { timeout: 12000 })
+  } catch (e) {
+    fail(e)
+  }
+}
+
+// ---- personal to-dos: every write reschedules, since dated minutes are fixed load on their day ----
+
+export interface TodoFields {
+  title: string
+  date?: string
+  minutes?: number
+}
+
+/** Adds a personal to-do, or changes the one with `id`. */
+export async function savePersonalTodo(fields: TodoFields, id?: string): Promise<boolean> {
+  try {
+    if (id) await updateRecord(db, 'personalTodos', id, { title: fields.title, date: fields.date, minutes: fields.minutes })
+    else await insertRecord(db, 'personalTodos', { ...fields, done: false })
+    await scheduleAll(db, today())
+    return true
+  } catch (e) {
+    fail(e)
+    return false
+  }
+}
+
+export async function setTodoDone(id: string, done: boolean): Promise<void> {
+  try {
+    await setPersonalTodoDone(db, id, done)
+    await scheduleAll(db, today())
+  } catch (e) {
+    fail(e)
+  }
+}
+
+/** Deletes a personal to-do, with Undo. */
+export async function deletePersonalTodo(id: string, title: string): Promise<void> {
+  try {
+    const before = await db.personalTodos.get(id)
+    if (!before || before.deleted) throw new Error('That to-do no longer exists.')
+    await softDelete(db, 'personalTodos', id)
+    const after = (await db.personalTodos.get(id))!
+    await scheduleAll(db, today())
+    toasts.add(
+      {
+        title: `Deleted: ${title}`,
+        action: {
+          label: 'Undo',
+          onPress: () =>
+            void revertWrite(db, { restore: [['personalTodos', before, after.updatedAt]] })
+              .then(() => scheduleAll(db, today()))
+              .catch(fail),
+        },
+      },
+      { timeout: 8000 },
+    )
   } catch (e) {
     fail(e)
   }

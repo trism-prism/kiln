@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildTodoItems, dayLabel, rangeBounds, todoView, type TodoCard, type TodoProblem, type TodoSource, type TodoTask } from './index'
+import { DEFAULT_TODO_PREFS, buildTodoItems, dayLabel, filterTodoItems, parseTodoPrefs, rangeBounds, todoView, type TodoCard, type TodoPrefs, type TodoProblem, type TodoSource, type TodoTask } from './index'
 
 const TODAY = '2026-11-11' // a Wednesday
 const at = (day: number, h = 12) => new Date(2026, 10, day, h).getTime()
@@ -68,14 +68,82 @@ describe('buildTodoItems', () => {
   })
 })
 
+const prefs = (over: Partial<TodoPrefs> = {}): TodoPrefs => ({ ...DEFAULT_TODO_PREFS, ...over })
+
 describe('rangeBounds', () => {
+  // TODAY is Wednesday 11 Nov: its week starts Monday 9 Nov, or Sunday 8 Nov.
   it.each([
-    ['today', '2026-11-11', '2026-11-11'],
-    ['next7', '2026-11-11', '2026-11-17'],
-    ['next28', '2026-11-11', '2026-12-08'],
-    ['past7', '2026-11-04', '2026-11-10'],
-    ['past28', '2026-10-14', '2026-11-10'],
-  ] as const)('%s', (range, from, to) => expect(rangeBounds(range, TODAY)).toEqual({ from, to }))
+    [{}, 'monday', '2026-11-11', '2026-11-11'],
+    [{ from: 'thisWeek', until: 'thisWeek' }, 'monday', '2026-11-09', '2026-11-15'],
+    [{ from: 'thisWeek', until: 'thisWeek' }, 'sunday', '2026-11-08', '2026-11-14'],
+    [{ from: 'lastWeek', until: 'nextWeek' }, 'monday', '2026-11-02', '2026-11-22'],
+    [{ from: 'weeks4', until: 'weeks4' }, 'monday', '2026-10-12', '2026-12-13'],
+    [{ from: 'weeks4', until: 'weeks4' }, 'sunday', '2026-10-11', '2026-12-12'],
+    [{ from: 'weeks2', until: 'weeks2' }, 'monday', '2026-10-26', '2026-11-29'],
+    [{ from: 'weeks3', until: 'weeks3' }, 'monday', '2026-10-19', '2026-12-06'],
+  ] as const)('anchors %j, week starts %s', (over, weekStart, from, to) => expect(rangeBounds(prefs(over), TODAY, weekStart)).toEqual({ from, to }))
+
+  it('uses custom month and day instead of the anchors, in this year', () => {
+    const custom = prefs({ from: 'weeks4', until: 'weeks4', customFrom: { month: 11, day: 1 }, customUntil: { month: 11, day: 30 } })
+    expect(rangeBounds(custom, TODAY)).toEqual({ from: '2026-11-01', to: '2026-11-30' })
+    expect(rangeBounds(prefs({ customFrom: { month: 11, day: 1 } }), TODAY)).toEqual({ from: '2026-11-01', to: TODAY })
+  })
+
+  it('takes an Until before the From in next year, and ignores a date that does not exist', () => {
+    expect(rangeBounds(prefs({ customFrom: { month: 12, day: 1 }, customUntil: { month: 1, day: 15 } }), TODAY)).toEqual({ from: '2026-12-01', to: '2027-01-15' })
+    expect(rangeBounds(prefs({ customFrom: { month: 2, day: 30 } }), TODAY)).toEqual({ from: TODAY, to: TODAY })
+  })
+})
+
+describe('parseTodoPrefs', () => {
+  it('defaults when missing or damaged and keeps valid fields', () => {
+    expect(parseTodoPrefs(undefined)).toEqual(DEFAULT_TODO_PREFS)
+    expect(parseTodoPrefs('{not json')).toEqual(DEFAULT_TODO_PREFS)
+    const saved = prefs({ completed: false, favoriteOnly: true, from: 'lastWeek', until: 'weeks3', customFrom: { month: 9, day: 1 } })
+    expect(parseTodoPrefs(JSON.stringify(saved))).toEqual({ ...saved, customUntil: undefined })
+    expect(parseTodoPrefs(JSON.stringify({ from: 'bogus', customFrom: { month: 13, day: 1 } }))).toEqual(DEFAULT_TODO_PREFS)
+  })
+})
+
+describe('personal to-dos and events', () => {
+  const items = buildTodoItems(
+    {
+      tasks: [task('t1', TODAY)],
+      problems: [],
+      cards: [],
+      personalTodos: [
+        { id: 'p1', title: 'Buy a book', done: false },
+        { id: 'p2', title: 'Hand in form', date: '2026-11-09', minutes: 15, done: false },
+        { id: 'p3', title: 'Email prof', done: true, completedAt: at(10) },
+      ],
+      events: [{ id: 'e1', title: 'BIO 101 lecture', date: TODAY, course: 'BIO 101', allDay: false, start: at(11, 9) }],
+      planTitles: new Map([['p1', 'DSA']]),
+      cardTitle: () => '',
+    },
+    TODAY,
+  )
+  const by = (id: string) => items.find((i) => i.id === id)!
+
+  it('lists undated to-dos today, done ones on their finish day, dated overdue ones overdue', () => {
+    expect([by('p1').date, by('p1').overdue]).toEqual([TODAY, false])
+    expect([by('p2').date, by('p2').overdue, by('p2').minutes]).toEqual(['2026-11-09', true, 15])
+    expect([by('p3').date, by('p3').overdue, by('p3').done]).toEqual(['2026-11-10', false, true])
+  })
+
+  it('lists an event on its day, with no minutes and no plan', () => {
+    expect(by('e1')).toMatchObject({ kind: 'event', date: TODAY, minutes: 0, planId: '', planTitle: 'BIO 101', done: false, rates: false })
+    expect(by('e1').typeLabel).toMatch(/^Event, /)
+  })
+
+  it('the visible-items choices hide kinds, completed items and non-favorite plan items', () => {
+    const kinds = (p: TodoPrefs, fav: string[] = []) => filterTodoItems(items, p, new Set(fav)).map((i) => i.id)
+    expect(kinds(prefs())).toEqual(['e1', 't1', 'p1', 'p3', 'p2'])
+    expect(kinds(prefs({ personal: false }))).toEqual(['e1', 't1'])
+    expect(kinds(prefs({ events: false }))).toEqual(['t1', 'p1', 'p3', 'p2'])
+    expect(kinds(prefs({ completed: false }))).toEqual(['e1', 't1', 'p1', 'p2'])
+    expect(kinds(prefs({ favoriteOnly: true }))).toEqual(['e1', 'p1', 'p3', 'p2'])
+    expect(kinds(prefs({ favoriteOnly: true }), ['p1'])).toEqual(['e1', 't1', 'p1', 'p3', 'p2'])
+  })
 })
 
 describe('dayLabel', () => {
@@ -100,38 +168,44 @@ describe('todoView', () => {
     ],
     [problem('a', TODAY)],
   )
+  const view = (over: Partial<TodoPrefs>, weekStart: 'monday' | 'sunday' = 'monday') => todoView(items, rangeBounds(prefs(over), TODAY, weekStart), TODAY)
   const ids = (v: ReturnType<typeof todoView>) => ({ overdue: v.overdue.map((i) => i.id), days: v.days.map((d) => [d.date, d.items.map((i) => i.id)]) })
 
   it('today pins every overdue item and lists only today', () => {
-    expect(ids(todoView(items, 'today', TODAY))).toEqual({ overdue: ['t1', 't2'], days: [[TODAY, ['t4', 'a']]] })
+    expect(ids(view({}))).toEqual({ overdue: ['t1', 't2'], days: [[TODAY, ['t4', 'a']]] })
   })
 
-  it('next 7 days runs today through the sixth day after, grouped by day', () => {
-    const v = todoView(items, 'next7', TODAY)
+  it('a range through next week groups by day with labels, overdue still pinned', () => {
+    const v = view({ until: 'thisWeek' })
     expect(v.overdue.map((i) => i.id)).toEqual(['t1', 't2'])
     expect(v.days.map((d) => [d.date, d.label])).toEqual([
       [TODAY, 'Today'],
       ['2026-11-12', 'Tomorrow'],
     ])
+    expect(view({ until: 'nextWeek' }).days.map((d) => d.date)).toEqual([TODAY, '2026-11-12', '2026-11-20'])
+    expect(view({ until: 'weeks4' }).days.map((d) => d.date)).toEqual([TODAY, '2026-11-12', '2026-11-20'])  // t7 is on 20 Dec, past 13 Dec
   })
 
-  it('next 28 days includes the later items but not beyond', () => {
-    const v = todoView(items, 'next28', TODAY)
-    expect(v.days.map((d) => d.date)).toEqual([TODAY, '2026-11-12', '2026-11-20'])
+  it('a range that includes today lists the past part oldest first, with overdue pinned, not repeated', () => {
+    const v = view({ from: 'thisWeek', until: 'thisWeek' })
+    expect(ids(v)).toEqual({ overdue: ['t1', 't2'], days: [['2026-11-09', ['t3']], [TODAY, ['t4', 'a']], ['2026-11-12', ['t5']]] })
   })
 
-  it('past ranges show done and still-open items, newest day first, with no pinned section', () => {
-    const v = todoView(items, 'past7', TODAY)
+  it('a range wholly in the past has no pinned section and lists done and still-open items', () => {
+    const v = todoView(items, { from: '2026-11-02', to: '2026-11-10' }, TODAY)
     expect(ids(v)).toEqual({ overdue: [], days: [['2026-11-09', ['t2', 't3']]] })
     expect(v.days[0]!.items.map((i) => [i.id, i.done, i.overdue])).toEqual([
       ['t2', false, true],
       ['t3', true, false],
     ])
-    expect(todoView(items, 'past28', TODAY).days.map((d) => d.date)).toEqual(['2026-11-09'])
+  })
+
+  it('a range wholly in the future has no pinned section', () => {
+    expect(ids(todoView(items, { from: '2026-11-12', to: '2026-11-30' }, TODAY)).overdue).toEqual([])
   })
 
   it('is empty for a range with nothing in it', () => {
-    expect(todoView([], 'today', TODAY)).toEqual({ overdue: [], days: [] })
-    expect(todoView(items.filter((i) => i.id === 't7'), 'next7', TODAY).days).toEqual([])
+    expect(todoView([], { from: TODAY, to: TODAY }, TODAY)).toEqual({ overdue: [], days: [] })
+    expect(todoView(items.filter((i) => i.id === 't7'), { from: TODAY, to: '2026-11-17' }, TODAY).days).toEqual([])
   })
 })

@@ -49,6 +49,19 @@ for (const colorScheme of ['light', 'dark'] as const) {
       expect(await seriousViolations(page)).toEqual([])
     })
 
+    test('/todo preferences dialog and add-to-do form', async ({ page }) => {
+      await openSeeded(page, '/todo')
+      await page.getByRole('button', { name: 'To-do list preferences' }).click()
+      await expect(page.getByRole('dialog', { name: 'To-do list preferences' })).toBeVisible()
+      await page.waitForTimeout(800) // let the dialog finish its entrance before axe reads its colors
+      expect(await seriousViolations(page)).toEqual([])
+      await page.getByRole('button', { name: 'Done' }).click()
+      await page.getByRole('button', { name: 'Add to-do' }).click()
+      await expect(page.getByRole('dialog', { name: 'Add to-do' })).toBeVisible()
+      await page.waitForTimeout(800)
+      expect(await seriousViolations(page)).toEqual([])
+    })
+
     test('/tasks page (done task)', async ({ page }) => {
       await openSeeded(page, '/todo')
       const lesson = page.getByRole('region', { name: 'Today' }).getByRole('listitem').filter({ hasText: '· Lesson ·' }).first()
