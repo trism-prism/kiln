@@ -23,7 +23,7 @@ Source material: a 16-week DSA study-plan doc (day topics + ~60 LC problems) and
 | Design | Canvas information architecture (left nav rail with To Do red badge, dashboard plan cards, day-grouped planner list, modules page, assignment-style task page). Own brand, no Canvas name/logo (registered trademark). Tailwind + React Aria Components. /unslop at the design stage |
 | v1 screens | To Do (Today / next 7 / next 28 / past 7 / past 28), task page (completed = greyed but fully openable), dashboard cards + progress, plan/modules page, calendar month/week with drag-to-reschedule, streak heatmap, brush-up list, import/create, settings |
 | Analytics | Cloudflare Web Analytics (cookieless) + anonymous daily active-device ping. Privacy page |
-| Name / repo | Kiln, `github.com/trism-dev/kiln`, PRIVATE |
+| Name / repo | Kiln, `github.com/trism-prism/kiln`, PRIVATE |
 | Merges | User grant: "Private, you may merge when CI is green" |
 | Execution | One Workflow per stage (implement, test, review), PR, merge on green CI, update PROGRESS.md, then stop for the user's review |
 | Timeline | No rush: full v1, then use |
@@ -51,7 +51,7 @@ Every stage: read `PROGRESS.md` → feature branch `feat/<slug>` → implement �
 
 | # | Stage | Delivers |
 |---|---|---|
-| 1 | Repo + setup | Check kiln domain options (user buys); `gh repo create trism-dev/kiln --private`; Vite/TS/Tailwind/Vitest/Playwright/ESLint scaffold; GitHub Actions CI; `PROGRESS.md`; `docs/plan.md` (this file) |
+| 1 | Repo + setup | Check kiln domain options (user buys); `gh repo create trism-prism/kiln --private`; Vite/TS/Tailwind/Vitest/Playwright/ESLint scaffold; GitHub Actions CI; `PROGRESS.md`; `docs/plan.md` (this file) |
 | 2 | Plan format + prompts | Zod schema, JSON Schema, `docs/plan-format.md`, both LLM prompts, block extractor + validator with path errors, CSV/XLSX template, DSA doc → fixture. **User checkpoint: regenerate DSA + new SD plans in Gemini** |
 | 3 | Data layer | Dexie schema, sync-ready record shape, migrations, backup export/import |
 | 4 | Scheduler + LC ramp | `scheduler`, `practice`, NeetCode pool snapshot; table-driven tests (capacity, deps, fixed dates, overflow, reschedule, deadlines, ramp) |
