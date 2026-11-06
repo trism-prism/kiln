@@ -15,6 +15,8 @@ const BrushUpPage = lazy(() => import('./pages/BrushUp'))
 const ImportPage = lazy(() => import('./pages/Import'))
 const SettingsPage = lazy(() => import('./pages/Settings'))
 const PrivacyPage = lazy(() => import('./pages/Privacy'))
+const TermsPage = lazy(() => import('./pages/Terms'))
+const LicensesPage = lazy(() => import('./pages/Licenses'))
 const DesignPage = lazy(() => import('./pages/Design'))
 const NotFoundPage = lazy(() => import('./pages/NotFound'))
 
@@ -37,6 +39,8 @@ export function App() {
             <Route path="import" element={<ImportPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="privacy" element={<PrivacyPage />} />
+            <Route path="terms" element={<TermsPage />} />
+            <Route path="licenses" element={<LicensesPage />} />
             <Route path="design" element={<DesignPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
