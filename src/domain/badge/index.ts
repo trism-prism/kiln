@@ -14,17 +14,17 @@ export interface BadgeBreakdown {
 /**
  * Count = today's open tasks + overdue open tasks + reviews due today or earlier. The plan says
  * "today's open + overdue"; due reviews are shown in the to-do list as items for today, so they
- * count too. Tasks with no scheduled date, done and skipped tasks do not count.
+ * count too. Tasks with no scheduled date, done, skipped and deleted tasks do not count. Pass live reviews only.
  */
 export function badgeBreakdown(
-  tasks: { status: string; scheduledDate?: string }[],
+  tasks: { status: string; scheduledDate?: string; deleted?: boolean }[],
   dueReviews: { due: number }[],
   today: string,
 ): BadgeBreakdown {
   let todayN = 0
   let overdue = 0
   for (const t of tasks) {
-    if (t.status !== 'open' || !t.scheduledDate) continue
+    if (t.deleted || t.status !== 'open' || !t.scheduledDate) continue
     if (t.scheduledDate === today) todayN++
     else if (t.scheduledDate < today) overdue++
   }

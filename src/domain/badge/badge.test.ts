@@ -22,6 +22,10 @@ describe('badgeCount', () => {
     expect(badgeBreakdown([], reviews, today)).toMatchObject({ reviews: 3, total: 3 })
   })
 
+  it('ignores deleted tasks', () => {
+    expect(badgeCount([{ status: 'open', scheduledDate: today, deleted: true }], [], today)).toBe(0)
+  })
+
   it('adds tasks and reviews', () => {
     expect(badgeCount([t('open', today), t('open', '2026-11-01')], [{ due: noon(9) }], today)).toBe(3)
   })

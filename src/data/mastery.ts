@@ -41,8 +41,9 @@ export interface CompleteResult {
  * Marks the task done and records how well it went. First completion of a task that gets a card
  * (cardMinutes) creates the card and rates it; completing again rates the existing card. Tasks
  * without a card (reviews, projects, milestones) are only marked done and the rating is ignored.
- * The three writes are separate (no transaction): a crash between them can leave a done task
- * without its card or log, and the next completion repairs it.
+ * Skipping a task later does not retire its card. The three writes are separate (no transaction): a crash between them can leave a done task
+ * without its card or log (the next completion repairs it), and two overlapping calls for one new
+ * task could create two cards (the oldest is the one rated and read).
  */
 export async function completeTask(
   db: KilnDB,

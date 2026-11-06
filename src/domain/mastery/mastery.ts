@@ -71,7 +71,8 @@ export interface CardRef extends CardState {
 
 function stats(groups: Map<string, PlannedTask[]>, cards: CardRef[], now: number): Record<string, MasteryStat> {
   const byTask = new Map<string, number>()
-  for (const c of cards) if (c.taskId) byTask.set(c.taskId, retrievability(c, now))
+  // First card wins, as when rating (data layer): a duplicate from a double tap is never read.
+  for (const c of cards) if (c.taskId && !byTask.has(c.taskId)) byTask.set(c.taskId, retrievability(c, now))
   const out: Record<string, MasteryStat> = {}
   for (const [key, tasks] of groups) {
     let sum = 0
