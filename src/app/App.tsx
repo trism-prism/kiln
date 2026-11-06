@@ -1,13 +1,44 @@
-import { Route, Routes } from 'react-router'
-
-function Home() {
-  return <h1 className="p-6 text-2xl font-semibold">Kiln</h1>
-}
+import { LucideProvider } from 'lucide-react'
+import { RouterProvider } from 'react-aria-components'
+import { Route, Routes, useHref, useNavigate } from 'react-router'
+import { DesignPage } from './DesignPage'
+import {
+  BrushUpPage,
+  CalendarPage,
+  DashboardPage,
+  ImportPage,
+  NotFoundPage,
+  PlanPage,
+  PlansPage,
+  SettingsPage,
+  TaskPage,
+  TodoPage,
+} from './pages'
+import { Shell } from './Shell'
 
 export function App() {
+  const navigate = useNavigate()
   return (
-    <Routes>
-      <Route path="/" element={<Home />} />
-    </Routes>
+    // RouterProvider makes React Aria links and menu items navigate through react-router.
+    <RouterProvider navigate={navigate} useHref={useHref}>
+      {/* One icon size and stroke for the whole app */}
+      <LucideProvider size={18} strokeWidth={1.75}>
+        <Routes>
+          <Route element={<Shell />}>
+            <Route index element={<DashboardPage />} />
+            <Route path="todo" element={<TodoPage />} />
+            <Route path="task/:taskId" element={<TaskPage />} />
+            <Route path="calendar" element={<CalendarPage />} />
+            <Route path="plans" element={<PlansPage />} />
+            <Route path="plans/:planId" element={<PlanPage />} />
+            <Route path="brush-up" element={<BrushUpPage />} />
+            <Route path="import" element={<ImportPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+            <Route path="design" element={<DesignPage />} />
+            <Route path="*" element={<NotFoundPage />} />
+          </Route>
+        </Routes>
+      </LucideProvider>
+    </RouterProvider>
   )
 }
