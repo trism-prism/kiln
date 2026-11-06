@@ -68,6 +68,29 @@
   --duration-slow: 320ms;
   --default-transition-duration: 150ms;
   --default-transition-timing-function: var(--ease-out);
+
+  /* Entrances only: popovers rise a few pixels, sheets slide up, overlays fade */
+  --animate-rise: kiln-rise var(--duration-base) var(--ease-out);
+  --animate-sheet: kiln-sheet var(--duration-slow) var(--ease-out);
+  --animate-fade: kiln-fade var(--duration-base) var(--ease-out);
+
+  @keyframes kiln-rise {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
+  @keyframes kiln-sheet {
+    from {
+      transform: translateY(24px);
+      opacity: 0;
+    }
+  }
+  @keyframes kiln-fade {
+    from {
+      opacity: 0;
+    }
+  }
 }
 
 :root {
