@@ -4,7 +4,9 @@
 import { DatabaseSync } from 'node:sqlite'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { KilnDB } from '../data/db'
-import { getSettings, insertRecord, softDelete, updateRecord, updateSettings } from '../data/repo'
+import { fixtureTexts, validateParts } from '../data/fixtures'
+import { getSettings, importPlan, insertRecord, setPersonalTodoDone, setPlanShare, softDelete, updateRecord, updateSettings } from '../data/repo'
+import { readSnapshot, snapshotPlan } from '../data/versions'
 import { newDb } from '../data/test-db'
 import type { PracticeLogRecord } from '../data/types'
 import { deriveKeys, encryptRow, generateSyncKey, keyToMnemonic, mnemonicToKey } from './crypto'
@@ -542,5 +544,43 @@ describe('trouble', () => {
       (await d1.prepare('SELECT * FROM sync_spaces').all()).results,
     ])
     for (const needle of ['secret-slug', 'Secret Title', 'practiceLog', r.id, mnemonic.split(' ')[0]!]) expect(dump).not.toContain(needle)
+  })
+})
+
+describe('schema 4 tables', () => {
+  beforeEach(reset)
+
+  it('syncs personal to-dos, events, plan versions, feeds and the new plan fields, edits and deletes included', async () => {
+    const { a, b } = await twoDevices()
+    const todo = await insertRecord(a, 'personalTodos', { title: 'Call the bank', date: '2026-11-09', minutes: 15, done: false })
+    const event = await insertRecord(a, 'events', { title: 'BIO 101 lecture', date: '2026-11-09', allDay: false, start: NOW, end: NOW + 3_600_000, course: 'BIO 101', uid: 'u1@lms' })
+    const feed = await insertRecord(a, 'feeds', { lms: 'canvas', url: 'https://canvas.example/feeds/calendars/user_secret.ics', planIds: [], lastResult: { ok: true, added: 2 } })
+    const plan = validateParts([fixtureTexts.sd]).plans[0]!
+    const { planId } = await importPlan(a, plan, { startDate: '2026-11-09' })
+    await updateRecord(a, 'plans', planId, { favorite: true, dailyPracticeOn: true })
+    await setPlanShare(a, planId, 'more')
+    const version = await snapshotPlan(a, planId, { summary: 'Imported' })
+    ok(await sync(a))
+    ok(await sync(b))
+    expect(await b.personalTodos.get(todo.id)).toEqual(todo)
+    expect(await b.events.get(event.id)).toEqual(event)
+    expect(await b.feeds.get(feed.id)).toEqual(feed)
+    expect(await b.planVersions.get(version.id)).toEqual(version)
+    expect((await readSnapshot((await b.planVersions.get(version.id))!)).title).toBe(plan.title)
+    expect(await b.plans.get(planId)).toMatchObject({ favorite: true, dailyPracticeOn: true, share: 'more', weight: 5 })
+
+    // Back the other way: B edits and deletes, A receives.
+    await setPersonalTodoDone(b, todo.id, true)
+    await softDelete(b, 'events', event.id)
+    await updateRecord(b, 'feeds', feed.id, { lastFetchedAt: NOW })
+    ok(await sync(b))
+    ok(await sync(a))
+    expect(await a.personalTodos.get(todo.id)).toMatchObject({ done: true })
+    expect(await a.events.get(event.id)).toMatchObject({ deleted: true })
+    expect(await a.feeds.get(feed.id)).toMatchObject({ lastFetchedAt: NOW })
+
+    // The feed URL is a secret: the server only ever holds ciphertext.
+    const dump = JSON.stringify((await d1.prepare('SELECT * FROM sync_records').all()).results)
+    expect(dump).not.toContain('user_secret')
   })
 })

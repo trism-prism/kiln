@@ -44,7 +44,7 @@ describe('importPlan with the real fixtures', () => {
     const db = newDb()
     const results = []
     for (const p of dsa) results.push(await importPlan(db, p, opts))
-    const sdResult = await importPlan(db, sd, { ...opts, weight: 2 })
+    const sdResult = await importPlan(db, sd, { ...opts, share: 'less' })
 
     expect(results.map((r) => [r.created, r.partsIn, r.complete])).toEqual([
       [true, [1], false],
@@ -60,7 +60,7 @@ describe('importPlan with the real fixtures', () => {
     const dsaPlan = plans.find((p) => p.key === dsa[0]!.id)!
     const sdPlan = plans.find((p) => p.key === sd.id)!
     expect(isPlanComplete(dsaPlan)).toBe(true)
-    expect(sdPlan.weight).toBe(2)
+    expect(sdPlan).toMatchObject({ share: 'less', weight: 2 })
 
     const dsaTasks = await listTasks(db, dsaPlan.id)
     expect(dsaTasks).toHaveLength(dsa.reduce((n, p) => n + p.tasks.length, 0))

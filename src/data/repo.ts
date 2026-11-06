@@ -3,7 +3,8 @@
 import type { Table } from 'dexie'
 import type { Plan } from '../domain/plan-format'
 import type { KilnDB } from './db'
-import type { Base, ModuleRecord, PlanRecord, Records, SettingsRecord, TableName, TaskRecord, TaskStatus } from './types'
+import { SHARE_WEIGHT } from './plan-settings'
+import type { Base, EventRecord, ModuleRecord, PersonalTodoRecord, PlanRecord, Records, SettingsRecord, Share, TableName, TaskRecord, TaskStatus } from './types'
 import { uuidv7 } from './uuid'
 
 export const SETTINGS_ID = 'settings'
@@ -94,11 +95,17 @@ export async function softDelete(db: KilnDB, name: TableName, id: string): Promi
   await updateRecord(db, name, id, { deleted: true } as Partial<Records[typeof name]>)
 }
 
-/** Tombstones a plan with its modules, tasks, review cards and logs, its practice log rows and its generated daily problems. */
+/**
+ * Tombstones a plan with its modules, tasks, review cards and logs, its practice log rows, its
+ * generated daily problems, its events and its versions (whose snapshots are emptied).
+ */
 export async function softDeletePlan(db: KilnDB, planId: string): Promise<void> {
   const deviceId = await getDeviceId(db)
   const tomb = <T extends Base>(rows: T[]) => rows.filter((r) => !r.deleted).map((r) => ({ ...r, deleted: true, updatedAt: stampAfter(r.updatedAt), deviceId }))
-  await db.transaction('rw', [db.plans, db.modules, db.tasks, db.reviewCards, db.reviewLogs, db.practiceLog, db.practiceItems], async () => {
+  const tables = [db.plans, db.modules, db.tasks, db.reviewCards, db.reviewLogs, db.practiceLog, db.practiceItems, db.events, db.planVersions]
+  await db.transaction('rw', tables, async () => {
+    await db.events.bulkPut(tomb(await db.events.where('planId').equals(planId).toArray()))
+    await db.planVersions.bulkPut(tomb(await db.planVersions.where('planId').equals(planId).toArray()).map((v) => ({ ...v, snapshot: '' })))
     const plan = await db.plans.get(planId)
     if (plan) await db.plans.put({ ...plan, deleted: true, updatedAt: stampAfter(plan.updatedAt), deviceId })
     await db.modules.bulkPut(tomb(await db.modules.where('planId').equals(planId).toArray()))
@@ -181,6 +188,34 @@ export function isPlanComplete(plan: Pick<PlanRecord, 'partTotal' | 'partsIn'>):
   return Array.from({ length: plan.partTotal }, (_, i) => i + 1).every((n) => plan.partsIn.includes(n))
 }
 
+/** Sets a plan's share of study time and the matching weight (so devices before schema 4 schedule the same). */
+export function setPlanShare(db: KilnDB, planId: string, share: Share) {
+  return updateRecord(db, 'plans', planId, { share, weight: SHARE_WEIGHT[share] })
+}
+
+// ---- personal to-dos and events (schema 4) ----
+// Add with insertRecord(db, 'personalTodos' | 'events' | 'feeds', fields), edit with updateRecord, delete with softDelete.
+
+/** Every live personal to-do, dated ones first by date, then undated. */
+export async function listPersonalTodos(db: KilnDB): Promise<PersonalTodoRecord[]> {
+  const day = (t: PersonalTodoRecord) => t.date ?? '9999-12-31'
+  return live(await db.personalTodos.toArray()).sort((a, b) => day(a).localeCompare(day(b)) || a.id.localeCompare(b.id))
+}
+
+/** Marks a personal to-do done (sets `completedAt`) or open again (clears it). */
+export function setPersonalTodoDone(db: KilnDB, id: string, done: boolean) {
+  return updateRecord(db, 'personalTodos', id, { done, completedAt: done ? Date.now() : undefined })
+}
+
+/** Live events shown from `from` to `to` inclusive ("yyyy-mm-dd"), including multi-day ones that started earlier, by date then start. */
+export async function eventsBetween(db: KilnDB, from: string, to: string): Promise<EventRecord[]> {
+  // ponytail: multi-day events are found by a scan of earlier rows; fine for a term's worth of classes.
+  const rows = await db.events.where('date').belowOrEqual(to).toArray()
+  return live(rows)
+    .filter((e) => (e.endDate ?? e.date) >= from)
+    .sort((a, b) => a.date.localeCompare(b.date) || (a.start ?? 0) - (b.start ?? 0))
+}
+
 // ---- settings ----
 
 const liveSettings = async (db: KilnDB) => {
@@ -210,8 +245,8 @@ export interface ImportOptions {
   startDate: string
   /** Overrides the plan file's deadline. */
   deadline?: string
-  /** 1-5, default 3. Used when the plan is created. */
-  weight?: number
+  /** Share of study time, default even. Used when the plan is created. */
+  share?: Share
 }
 
 export interface ImportResult {
@@ -269,7 +304,8 @@ export async function importPlan(db: KilnDB, plan: Plan, opts: ImportOptions): P
         ...content,
         id: uuidv7(),
         key: plan.id,
-        weight: opts.weight ?? 3,
+        share: opts.share ?? 'even',
+        weight: SHARE_WEIGHT[opts.share ?? 'even'],
         startDate: opts.startDate,
         deadline: opts.deadline ?? plan.deadline,
         partTotal: part.total,
