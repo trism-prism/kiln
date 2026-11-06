@@ -156,6 +156,17 @@ export async function mergeRows(
   rows: Base[],
   opts: { takeTies?: boolean } = {},
 ): Promise<{ added: number; replaced: number; kept: number }> {
+  const { take, ...counts } = await planMerge(t, rows, opts)
+  await t.bulkPut(take)
+  return counts
+}
+
+/** What mergeRows would do, without writing: the rows it would take and the counts. */
+async function planMerge(
+  t: Table<Base, string>,
+  rows: Base[],
+  opts: { takeTies?: boolean } = {},
+): Promise<{ take: Base[]; added: number; replaced: number; kept: number }> {
   const byId = new Map<string, Base>()
   for (const r of rows) {
     const dup = byId.get(r.id)
@@ -173,8 +184,7 @@ export async function mergeRows(
     else return
     take.push(r)
   })
-  await t.bulkPut(take)
-  return { added, replaced, kept: incoming.length - added - replaced }
+  return { take, added, replaced, kept: incoming.length - added - replaced }
 }
 
 export async function exportBackup(db: KilnDB): Promise<string> {
@@ -191,12 +201,24 @@ export interface BackupResult {
   [table: string]: { added: number; replaced: number; kept: number }
 }
 
+/** The largest backup file accepted: 25 MB. A backup holds every table, so it is allowed more than a plan file (5 MB). */
+export const MAX_BACKUP_CHARS = 25 * 1024 * 1024
+
+type ParsedBackup = z.infer<ReturnType<typeof backupSchema>>
+
+/** A validated backup and what applying it would do. Nothing has been written. */
+export interface BackupCheck {
+  backup: ParsedBackup
+  /** Per table: `added` new rows, `replaced` stored rows older than the backup's, `kept` (stale) rows the database already has a newer or equal copy of. */
+  counts: BackupResult
+}
+
 /**
- * Merges a backup into the database by id: a record is taken when it is new or its updatedAt is
- * larger than the stored one (ties keep the stored record). If an id appears twice in the backup,
- * the copy with the larger updatedAt counts. Throws before writing anything if any row is invalid.
+ * Validates a backup and counts what importing it would do, without writing. Throws on a file over
+ * MAX_BACKUP_CHARS, invalid JSON, any invalid row, or a backup from a newer Kiln.
  */
-export async function importBackup(db: KilnDB, text: string): Promise<BackupResult> {
+export async function checkBackup(db: KilnDB, text: string): Promise<BackupCheck> {
+  if (text.length > MAX_BACKUP_CHARS) throw new Error('The backup file is larger than 25 MB')
   let raw: unknown
   try {
     raw = JSON.parse(text)
@@ -213,11 +235,32 @@ export async function importBackup(db: KilnDB, text: string): Promise<BackupResu
     throw new Error(`This backup is from a newer Kiln (schema ${backup.schemaVersion}); update the app first`)
   }
 
+  const counts: BackupResult = {}
+  await db.transaction('r', TABLE_NAMES.map((n) => db.table(n)), async () => {
+    for (const name of TABLE_NAMES) {
+      const p = await planMerge(db.table(name) as Table<Base, string>, backup.tables[name as TableName] as Base[])
+      counts[name] = { added: p.added, replaced: p.replaced, kept: p.kept }
+    }
+  })
+  return { backup, counts }
+}
+
+/** Writes a checked backup. The result counts what was merged now, which can differ from `check.counts` if the data changed in between. */
+export async function applyBackup(db: KilnDB, check: BackupCheck): Promise<BackupResult> {
   const result: BackupResult = {}
   await db.transaction('rw', TABLE_NAMES.map((n) => db.table(n)), async () => {
     for (const name of TABLE_NAMES) {
-      result[name] = await mergeRows(db.table(name) as Table<Base, string>, backup.tables[name as TableName] as Base[])
+      result[name] = await mergeRows(db.table(name) as Table<Base, string>, check.backup.tables[name as TableName] as Base[])
     }
   })
   return result
+}
+
+/**
+ * Merges a backup into the database by id: a record is taken when it is new or its updatedAt is
+ * larger than the stored one (ties keep the stored record). If an id appears twice in the backup,
+ * the copy with the larger updatedAt counts. Throws before writing anything if any row is invalid.
+ */
+export async function importBackup(db: KilnDB, text: string): Promise<BackupResult> {
+  return applyBackup(db, await checkBackup(db, text))
 }

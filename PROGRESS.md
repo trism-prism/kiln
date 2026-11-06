@@ -15,7 +15,7 @@ Plan: docs/plan.md.
 | 6 | Design system + shell | done (PR pending); design self-approved overnight per the user's instruction; user reviews docs/design in the morning |
 | 7 | Core screens | pending |
 | 8 | Calendar + streaks | pending |
-| 9 | Import + create | pending |
+| 9 | Import + create | done (PR pending) |
 | 10 | PWA | pending |
 | 11 | Worker: push + analytics | server half merged (b651130) (SW push handler and UI pending in the PWA stage) |
 | 12 | Sync | non-UI done (PR pending); Settings > Sync UI pending |

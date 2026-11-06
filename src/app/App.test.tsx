@@ -27,7 +27,8 @@ describe('shell routes', () => {
         <App />
       </MemoryRouter>,
     )
-    expect(await screen.findByRole('heading', { level: 1, name: title })).toBeTruthy()
+    // Pages are lazy chunks; the first import of a big one (Import) can take over a second under load.
+    expect(await screen.findByRole('heading', { level: 1, name: title }, { timeout: 8000 })).toBeTruthy()
     expect(screen.getAllByRole('navigation', { name: 'Main' }).length).toBeGreaterThan(0)
     expect(screen.getByRole('main')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Skip to content' })).toBeTruthy()
