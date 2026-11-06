@@ -1,4 +1,6 @@
 import { runCron, seedSentDate } from './cron'
+import { HttpError, json, readJson, safeEqual, sha256Hex } from './http'
+import { handleSync } from './sync'
 import { isPushEndpoint, isSecretString, parsePing, parseSubscription } from './validate'
 
 export interface Env {
@@ -9,67 +11,17 @@ export interface Env {
   VAPID_PRIVATE_KEY: string
   /** Optional override of the subscription row cap. */
   MAX_SUBSCRIPTIONS?: string
+  /** Optional overrides of the sync caps (see sync.ts). */
+  MAX_SYNC_SPACES?: string
+  MAX_SYNC_RECORDS?: string
+  MAX_SYNC_BYTES?: string
 }
 
 const DEFAULT_MAX_SUBSCRIPTIONS = 50_000
 
 const MAX_BODY = 4096
-
-class HttpError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
-    super(message)
-  }
-}
-
-function json(data: unknown, status: number, headers: HeadersInit = {}): Response {
-  return Response.json(data, { status, headers })
-}
-
-/** Reads the body with a byte counter, so a lying or missing Content-Length cannot get past the limit. */
-async function readJson(req: Request): Promise<unknown> {
-  if (!(req.headers.get('content-type') ?? '').toLowerCase().startsWith('application/json')) {
-    throw new HttpError(415, 'content-type must be application/json')
-  }
-  const chunks: Uint8Array[] = []
-  let total = 0
-  const reader = req.body?.getReader()
-  while (reader) {
-    const { done, value } = await reader.read()
-    if (done) break
-    total += value.length
-    if (total > MAX_BODY) {
-      await reader.cancel()
-      throw new HttpError(413, 'body too large')
-    }
-    chunks.push(value)
-  }
-  const bytes = new Uint8Array(total)
-  let o = 0
-  for (const c of chunks) {
-    bytes.set(c, o)
-    o += c.length
-  }
-  try {
-    return JSON.parse(new TextDecoder().decode(bytes))
-  } catch {
-    throw new HttpError(400, 'invalid JSON')
-  }
-}
-
-async function sha256Hex(s: string): Promise<string> {
-  const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s))
-  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('')
-}
-
-/** Constant-time string compare (both are hex digests of equal length when they match). */
-function safeEqual(a: string, b: string): boolean {
-  let diff = a.length ^ b.length
-  for (let i = 0; i < Math.max(a.length, b.length); i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0)
-  return diff === 0
-}
+// Sync bodies carry up to 200 encrypted records.
+const MAX_SYNC_BODY = 1_048_576
 
 async function route(req: Request, env: Env, url: URL): Promise<Response> {
   const { pathname } = url
@@ -78,7 +30,7 @@ async function route(req: Request, env: Env, url: URL): Promise<Response> {
   if (pathname === '/health' && m === 'GET') return json({ ok: true }, 200)
 
   if (pathname === '/push/subscription' && m === 'POST') {
-    const s = parseSubscription(await readJson(req))
+    const s = parseSubscription(await readJson(req, MAX_BODY))
     if (typeof s === 'string') throw new HttpError(400, s)
     const tokenHash = await sha256Hex(s.token)
     const existing = await env.DB.prepare('SELECT token_hash FROM push_subscriptions WHERE endpoint = ?')
@@ -127,7 +79,7 @@ async function route(req: Request, env: Env, url: URL): Promise<Response> {
   }
 
   if (pathname === '/push/subscription' && m === 'DELETE') {
-    const b = (await readJson(req)) as { endpoint?: unknown; token?: unknown } | null
+    const b = (await readJson(req, MAX_BODY)) as { endpoint?: unknown; token?: unknown } | null
     if (!isPushEndpoint(b?.endpoint)) throw new HttpError(400, 'endpoint must be an https URL of a known push service')
     if (!isSecretString(b?.token)) throw new HttpError(400, 'token must be 16-128 chars of A-Z a-z 0-9 _ -')
     const row = await env.DB.prepare('SELECT token_hash FROM push_subscriptions WHERE endpoint = ?')
@@ -142,13 +94,18 @@ async function route(req: Request, env: Env, url: URL): Promise<Response> {
   }
 
   if (pathname === '/ping' && m === 'POST') {
-    const id = parsePing(await readJson(req))
+    const id = parsePing(await readJson(req, MAX_BODY))
     if (!id) throw new HttpError(400, 'deviceId must be 16-128 chars of A-Z a-z 0-9 _ -')
     const day = new Date().toISOString().slice(0, 10)
     await env.DB.prepare('INSERT OR IGNORE INTO active_devices (device_hash, day) VALUES (?, ?)')
       .bind(await sha256Hex(id), day)
       .run()
     return new Response(null, { status: 204 })
+  }
+
+  if (pathname === '/sync/push' || pathname === '/sync/pull') {
+    if (m !== 'POST') throw new HttpError(405, 'method not allowed')
+    return handleSync(pathname === '/sync/push' ? 'push' : 'pull', await readJson(req, MAX_SYNC_BODY), env)
   }
 
   if (['/health', '/push/subscription', '/ping'].includes(pathname)) throw new HttpError(405, 'method not allowed')
