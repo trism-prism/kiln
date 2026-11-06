@@ -22,8 +22,9 @@ import type { ReviewCardRecord, ReviewLogRecord, TaskRecord } from './types'
 /** The app spreads review dates with fuzz; tests pass `{ fuzz: false }`. */
 const APP_OPTS: SchedulerOptions = { fuzz: true }
 
+/** The task's card. If two devices each made one before syncing, the smallest id wins everywhere. */
 async function liveCardForTask(db: KilnDB, taskId: string): Promise<ReviewCardRecord | undefined> {
-  return (await db.reviewCards.where('taskId').equals(taskId).toArray()).find((c) => !c.deleted)
+  return (await db.reviewCards.where('taskId').equals(taskId).toArray()).filter((c) => !c.deleted).sort((a, b) => (a.id < b.id ? -1 : 1))[0]
 }
 
 async function logReview(db: KilnDB, cardId: string, log: ReturnType<typeof rate>['log']): Promise<ReviewLogRecord> {
@@ -104,7 +105,7 @@ export async function skipTask(db: KilnDB, taskId: string): Promise<TaskRecord> 
   return setSkipped(db, taskId, true)
 }
 
-/** Reopens a skipped task and resumes its card. */
+/** Reopens a skipped task and resumes its card. A task that had been completed goes back to done (completedAt kept), any other to open. */
 export async function unskipTask(db: KilnDB, taskId: string): Promise<TaskRecord> {
   return setSkipped(db, taskId, false)
 }
@@ -112,9 +113,12 @@ export async function unskipTask(db: KilnDB, taskId: string): Promise<TaskRecord
 async function setSkipped(db: KilnDB, taskId: string, skipped: boolean): Promise<TaskRecord> {
   await getDeviceId(db)
   return db.transaction('rw', db.tasks, db.reviewCards, async () => {
-    const task = await setTaskStatus(db, taskId, skipped ? 'skipped' : 'open')
-    if (!task) throw new Error(`Task ${taskId} not found`)
+    const old = await db.tasks.get(taskId)
+    if (!old || old.deleted) throw new Error(`Task ${taskId} not found`)
     const card = await liveCardForTask(db, taskId)
+    // Not setTaskStatus: it clears completedAt for anything but done.
+    const status = skipped ? 'skipped' : card || old.completedAt ? 'done' : 'open'
+    const task = (await updateRecord(db, 'tasks', taskId, { status }))!
     if (card && !!card.suspended !== skipped) await updateRecord(db, 'reviewCards', card.id, { suspended: skipped })
     return task
   })
@@ -126,15 +130,32 @@ async function liveTasks(db: KilnDB): Promise<Map<string, TaskRecord>> {
   return new Map((await db.tasks.toArray()).filter((t) => !t.deleted).map((t) => [t.id, t]))
 }
 
+/**
+ * The cards every query uses: not deleted, task alive, one per task (the smallest id, because two
+ * devices can each create a card before they sync), then not suspended. Rows synced from a version 1
+ * device may lack `minutes` and `learningSteps`; minutes are filled from the task.
+ */
 async function liveCards(db: KilnDB, tasks: Map<string, TaskRecord>): Promise<ReviewCardRecord[]> {
-  return (await db.reviewCards.toArray()).filter((c) => !c.deleted && !c.suspended && (!c.taskId || tasks.has(c.taskId)))
+  const byTask = new Map<string, ReviewCardRecord>()
+  const out: ReviewCardRecord[] = []
+  for (const c of (await db.reviewCards.toArray()).sort((a, b) => (a.id < b.id ? -1 : 1))) {
+    if (c.deleted) continue
+    const task = c.taskId ? tasks.get(c.taskId) : undefined
+    if (c.taskId && !task) continue
+    if (c.taskId) {
+      if (byTask.has(c.taskId)) continue
+      byTask.set(c.taskId, c)
+    }
+    if (!c.suspended) out.push({ ...c, learningSteps: c.learningSteps ?? 0, minutes: c.minutes ?? ((task && cardMinutes(task)) || 10) })
+  }
+  return out
 }
 
 /** Cards due on `date` ("yyyy-mm-dd", local) or earlier, earliest first. */
 export async function dueCards(db: KilnDB, date: string): Promise<ReviewCardRecord[]> {
   const tasks = await liveTasks(db)
-  const due = await db.reviewCards.where('due').belowOrEqual(endOfLocalDay(date)).toArray()
-  return due.filter((c) => !c.deleted && !c.suspended && (!c.taskId || tasks.has(c.taskId))).sort((a, b) => a.due - b.due)
+  const end = endOfLocalDay(date)
+  return (await liveCards(db, tasks)).filter((c) => c.due <= end).sort((a, b) => a.due - b.due)
 }
 
 /** The scheduler's `reviewsDue` input for `fromDate`..`toDate` (see domain/mastery reviewsDue). */

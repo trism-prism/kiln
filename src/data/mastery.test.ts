@@ -1,10 +1,11 @@
 import 'fake-indexeddb/auto'
 import Dexie from 'dexie'
 import { describe, expect, it } from 'vitest'
+import { badgeCount } from '../domain/badge'
 import { fixtureTexts, validateParts } from './fixtures'
 import { KilnDB } from './db'
 import { brushUp, completeTask, dueCards, masteryByPlan, masteryByTopic, reviewCard, reviewsDue, skipTask, unskipTask } from './mastery'
-import { importPlan, listTasks, softDelete } from './repo'
+import { importPlan, insertRecord, listTasks, softDelete } from './repo'
 import { newDb } from './test-db'
 import { uuidv7 } from './uuid'
 
@@ -188,18 +189,74 @@ describe('atomic writes and skipping', () => {
   })
 })
 
+describe('review fixes', () => {
+  const count = async (db: KilnDB, date: string) => {
+    const tasks = (await db.tasks.toArray()).map((t) => ({ status: t.status, scheduledDate: t.scheduledDate, deleted: t.deleted }))
+    return badgeCount(tasks, [], date)
+  }
+
+  it('unskipping a completed task restores done and keeps completedAt; a never-done task reopens', async () => {
+    const { db, lesson, lc } = await seeded()
+    await db.tasks.update(lesson.id, { scheduledDate: '2026-11-09' })
+    await db.tasks.update(lc.id, { scheduledDate: '2026-11-09' })
+    expect(await count(db, '2026-11-09')).toBe(2)
+
+    const done = await completeTask(db, lesson.id, 'good', T0, NO_FUZZ)
+    expect(await count(db, '2026-11-09')).toBe(1)
+    await skipTask(db, lesson.id)
+    expect((await db.tasks.get(lesson.id))!.completedAt).toBe(done.task.completedAt)
+    const back = await unskipTask(db, lesson.id)
+    expect(back).toMatchObject({ status: 'done', completedAt: done.task.completedAt })
+    expect(await count(db, '2026-11-09')).toBe(1) // not back on the to-do list
+
+    await skipTask(db, lc.id)
+    expect(await count(db, '2026-11-09')).toBe(0)
+    expect((await unskipTask(db, lc.id)).status).toBe('open')
+    expect(await count(db, '2026-11-09')).toBe(1)
+  })
+
+  it('two devices each made a card for one task: queries see only the smallest id', async () => {
+    const { db, lesson } = await seeded()
+    const a = await completeTask(db, lesson.id, 'again', T0, NO_FUZZ)
+    const { id: _id, updatedAt: _u, deleted: _d, deviceId: _v, ...fields } = a.card!
+    void [_id, _u, _d, _v]
+    const dup = await insertRecord(db, 'reviewCards', fields)
+    const smallest = [a.card!.id, dup.id].sort()[0]
+    const far = T0 + 400 * DAY
+    expect((await dueCards(db, '2030-01-01')).map((c) => c.id)).toEqual([smallest])
+    expect((await brushUp(db, far)).map((i) => i.card.id)).toEqual([smallest])
+    expect(Object.values(await reviewsDue(db, '2026-11-09', '2030-01-01')).map((e) => e.count)).toEqual([1])
+    expect((await masteryByTopic(db, far))[lesson.topics[0]!]!.studied).toBe(1)
+  })
+
+  it('cards synced from a version 1 device (no minutes, no learningSteps) still work', async () => {
+    const { db, lesson } = await seeded()
+    const a = await completeTask(db, lesson.id, 'good', T0, NO_FUZZ)
+    const old: Record<string, unknown> = { ...a.card! }
+    delete old.minutes
+    delete old.learningSteps
+    await db.reviewCards.put(old as never)
+    const [c] = await dueCards(db, '2030-01-01')
+    expect(c).toMatchObject({ learningSteps: 0, minutes: Math.min(20, Math.max(5, Math.round(0.25 * lesson.estimatedMinutes))) })
+    await expect(reviewCard(db, a.card!.id, 'good', a.card!.due, NO_FUZZ)).resolves.toBeTruthy()
+  })
+})
+
 describe('migration to version 2', () => {
-  it('upgrades a version 1 database with cards and logs', async () => {
+  it('upgrades a version 1 database with cards and logs (minutes from the task, 10 when it is missing)', async () => {
     const name = `test-${uuidv7()}`
     const v1 = new Dexie(name)
     v1.version(1).stores({
       reviewCards: 'id, taskId, planId, due, updatedAt',
       reviewLogs: 'id, cardId, reviewedAt, updatedAt',
+      tasks: 'id, planId',
       meta: 'key',
     })
     const card = { id: 'c1', updatedAt: 1, deleted: false, deviceId: 'd', planId: 'p', taskId: 't', topics: ['x'], due: 5, stability: 2, difficulty: 3, elapsedDays: 4, scheduledDays: 1, reps: 1, lapses: 0, state: 2 }
     const log = { id: 'l1', updatedAt: 1, deleted: false, deviceId: 'd', cardId: 'c1', rating: 3, state: 0, due: 1, stability: 1, difficulty: 1, elapsedDays: 0, scheduledDays: 1, reviewedAt: 1 }
-    await v1.table('reviewCards').add(card)
+    const card2 = { ...card, id: 'c2', taskId: 't60' }
+    await v1.table('tasks').add({ id: 't60', planId: 'p', type: 'lesson', estimatedMinutes: 60 })
+    await v1.table('reviewCards').bulkAdd([card, card2])
     await v1.table('reviewLogs').add(log)
     v1.close()
 
@@ -211,6 +268,7 @@ describe('migration to version 2', () => {
     void _l
     expect(await db.reviewCards.get('c1')).toEqual({ ...cardRest, learningSteps: 0, minutes: 10 })
     expect(await db.reviewLogs.get('l1')).toEqual({ ...logRest, learningSteps: 0 })
+    expect(await db.reviewCards.get('c2')).toMatchObject({ minutes: 15 }) // lesson, 60 min -> 15
     expect(db.verno).toBe(2)
   })
 })

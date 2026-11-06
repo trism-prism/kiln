@@ -145,9 +145,15 @@ describe('brushUp', () => {
     expect(out.every((i) => i.due)).toBe(true)
   })
 
+  it('treats a card due later today as due, like the badge', () => {
+    const c = { ...rate(newCard(T0), 'good', T0).card, due: new Date(2026, 10, 9, 23, 0).getTime() }
+    expect(brushUp([c], T0)).toMatchObject([{ due: true }])
+    expect(brushUp([{ ...c, due: new Date(2026, 10, 10, 0, 1).getTime() }], T0)).toEqual([])
+  })
+
   it('includes a card under the threshold that is not yet due, and skips a strong one', () => {
     const c = rate(rate(newCard(T0), 'good', T0).card, 'easy', T0 + DAY).card
-    const t = c.due - 1000
+    const t = c.due - 3 * DAY
     expect(brushUp([c], t, 0.999)).toHaveLength(1)
     expect(brushUp([c], t, 0.5)).toHaveLength(0)
   })

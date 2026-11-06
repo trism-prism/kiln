@@ -43,6 +43,7 @@ export interface SchedulerOptions {
 
 // Default FSRS parameters (90% target retention). Short-term steps are off: Kiln schedules in
 // whole days, so "Again" comes back the next day instead of in a minute.
+// ponytail: the classic fsrs() API is deprecated in ts-fsrs 6; DefaultScheduler({ version: 'FSRS-6' }) (async) is the upgrade path.
 const schedulers = new Map<boolean, FSRS>()
 const scheduler = (fuzz: boolean) => {
   let s = schedulers.get(fuzz)
@@ -55,7 +56,7 @@ const toLib = (c: CardState): Card => ({
   stability: c.stability,
   difficulty: c.difficulty,
   scheduled_days: c.scheduledDays,
-  learning_steps: c.learningSteps,
+  learning_steps: c.learningSteps ?? 0, // rows synced from a version 1 device lack it
   reps: c.reps,
   lapses: c.lapses,
   state: c.state as Card['state'],

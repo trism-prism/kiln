@@ -71,7 +71,7 @@ export interface CardRef extends CardState {
 
 function stats(groups: Map<string, PlannedTask[]>, cards: CardRef[], now: number): Record<string, MasteryStat> {
   const byTask = new Map<string, number>()
-  // First card wins, as when rating (data layer): a duplicate from a double tap is never read.
+  // One card per task (the data layer dedupes: two devices can each create one before syncing).
   for (const c of cards) if (c.taskId && !byTask.has(c.taskId)) byTask.set(c.taskId, retrievability(c, now))
   const out: Record<string, MasteryStat> = {}
   for (const [key, tasks] of groups) {
@@ -111,14 +111,15 @@ export const BRUSH_UP_THRESHOLD = 0.85
 export interface BrushUpItem<C extends CardState> {
   card: C
   retrievability: number
-  /** Past its due time. */
+  /** Due today or earlier (by local day). */
   due: boolean
 }
 
 /** Cards that are due or have retrievability under the threshold, lowest retrievability first (ties: earliest due). */
 export function brushUp<C extends CardState>(cards: C[], now: number, threshold = BRUSH_UP_THRESHOLD): BrushUpItem<C>[] {
+  const endOfToday = endOfLocalDay(localDate(now)) // "due" means due today, as for the badge and the due list
   return cards
-    .map((card) => ({ card, retrievability: retrievability(card, now), due: card.due <= now }))
+    .map((card) => ({ card, retrievability: retrievability(card, now), due: card.due <= endOfToday }))
     .filter((i) => i.due || i.retrievability < threshold)
     .sort((a, b) => a.retrievability - b.retrievability || a.card.due - b.card.due)
 }
