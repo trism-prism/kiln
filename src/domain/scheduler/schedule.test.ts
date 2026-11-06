@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PoolProblem } from '../practice'
+import { NEETCODE_POOL } from '../practice'
 import { schedule, type SchedPlan, type SchedTask, type ScheduleInput } from './index'
 
 // 2026-11-02 is a Monday.
@@ -278,7 +279,7 @@ describe('daily practice slot', () => {
       { slug: 'h0', title: 'H0', difficulty: 'hard', topic: 'stack' },
     ]
     const out = run({
-      plans: [plan('p', { deadline: '2026-11-03', dailyPractice: dp({ source: 'neetcode' }) })],
+      plans: [plan('p', { deadline: '2026-11-04', dailyPractice: dp({ source: 'neetcode' }) })],
       pool: hardPool,
       tasks: tasks('p', [['end', 10, { notBeforeDay: 3 }]]),
     })
@@ -394,5 +395,104 @@ describe('determinism', () => {
     expect(JSON.stringify(schedule(input))).toBe(first)
     expect(JSON.stringify(input)).toBe(before)
     expect(JSON.parse(first).practice.length).toBeGreaterThan(0)
+  })
+})
+
+describe('review fixes', () => {
+  const dpn: SchedPlan['dailyPractice'] = { source: 'neetcode', perDay: 1, startDifficulty: 'easy', topicFollowsLessons: true }
+  const pool: PoolProblem[] = [
+    { slug: 'st-1', title: 'ST 1', difficulty: 'easy', topic: 'stack' },
+    { slug: 'st-2', title: 'ST 2', difficulty: 'easy', topic: 'stack' },
+    { slug: 'tr-1', title: 'TR 1', difficulty: 'easy', topic: 'trees' },
+    { slug: 'tr-2', title: 'TR 2', difficulty: 'easy', topic: 'trees' },
+  ]
+
+  it('reports a pinned task whose dependency is in the backlog, undated, or not earlier', () => {
+    const ts = tasks('p', [
+      ['o', 10, { priority: 'optional' }],
+      ['pin-after-backlog', 10, { pinnedDate: '2026-11-05', dependsOn: ['o'] }],
+      ['dep', 10, { pinnedDate: '2026-11-05' }],
+      ['pin-same-day', 10, { pinnedDate: '2026-11-05', dependsOn: ['dep'] }],
+    ])
+    const out = run({ skipOptional: true, tasks: ts })
+    expect(out.violations).toEqual([
+      { kind: 'dependency', planId: 'p', taskId: 'p-pin-after-backlog', dependsOnId: 'p-o', reason: 'backlog' },
+      { kind: 'dependency', planId: 'p', taskId: 'p-pin-same-day', dependsOnId: 'p-dep', reason: 'not-earlier' },
+    ])
+    const blocked = run({ tasks: tasks('p', [['a', 10, { dependsOn: ['b'] }], ['b', 10, { dependsOn: ['a'] }], ['pin', 10, { pinnedDate: MON, dependsOn: ['a'] }]]) })
+    expect(blocked.violations).toEqual([{ kind: 'dependency', planId: 'p', taskId: 'p-pin', dependsOnId: 'p-a', reason: 'unscheduled' }])
+  })
+
+  it('lessons dated the same day: the later one in plan order sets the topic, whatever the input order', () => {
+    const ls = tasks('p', [['l1', 10, { topics: ['stack'], pinnedDate: MON }], ['l2', 10, { topics: ['trees'], pinnedDate: MON }], ['end', 10, { notBeforeDay: 3 }]])
+    for (const order of [ls, [...ls].reverse()]) {
+      const out = run({ plans: [plan('p', { dailyPractice: dpn })], pool, tasks: order, today: MON })
+      expect(out.practice[0]?.topic).toBe('trees')
+    }
+  })
+
+  it('a task that cannot start within the horizon is unplaceable at once', () => {
+    const out = run({ tasks: tasks('p', [['a', 10], ['far', 10, { notBeforeDay: 3000 }]]) })
+    expect(out.assignments['p-a']).toBe(MON)
+    expect(out.unplaceable).toEqual([{ taskId: 'p-far', reason: 'no-capacity' }])
+  })
+
+  it('generated problems stop after the plan deadline', () => {
+    const ts = tasks('p', Array.from({ length: 8 }, (_, i) => [`t${i}`, 60] as TaskSpec))
+    const out = run({ plans: [plan('p', { deadline: '2026-11-04', dailyPractice: dpn })], pool: NEETCODE_POOL, minutesPerWeekday: week(100), tasks: ts })
+    expect(out.practice.length).toBeGreaterThan(0)
+    expect(out.practice.every((g) => g.date <= '2026-11-04')).toBe(true)
+  })
+
+  it('generated problems stop once the plan has nothing left to place', () => {
+    const ts = [...tasks('a', [['x', 10]]), ...tasks('b', [['y', 60], ['z', 60], ['w', 60]])]
+    const out = run({ plans: [plan('a', { dailyPractice: dpn }), plan('b')], pool: NEETCODE_POOL, tasks: ts })
+    expect(out.practice.map((g) => g.date)).toEqual([MON])
+  })
+
+  it('the practice slot cannot pull a later module plan problem past a task that does not fit', () => {
+    const ts = tasks('p', [
+      ['pin', 40, { pinnedDate: MON }],
+      ['a', 30],
+      ['prob', 10, { moduleOrder: 2, taskOrder: 1, type: 'practice', practice: { slug: 'x-1', difficulty: 'easy' } }],
+    ])
+    const out = run({ plans: [plan('p', { dailyPractice: { ...dpn, source: 'plan' } })], tasks: ts })
+    expect(dates(out, ['a', 'prob'])).toEqual(['2026-11-03', '2026-11-03'])
+  })
+
+  it('does not defer when that would strand a core task behind the deferred one', () => {
+    const ts = tasks('p', [['c0', 60], ['r1', 60, { priority: 'recommended' }], ['c1', 60, { dependsOn: ['r1'] }]])
+    const out = run({ plans: [plan('p', { deadline: '2026-11-03' })], tasks: ts })
+    expect(Object.values(out.assignments)).not.toContain('backlog')
+    expect(out.violations.map((v) => v.kind)).toEqual(['plan-deadline'])
+    expect(out.unplaceable).toEqual([])
+  })
+})
+
+describe('speed', () => {
+  it('schedules four plans of 300 tasks in about a second', () => {
+    const plans = ['a', 'b', 'c', 'd'].map((id, i) => plan(id, { weight: i + 1, dailyPractice: i === 0 ? { source: 'neetcode', perDay: 1, startDifficulty: 'easy', topicFollowsLessons: true } : undefined }))
+    const ts = plans.flatMap((p) =>
+      tasks(
+        p.id,
+        Array.from({ length: 300 }, (_, i): TaskSpec => [
+          `t${i}`,
+          20 + ((i * 7) % 70),
+          {
+            moduleOrder: 1 + Math.floor(i / 15),
+            taskOrder: i,
+            dependsOn: i % 3 === 0 && i > 0 ? [`t${i - 1}`] : [],
+            priority: i % 10 === 9 ? 'optional' : i % 5 === 4 ? 'recommended' : 'core',
+            topics: [i % 2 ? 'stack' : 'trees'],
+          },
+        ]),
+      ),
+    )
+    const t0 = performance.now()
+    const out = run({ plans, tasks: ts, pool: NEETCODE_POOL, minutesPerWeekday: week(120) })
+    const ms = performance.now() - t0
+    expect(out.unplaceable).toEqual([])
+    expect(Object.keys(out.assignments)).toHaveLength(1200)
+    expect(ms).toBeLessThan(1500)
   })
 })

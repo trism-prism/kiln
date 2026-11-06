@@ -96,6 +96,8 @@ export interface DayLoad {
 export type Violation =
   | { kind: 'plan-deadline'; planId: string; deadline: string; projectedFinish: string }
   | { kind: 'task-deadline'; planId: string; taskId: string; deadline: string; date: string }
+  /** A pinned or already dated task whose open dependency is in the backlog, undated, or not dated earlier. */
+  | { kind: 'dependency'; planId: string; taskId: string; dependsOnId: string; reason: 'backlog' | 'unscheduled' | 'not-earlier' }
 
 export interface ScheduleOutput {
   /** Open tasks to a date, or 'backlog'. Includes tasks that keep their date. Unplaceable tasks are absent. */

@@ -71,7 +71,8 @@ export function pickProblem(
 ): PoolProblem | undefined {
   const open = pool.filter((p) => !excluded.has(p.slug))
   const inTopic = topic === undefined ? [] : open.filter((p) => p.topic === topic)
-  for (const candidates of [inTopic, open.filter((p) => p.topic === roadmapTopic(pool, excluded))]) {
+  const fallbackTopic = roadmapTopic(pool, excluded)
+  for (const candidates of [inTopic, open.filter((p) => p.topic === fallbackTopic)]) {
     for (const d of difficultyOrder(target)) {
       const found = candidates.find((p) => p.difficulty === d && p.neetcode150) ?? candidates.find((p) => p.difficulty === d)
       if (found) return found

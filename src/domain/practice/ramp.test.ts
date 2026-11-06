@@ -68,6 +68,18 @@ describe('pool and picking', () => {
     expect(pickProblem(pool, new Set(), 'stack', 'hard')?.slug).toBe('s1')
   })
 
+  it('looks up the roadmap topic once, not once per problem', () => {
+    let calls = 0
+    const counted = new Proxy([...NEETCODE_POOL], {
+      get(target, prop, receiver) {
+        if (prop === 'some') calls++
+        return Reflect.get(target, prop, receiver)
+      },
+    })
+    pickProblem(counted, new Set(), 'no-such-topic', 'easy')
+    expect(calls).toBeLessThanOrEqual(NEETCODE_TOPICS.length)
+  })
+
   it('falls back to roadmap order when the topic is used up or missing', () => {
     expect(pickProblem(pool, new Set(['s1']), 'stack', 'easy')?.slug).toBe('a1')
     expect(pickProblem(pool, new Set(), undefined, 'easy')?.slug).toBe('a1')

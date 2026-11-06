@@ -165,7 +165,13 @@ function place(ctx: Ctx, deferred: ReadonlySet<string>): Result {
   const stuck = pend.filter((t) => !resolved.has(t.id))
   pend = pend.filter((t) => resolved.has(t.id))
 
+  // Tasks that cannot start within the horizon are unplaceable at once; looping to the end would not help.
+  const end = addDaysISO(ctx.start, HORIZON_DAYS)
+  const beyond = pend.filter((t) => (ctx.earliest.get(t.id) as string) > end)
+  pend = pend.filter((t) => (ctx.earliest.get(t.id) as string) <= end)
+
   const queue = new Map<string, SchedTask[]>(ctx.plans.map((p) => [p.id, pend.filter((t) => t.planId === p.id)]))
+  const planLeft = new Map<string, number>(ctx.plans.map((p) => [p.id, (queue.get(p.id) as SchedTask[]).length]))
   const placed = new Set<string>()
   const generated: GeneratedPractice[] = []
   const minutesPlaced = new Map<string, number>(ctx.plans.map((p) => [p.id, 0]))
@@ -179,16 +185,15 @@ function place(ctx: Ctx, deferred: ReadonlySet<string>): Result {
   // Rule: "the most recent scheduled lesson" is the latest-dated lesson that has been reached, counting
   // lessons that keep a date and lessons placed earlier in this run. Only NeetCode topics count.
   const lessonTopic = new Map<string, string>()
-  const fixedLessons = new Map<string, { date: string; topic: string }[]>()
+  const fixedLessons = new Map<string, { date: string; order: number; topic: string }[]>()
   for (const t of ctx.tasks) {
     const d = t.status === 'open' ? ctx.fixed.get(t.id) : t.status === 'done' ? t.scheduledDate : undefined
     const topic = neetcodeTopic(t.topics)
-    if (t.type === 'lesson' && d && topic) fixedLessons.set(t.planId, [...(fixedLessons.get(t.planId) ?? []), { date: d, topic }])
+    if (t.type === 'lesson' && d && topic) fixedLessons.set(t.planId, [...(fixedLessons.get(t.planId) ?? []), { date: d, order: ctx.orderIndex.get(t.id) as number, topic }])
   }
-  for (const list of fixedLessons.values()) list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+  for (const list of fixedLessons.values()) list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.order - b.order))
   const lessonPtr = new Map<string, number>()
 
-  const end = addDaysISO(ctx.start, HORIZON_DAYS)
   for (let d = ctx.start; d <= end && remaining > 0; d = addDaysISO(d, 1)) {
     for (const p of ctx.plans) {
       const list = fixedLessons.get(p.id) ?? []
@@ -218,34 +223,48 @@ function place(ctx: Ctx, deferred: ReadonlySet<string>): Result {
     for (const p of ctx.plans) {
       ready.set(p.id, (queue.get(p.id) as SchedTask[]).filter((t) => d >= (ctx.earliest.get(t.id) as string) && depsMet(t)))
     }
+    const taken = new Set<string>()
+    /** Per plan: where the scan for the next task stands, and the module of the first task that did not fit. */
+    const cursor = new Map<string, { i: number; blocked?: number }>(ctx.plans.map((p) => [p.id, { i: 0 }]))
 
     const put = (t: SchedTask) => {
       date.set(t.id, d)
       placed.add(t.id)
       remaining--
+      planLeft.set(t.planId, (planLeft.get(t.planId) as number) - 1)
       a.tasks += t.estimatedMinutes
       a.taskCount++
       room -= t.estimatedMinutes
       minutesPlaced.set(t.planId, (minutesPlaced.get(t.planId) ?? 0) + t.estimatedMinutes)
-      const list = ready.get(t.planId) as SchedTask[]
-      list.splice(list.indexOf(t), 1)
+      taken.add(t.id)
       const topic = neetcodeTopic(t.topics)
       if (t.type === 'lesson' && topic) lessonTopic.set(t.planId, topic)
       if (t.practice) solved.push({ slug: t.practice.slug, difficulty: t.practice.difficulty, topic, rating: 3 })
     }
+
+    // Rule: a task fits if it fits the room left. The first task of a day always fits, whatever its size: the
+    // budget is a target, and without this a long task (a 150-minute mock interview) would wait forever behind
+    // reviews and the practice slot. A day can therefore run over its budget; the overrun is that first task.
+    const fits = (t: SchedTask) => t.estimatedMinutes === 0 || t.estimatedMinutes <= room || a.taskCount === 0
 
     // Daily practice slot: the plan's own problems first, then generated NeetCode ones.
     for (const p of ctx.plans) {
       const dp = p.dailyPractice
       if (!dp || d < p.startDate) continue
       let need = dp.perDay - (a.practiceCount.get(p.id) ?? 0)
-      for (const t of [...(ready.get(p.id) as SchedTask[])]) {
-        if (need > 0 && t.practice && t.estimatedMinutes <= room) {
+      // Rule: the slot obeys the same module block as step 4 below: once a ready task does not fit the room,
+      // plan problems of later modules cannot jump past it.
+      let blocked: number | undefined
+      for (const t of ready.get(p.id) as SchedTask[]) {
+        if (need === 0 || taken.has(t.id)) continue
+        if (blocked !== undefined && t.moduleOrder !== blocked) break
+        if (t.practice && t.estimatedMinutes <= room) {
           put(t)
           need--
-        }
+        } else if (!fits(t)) blocked ??= t.moduleOrder
       }
-      while (dp.source === 'neetcode' && need > 0) {
+      // Rule: no generated problems after the plan's deadline, or once the plan has nothing left to place.
+      while (dp.source === 'neetcode' && need > 0 && (planLeft.get(p.id) as number) > 0 && (p.deadline === undefined || d <= p.deadline)) {
         const follow = dp.topicFollowsLessons ? lessonTopic.get(p.id) : undefined
         const topic = follow ?? roadmapTopic(pool, excluded)
         const inFinalDays = p.deadline !== undefined && d >= addDaysISO(p.deadline, 1 - FINAL_DAYS)
@@ -263,18 +282,21 @@ function place(ctx: Ctx, deferred: ReadonlySet<string>): Result {
     }
 
     // Ready tasks in plan order, plans interleaved by weight.
-    // Rule: a task fits if it fits the room left. The first task of a day always fits, whatever its size: the
-    // budget is a target, and without this a long task (a 150-minute mock interview) would wait forever behind
-    // reviews and the practice slot. The day then runs over by at most the reviews and practice on it.
-    const fits = (t: SchedTask) => t.estimatedMinutes === 0 || t.estimatedMinutes <= room || a.taskCount === 0
     // Rule: when a plan's next task does not fit, later ready tasks of the same module may fill the room
     // in plan order, but tasks of later modules never jump past it.
+    // Room only shrinks during a day, so a task that did not fit never will: the cursor never goes back.
     const next = (p: SchedPlan): SchedTask | undefined => {
-      let blocked: number | undefined
-      for (const t of ready.get(p.id) as SchedTask[]) {
-        if (blocked !== undefined && t.moduleOrder !== blocked) return undefined
+      const list = ready.get(p.id) as SchedTask[]
+      const c = cursor.get(p.id) as { i: number; blocked?: number }
+      for (; c.i < list.length; c.i++) {
+        const t = list[c.i] as SchedTask
+        if (taken.has(t.id)) continue
+        if (c.blocked !== undefined && t.moduleOrder !== c.blocked) {
+          c.i = list.length
+          return undefined
+        }
         if (fits(t)) return t
-        blocked ??= t.moduleOrder
+        c.blocked ??= t.moduleOrder
       }
       return undefined
     }
@@ -292,7 +314,7 @@ function place(ctx: Ctx, deferred: ReadonlySet<string>): Result {
     for (const p of ctx.plans) queue.set(p.id, (queue.get(p.id) as SchedTask[]).filter((t) => !placed.has(t.id)))
   }
 
-  const left = pend.filter((t) => !placed.has(t.id))
+  const left = [...pend.filter((t) => !placed.has(t.id)), ...beyond]
   return { date, backlog, placed, practice: generated, acc, stuck, left }
 }
 
@@ -304,6 +326,16 @@ function violationsOf(ctx: Ctx, r: Result): Violation[] {
     if (!d) continue
     if (d > (finish.get(t.planId) ?? '')) finish.set(t.planId, d)
     if (t.deadline && d > t.deadline) out.push({ kind: 'task-deadline', planId: t.planId, taskId: t.id, deadline: t.deadline, date: d })
+    // Pinned and kept tasks are not placed after their dependencies, so check them.
+    if (ctx.fixed.has(t.id)) {
+      for (const k of t.dependsOn) {
+        const dep = ctx.byKey.get(keyOf(t.planId, k))
+        if (!dep || dep.status !== 'open') continue
+        const when = r.date.get(dep.id)
+        const reason = r.backlog.has(dep.id) ? 'backlog' : when === undefined ? 'unscheduled' : when >= d ? 'not-earlier' : undefined
+        if (reason) out.push({ kind: 'dependency', planId: t.planId, taskId: t.id, dependsOnId: dep.id, reason })
+      }
+    }
   }
   for (const p of ctx.plans) {
     const f = finish.get(p.id)
@@ -314,19 +346,22 @@ function violationsOf(ctx: Ctx, r: Result): Violation[] {
 
 /**
  * Deadline step. For each plan that misses a deadline, send tasks to the backlog until it is met: optional
- * tasks first, then recommended, latest in plan order first, never core. Rule: the smallest number of
- * tasks that fixes the plan is found by binary search (deferring more never finishes later). A plan that
- * cannot be fixed this way keeps all its tasks and the miss is reported. Rule: when only task deadlines
+ * tasks first, then recommended, latest in plan order first, never core. Rule: the number of tasks to defer
+ * is found by binary search, which assumes deferring more never finishes later. The cut it finds is valid
+ * but, because placement interacts with dependencies and fill, not guaranteed to be the smallest. A plan
+ * that cannot be fixed this way (or where deferring would strand a core task) keeps all its tasks and the
+ * miss is reported. Rule: when only task deadlines
  * are missed, only tasks up to the latest missed task in plan order are candidates, since later ones
  * cannot help.
  */
 function withDeferral(ctx: Ctx): Result {
   const deferred = new Set<string>()
   let res = place(ctx, deferred)
+  const stuckBefore = new Set(res.stuck.map((t) => t.id))
   for (let round = 0; round <= ctx.plans.length; round++) {
     let progressed = false
     for (const p of ctx.plans) {
-      const missed = violationsOf(ctx, res).filter((v) => v.planId === p.id)
+      const missed = violationsOf(ctx, res).filter((v) => v.planId === p.id && v.kind !== 'dependency')
       if (missed.length === 0) continue
       const planMissed = missed.some((v) => v.kind === 'plan-deadline')
       const lastMissed = Math.max(...missed.flatMap((v) => (v.kind === 'task-deadline' ? [ctx.orderIndex.get(v.taskId) as number] : [])))
@@ -335,7 +370,9 @@ function withDeferral(ctx: Ctx): Result {
         .sort((a, b) => Number(b.priority === 'optional') - Number(a.priority === 'optional') || (ctx.orderIndex.get(b.id) as number) - (ctx.orderIndex.get(a.id) as number))
       const fixedBy = (k: number) => {
         const r = place(ctx, new Set([...deferred, ...deferrable.slice(0, k).map((t) => t.id)]))
-        return violationsOf(ctx, r).every((v) => v.planId !== p.id)
+        // Deferring must not strand a core task of the plan behind a deferred one.
+        if (r.stuck.some((t) => t.planId === p.id && t.priority === 'core' && !stuckBefore.has(t.id))) return false
+        return violationsOf(ctx, r).every((v) => v.planId !== p.id || v.kind === 'dependency')
       }
       if (deferrable.length === 0 || !fixedBy(deferrable.length)) continue
       let lo = 1
