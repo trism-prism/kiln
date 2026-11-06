@@ -12,6 +12,7 @@ import { TextField } from '../../ui/form'
 import { toasts } from '../../ui/overlay'
 import { Card } from '../../ui/surface'
 import { META_START_DATE } from '../../pwa/onboarding'
+import { PRIORITY_LABEL } from '../priority'
 import { Report } from './Report'
 import {
   analyze,
@@ -275,7 +276,7 @@ function PreviewCard({
         <Stat label="Tasks" value={existing && existing.size > 0 ? `${s.tasks} (${added} new)` : String(s.tasks)} />
         <Stat label="Total time" value={hours(s.totalMinutes)} />
         {PRIORITIES.map((pr) => (
-          <Stat key={pr} label={`Time, ${pr}`} value={hours(s.minutesByPriority[pr])} />
+          <Stat key={pr} label={`Time, ${PRIORITY_LABEL[pr].toLowerCase()}`} value={hours(s.minutesByPriority[pr])} />
         ))}
       </dl>
       {error && <p role="alert" className="text-sm text-danger">Could not build the schedule: {error}</p>}
@@ -288,12 +289,12 @@ function PreviewCard({
             ) : (
               <>
                 <p>
-                  Projected finish: <strong className="font-medium">{finish ? dayLabel(finish) : 'none (nothing to schedule)'}</strong> at your current budget.
+                  Expected finish: <strong className="font-medium">{finish ? dayLabel(finish) : 'none (nothing to schedule)'}</strong> at your current budget.
                 </p>
                 {deadline === '' && !plan.deadline ? (
                   <p className="text-text-muted">No deadline set.</p>
                 ) : missed && missed.kind === 'plan-deadline' ? (
-                  <p className="text-danger">Misses the deadline of {dayLabel(missed.deadline)}: projected finish {dayLabel(missed.projectedFinish)}. Raise your minutes or move the deadline.</p>
+                  <p className="text-danger">Misses the deadline of {dayLabel(missed.deadline)}: expected finish {dayLabel(missed.projectedFinish)}. Raise your minutes or move the deadline.</p>
                 ) : (
                   <p className="text-success">On track for the deadline of {dayLabel(deadline || (plan.deadline as string))}.</p>
                 )}
