@@ -9,7 +9,7 @@ Dexie (IndexedDB) database `kiln`, a small repository API, and JSON backup. No R
 | `plans` | plan-level fields, weight 1-5, startDate, deadline, part progress (`partTotal`, `partsIn`) | `key` |
 | `modules` | modules of a plan | `[planId+key]`, `planId` |
 | `tasks` | plan task fields plus app state: `scheduledDate`, `pinnedDate`, `backlog` (deferred by the scheduler), `status` (open/done/skipped), `completedAt` | `[planId+key]`, `planId`, `moduleId`, `scheduledDate`, `pinnedDate`, `status`, `*topics` |
-| `reviewCards` | FSRS card state as plain data (due, stability, difficulty, reps, lapses, state) | `taskId`, `planId`, `due` |
+| `reviewCards` | FSRS card state as plain data (due, stability, difficulty, reps, lapses, state, learningSteps) plus `minutes` per review | `taskId`, `planId`, `due` |
 | `reviewLogs` | one row per review | `cardId`, `reviewedAt` |
 | `practiceLog` | daily LeetCode problems done | `date`, `slug` |
 | `settings` | singleton, id `settings`: minutes per weekday (Mon first), week start, reminder 08:00, optional 20:00 nudge, theme, review cap 25%, blackout dates | |
@@ -28,6 +28,10 @@ Use `insertRecord`, `updateRecord`, `softDelete`, `softDeletePlan`, `setTaskStat
 ## Scheduling
 
 `scheduleAll(db, today, { mode, skipOptional, reviewsDue })` (`schedule.ts`) runs the scheduler (src/domain/scheduler) over all complete plans and writes `scheduledDate` or `backlog` in one transaction.
+
+## Mastery (`mastery.ts`)
+
+`completeTask(db, taskId, rating, now)` marks the task done and creates its review card on first completion (lessons and tasks with a LeetCode problem; reviews, projects, milestones get none) or rates the existing one, and writes a `reviewLogs` row. `reviewCard(db, cardId, rating, now)` rates a due review. Queries: `dueCards`, `reviewsDue` (scheduler input), `masteryByTopic`, `masteryByPlan`, `brushUp`. Cards of deleted tasks and tombstoned cards are ignored. The maths is in `src/domain/mastery`.
 
 ## Adding a migration
 

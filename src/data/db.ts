@@ -38,6 +38,22 @@ export class KilnDB extends Dexie {
       settings: 'id, updatedAt',
       meta: 'key',
     })
+
+    // 2: review cards follow ts-fsrs 6's card (learningSteps replaces elapsedDays) and keep their
+    // review-time estimate. No index changes.
+    this.version(2)
+      .stores({})
+      .upgrade(async (tx) => {
+        await tx.table('reviewCards').toCollection().modify((c: Record<string, unknown>) => {
+          delete c.elapsedDays
+          c.learningSteps ??= 0
+          c.minutes ??= 10
+        })
+        await tx.table('reviewLogs').toCollection().modify((l: Record<string, unknown>) => {
+          delete l.elapsedDays
+          l.learningSteps ??= 0
+        })
+      })
   }
 }
 
