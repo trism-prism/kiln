@@ -31,7 +31,7 @@ Use `insertRecord`, `updateRecord`, `softDelete`, `softDeletePlan`, `setTaskStat
 
 ## Mastery (`mastery.ts`)
 
-`completeTask(db, taskId, rating, now)` marks the task done and creates its review card on first completion (lessons and tasks with a LeetCode problem; reviews, projects, milestones get none) or rates the existing one, and writes a `reviewLogs` row. `reviewCard(db, cardId, rating, now)` rates a due review. Queries: `dueCards`, `reviewsDue` (scheduler input), `masteryByTopic`, `masteryByPlan`, `brushUp`. Cards of deleted tasks and tombstoned cards are ignored. The maths is in `src/domain/mastery`.
+`completeTask(db, taskId, rating, now)` marks the task done and creates its review card on first completion (lessons and tasks with a LeetCode problem; reviews, projects, milestones get none) or rates the existing one, and writes a `reviewLogs` row. `reviewCard(db, cardId, rating, now)` rates a due review. Queries: `dueCards`, `reviewsDue` (scheduler input), `masteryByTopic`, `masteryByPlan`, `brushUp`. `skipTask` / `unskipTask` skip or reopen a task and suspend or resume its card (a suspended card is hidden from every query; unskipping a completed task restores `done`). Queries ignore tombstoned cards, cards of deleted tasks and suspended cards, and use one card per task (smallest id). `scheduleAll` reads `reviewsDue` itself unless you pass one. The maths is in `src/domain/mastery`.
 
 ## Adding a migration
 
