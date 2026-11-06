@@ -1,10 +1,11 @@
 import { Suspense, lazy, type ComponentType } from 'react'
 import { BookOpen, CalendarDays, Ellipsis, FileUp, LayoutDashboard, ListTodo, RotateCcw, Settings } from 'lucide-react'
 import { NavLink, Outlet, useLocation } from 'react-router'
-import { CountBadge, KilnMark, badgeLabel } from '../ui/surface'
+import { CountBadge, KilnMark, Skeleton, badgeLabel } from '../ui/surface'
 import { useTodoCount } from './useTodoCount'
 
-// Menus and toasts pull in most of React Aria's overlay code; keep it out of the first load.
+// Menus and toasts pull in most of React Aria's overlay code. Splitting them off shrinks the first chunk;
+// the More menu still loads right after on every screen width (the tab bar is only hidden by CSS), which is accepted.
 const MoreMenu = lazy(() => import('./MoreMenu'))
 const ToastRegion = lazy(() => import('../ui/overlay').then((m) => ({ default: m.ToastRegion })))
 
@@ -25,7 +26,7 @@ function Rail({ count }: { count: number }) {
     // The wrapper stretches to the page height and carries the background; the nav inside sticks to the viewport.
     <div className="hidden w-60 shrink-0 border-r border-border bg-surface-raised md:block">
       <nav aria-label="Main" className="sticky top-0 flex h-dvh flex-col overflow-y-auto px-3 py-4">
-        <NavLink to="/" className="mb-6 flex h-10 items-center gap-2 rounded-md px-3 text-lg font-semibold">
+        <NavLink to="/" end className="mb-6 flex h-10 items-center gap-2 rounded-md px-3 text-lg font-semibold">
           <KilnMark className="size-5 text-accent" />
           Kiln
         </NavLink>
@@ -93,6 +94,21 @@ function TabBar({ count }: { count: number }) {
   )
 }
 
+/** Same shape as Page: the top bar, then a content block. */
+function PageSkeleton() {
+  return (
+    <div aria-hidden="true">
+      <div className="flex h-16 items-center border-b border-border px-4 md:px-8">
+        <Skeleton className="h-6 w-40" />
+      </div>
+      <div className="mx-auto grid w-full max-w-6xl gap-3 px-4 py-6 md:px-8 md:py-8">
+        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-48 w-full" />
+      </div>
+    </div>
+  )
+}
+
 export function Shell() {
   const count = useTodoCount()
   return (
@@ -105,7 +121,9 @@ export function Shell() {
       </a>
       <Rail count={count} />
       <main id="main" tabIndex={-1} className="min-w-0 flex-1 pb-24 outline-none md:pb-0">
-        <Suspense>
+        {/* Shows only on first load: the router wraps navigations in startTransition, so React keeps
+            the old page on screen while the next page's chunk loads. */}
+        <Suspense fallback={<PageSkeleton />}>
           <Outlet />
         </Suspense>
       </main>

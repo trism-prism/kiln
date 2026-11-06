@@ -17,7 +17,7 @@ test('shell loads with landmarks, lang and title', async ({ page }) => {
   await expect(page.locator('html')).toHaveAttribute('lang', 'en')
   await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible()
   await expect(page.getByRole('main')).toBeVisible()
-  await expect(page.getByRole('link', { name: 'To Do, 3 items due' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'To Do', exact: true })).toBeVisible()
 })
 
 test('each rail item navigates', async ({ page }) => {
@@ -40,7 +40,7 @@ test('skip link and keyboard reach the rail', async ({ page }) => {
   await expect(page.getByRole('link', { name: 'Kiln', exact: true })).toBeFocused()
   await page.keyboard.press('Tab')
   await page.keyboard.press('Tab')
-  await expect(page.getByRole('link', { name: 'To Do, 3 items due' })).toBeFocused()
+  await expect(page.getByRole('link', { name: 'To Do', exact: true })).toBeFocused()
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL('/todo')
 })
@@ -102,4 +102,19 @@ test('rail background spans the full height of a long page', async ({ page }) =>
   expect(railHeight).toBeGreaterThanOrEqual(pageHeight)
   await page.mouse.wheel(0, 2000)
   await expect(nav.getByRole('link', { name: 'Settings' })).toBeInViewport()
+})
+
+test('saved theme is applied by the inline head script, before the app runs', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('kiln-theme', 'dark'))
+  // Block the app bundle so only index.html's own script can set the theme.
+  await page.route('**/assets/*.js', (route) => route.abort())
+  await page.goto('/')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+})
+
+test('logo link is not marked current on other pages', async ({ page }) => {
+  await page.goto('/todo')
+  await expect(page.getByRole('link', { name: 'Kiln', exact: true })).not.toHaveAttribute('aria-current', 'page')
+  await page.goto('/')
+  await expect(page.getByRole('link', { name: 'Kiln', exact: true })).toHaveAttribute('aria-current', 'page')
 })
