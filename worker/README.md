@@ -1,6 +1,6 @@
 # Kiln Worker
 
-Cloudflare Worker with D1: anonymous Web Push reminders and the anonymous daily active-device ping. Plain `fetch` and `scheduled` handlers, no framework. Sync routes arrive in a later stage.
+Cloudflare Worker with D1: anonymous Web Push reminders and the anonymous daily active-device ping. Plain `fetch` and `scheduled` handlers, no framework. Also the end-to-end encrypted sync store.
 
 ## What it stores
 
@@ -8,12 +8,14 @@ Cloudflare Worker with D1: anonymous Web Push reminders and the anonymous daily 
 |---|---|---|
 | `push_subscriptions` | `endpoint` (unique), `token_hash`, `p256dh`, `auth`, `reminder_time` (HH:MM), `nudge_time` (HH:MM or null), `timezone` (IANA), `last_reminder_date`, `last_nudge_date`, `last_attempt_at`, timestamps | Who to push, and when |
 | `active_devices` | `device_hash`, `day` (UTC), unique together | Count of active devices per day |
+| `sync_spaces` | `space_id`, `token_hash`, `seq`, `record_count`, `bytes`, `created_at` | One row per sync key |
+| `sync_records` | `space_id`, `record_key`, `updated_at`, `seq`, `iv`, `ciphertext` | Newest encrypted version of each record |
 
 It never stores: names, emails, accounts, IP addresses, user agents, task or plan content, study data, or the raw device id (only its SHA-256). The task count shown in a notification is computed on the device.
 
 ## Routes
 
-All bodies are JSON (`Content-Type: application/json`), max 4096 bytes, counted while streaming (Content-Length is not trusted). Errors are `{"error": "..."}` with a status code (400 invalid, 403 origin, 404, 405, 413, 415, 500).
+All bodies are JSON (`Content-Type: application/json`), max 4096 bytes (1 MB for `/sync/*`), counted while streaming (Content-Length is not trusted). Errors are `{"error": "..."}` with a status code (400 invalid, 403 origin, 404, 405, 413, 415, 500). The sync routes take larger bodies (see Sync).
 
 | Route | Body | Result |
 |---|---|---|
@@ -25,6 +27,36 @@ All bodies are JSON (`Content-Type: application/json`), max 4096 bytes, counted 
 Validation is strict: unknown fields are rejected; `endpoint` must be an `https` URL on a known push service (`fcm.googleapis.com`, `push.services.mozilla.com`, `push.apple.com`, `notify.windows.com`), so the cron cannot be pointed at arbitrary hosts; `p256dh` is a base64url 65-byte uncompressed P-256 key, `auth` is 16 base64url bytes; times are `HH:MM`; `timezone` must be accepted by `Intl.DateTimeFormat`.
 
 CORS: requests carrying an `Origin` not in `ALLOWED_ORIGINS` (comma separated, in `wrangler.toml`) get 403. Default is the Vite dev and preview origins; add the production origin at deploy time. There is no per-IP limit in code; add the Cloudflare rate-limiting rule from the deploy steps. Subscription rows are capped as a backstop.
+
+## Sync
+
+End-to-end encrypted storage for the app's data. The client design is in `src/sync/README.md`; this is the server side.
+
+`POST /sync/push` (JSON, max 1,048,576 bytes counted while streaming): `{spaceId, token, rows: [{recordKey, updatedAt, iv, ciphertext}]}`, 1-200 rows. `spaceId`, `token` and `recordKey` are 32 random-looking bytes as 43 base64url characters; `iv` is 12 bytes; `ciphertext` is base64url, at most 65,536 characters; `updatedAt` is an integer ms timestamp, at most one day ahead. Unknown fields are rejected. Answer `200 {accepted, stale}`.
+
+`POST /sync/pull`: `{spaceId, token, cursor, limit}` with `limit` 1-500. Answer `200 {rows: [{recordKey, updatedAt, iv, ciphertext}], cursor, more}`, rows in `seq` order; send the returned `cursor` next time while `more` is true. A page also ends after about 900,000 ciphertext characters (at least one row). A space nobody has pushed to is empty. A cursor beyond the space's last `seq` starts over from 0.
+
+Rules:
+
+- **Access.** The first push to a `spaceId` stores `SHA-256(token)`; from then on push and pull both need the same token (constant-time compare, 403 otherwise). One token gates reading and writing: everyone who holds the sync key is fully trusted, and there are no read-only or per-device keys. Space ids and tokens come from 256-bit secrets, so neither can be guessed.
+- **Newest wins.** A row is stored only if its `updatedAt` is greater than the stored one. A tie keeps the stored row: the server is the tie arbiter (first stored wins), and clients take the server's row on a pull when the timestamps are equal, so devices that wrote in the same millisecond converge. Stale rows are counted in `stale`, not an error. Duplicates inside one push keep the newest.
+- **seq.** Each accepted write gets the next number of a per-space counter, assigned inside one D1 batch together with the quota counters, so pull order is write order and an updated record moves to the end. Gaps are normal.
+- **Quotas per space.** 20,000 records and 25,000,000 ciphertext characters; a push that would exceed either is refused whole with `507` (updates that do not grow the space still work). The caps are checked in the same D1 batch statement that updates the counters, so simultaneous pushes cannot both pass; only rows that are actually accepted count (new records, or the size change of a replacement). The number of spaces is capped at 5,000 (`503`). `MAX_SYNC_RECORDS`, `MAX_SYNC_BYTES` and `MAX_SYNC_SPACES` override these.
+- **Errors.** 400 invalid, 403 wrong token or origin, 413 body over 1 MB, 415, 503, 507.
+- **CORS** is the same as for the other routes. Rate limiting is a Cloudflare rule (see Deploy, step 7); the Worker has no per-IP limit.
+- **Cleanup.** The cron deletes spaces that hold no records and were created more than a day ago, so abandoned first pushes and probes do not pile up.
+- **Deletes.** A delete is an ordinary update: the client pushes the record again with `deleted: true` inside the ciphertext, so the server cannot tell a delete from an edit. Storage does not shrink when records are deleted, and there is no compaction in v1; the quotas still apply to the tombstones.
+- **Clock skew.** `updatedAt` comes from the writing device's clock. The server refuses rows dated more than 24 hours ahead (400), and clients drop received rows dated more than 24 hours ahead. Because the newest `updatedAt` wins, a device whose clock runs ahead (but within a day) overrides other devices' later real edits until real time catches up; a clock behind loses its edits to older versions. Keep device clocks automatic.
+
+### What the server sees (privacy)
+
+The server sees: the space id (a hash derived from the key, not the key), the SHA-256 of the write token, one opaque record key per record (an HMAC, so it learns neither the table nor the id), each record's `updatedAt`, the ciphertext length, the IV, the sequence number, record counts per space, and when each space was created. It also sees the usual network metadata (IP address, request times) as any host does, though the Worker does not store it.
+
+The server never sees: the sync key or its 24 words, the encryption key, the plaintext of any record, table names, record ids, plan or task titles, or how records relate.
+
+Leaks that follow from the design: `updatedAt` is in the clear (the server must compare it to keep only the newest), so the server can tell when a space was edited and how often; ciphertext length roughly reveals record size; the number of records per space reveals roughly how much is stored. Anyone holding a space id and token (which means the key) can read and overwrite everything; there is no other account.
+
+There is no route to delete a space. Turning sync off on the device leaves the encrypted rows on the server; a delete route is a later addition.
 
 ## Cron
 
@@ -97,7 +129,7 @@ and the matching public key in `wrangler.toml`. `npm run vapid` prints a new pai
 4. Add the production site origin to `ALLOWED_ORIGINS`.
 5. `npx wrangler d1 migrations apply kiln --remote`.
 6. `npx wrangler deploy`.
-7. Rate limiting: in the Cloudflare dashboard (Security > WAF > Rate limiting rules) add a rule for URI path starting with `/push/` or equal to `/ping`, for example 30 requests per minute per IP, action Block. The 50,000-row cap in the Worker is only a backstop.
+7. Rate limiting: in the Cloudflare dashboard (Security > WAF > Rate limiting rules) add a rule for URI path starting with `/push/` or equal to `/ping`, for example 30 requests per minute per IP, action Block. Add a second rule for URI path starting with `/sync/`, for example 60 requests per minute per IP, action Block (a sync run is a few requests; the Worker enforces quotas but not request rates). The 50,000-row cap in the Worker is only a backstop.
 8. Verify: `curl https://<worker-url>/health`, then subscribe from the installed PWA.
 
 ## Web Analytics

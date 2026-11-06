@@ -18,7 +18,7 @@ Plan: docs/plan.md.
 | 9 | Import + create | pending |
 | 10 | PWA | pending |
 | 11 | Worker: push + analytics | server half merged (b651130) (SW push handler and UI pending in the PWA stage) |
-| 12 | Sync | pending |
+| 12 | Sync | non-UI done (PR pending); Settings > Sync UI pending |
 | 13 | Production | pending |
 
 ## Current branch
