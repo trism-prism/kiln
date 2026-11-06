@@ -104,7 +104,9 @@ const json = (v: unknown) => JSON.stringify(v, (_k, x: unknown) => (x && typeof 
 const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`
 
 /** "renamed 2 tasks, added 1, reordered tasks" for one kind of item, or nothing when unchanged. */
-function itemChanges<T extends { id: string; title: string }>(noun: string, before: T[], after: T[], content: (t: T) => unknown): string[] {
+function itemChanges<T extends { id: string; title: string; order: number }>(noun: string, before: T[], after: T[]): string[] {
+  // Everything but the id, title and position, which are counted separately.
+  const content = (t: T) => ({ ...t, id: undefined, title: undefined, order: undefined })
   const old = new Map(before.map((t) => [t.id, t]))
   const now = new Set(after.map((t) => t.id))
   const kept = after.filter((t) => old.has(t.id))
@@ -135,8 +137,8 @@ export function describeChanges(before: Plan, after: Plan): string {
   const parts = [
     ...(before.title !== after.title ? ['renamed the plan'] : []),
     ...(before.goal !== after.goal || before.description !== after.description ? ["edited the plan's goal or description"] : []),
-    ...itemChanges('module', a.modules, b.modules, ({ id: _i, title: _t, order: _o, ...rest }) => rest),
-    ...itemChanges('task', a.tasks, b.tasks, ({ id: _i, title: _t, order: _o, ...rest }) => rest),
+    ...itemChanges('module', a.modules, b.modules),
+    ...itemChanges('task', a.tasks, b.tasks),
   ]
   const text = parts.join(', ')
   return text ? text[0]!.toUpperCase() + text.slice(1) : 'No changes'
