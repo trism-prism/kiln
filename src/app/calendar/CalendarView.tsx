@@ -93,8 +93,12 @@ function DayCell({ date, view, items, today, inPeriod, focused, budget, blackout
     onDrop: async (e) => {
       for (const it of e.items) {
         if (isTextDropItem(it) && it.types.has(DRAG_TYPE)) {
-          const payload = JSON.parse(await it.getText(DRAG_TYPE)) as DragPayload
-          if (payload.from !== date) onMove(payload, date)
+          try {
+            const payload = JSON.parse(await it.getText(DRAG_TYPE)) as DragPayload
+            if (payload.from !== date) onMove(payload, date)
+          } catch {
+            // not one of ours
+          }
           return
         }
       }
@@ -207,13 +211,17 @@ export function CalendarView({ items, today, view, onViewChange, weekStartsOn, m
     grid.current?.querySelector<HTMLElement>(`[data-day="${focus}"]`)?.focus()
   }, [focus])
 
-  const goTo = (date: string, moveFocus: boolean) => {
-    refocus.current = moveFocus
+  const focusDay = (date: string) => grid.current?.querySelector<HTMLElement>(`[data-day="${date}"]`)?.focus()
+  const goTo = (date: string) => {
+    if (date === focus) return focusDay(date) // no state change, so no effect would run
+    refocus.current = true
     setFocus(date)
     if (!weeks.flat().includes(date)) setAnchor(date)
   }
+  // Previous and next keep the day you are on (same weekday in the week view, same day number in the month view).
   const step = (n: number) => {
-    const next = view === 'month' ? shiftMonth(anchor, n) : addDaysISO(anchor, 7 * n)
+    const next = view === 'month' ? shiftMonth(focus, n) : addDaysISO(focus, 7 * n)
+    refocus.current = false
     setAnchor(next)
     setFocus(next)
   }
@@ -223,7 +231,7 @@ export function CalendarView({ items, today, view, onViewChange, weekStartsOn, m
     const next = navigateDate(e.key, date, view, weekStartsOn)
     if (!next) return
     e.preventDefault()
-    goTo(next, true)
+    goTo(next)
   }
 
   const names = weekdayNames(weekStartsOn)
@@ -277,6 +285,7 @@ export function CalendarView({ items, today, view, onViewChange, weekStartsOn, m
           <Button
             variant="secondary"
             onPress={() => {
+              refocus.current = false
               setAnchor(today)
               setFocus(today)
             }}

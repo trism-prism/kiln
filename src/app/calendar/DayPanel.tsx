@@ -12,11 +12,14 @@ import type { DragPayload } from './CalendarView'
 function MoveField({ item, date, today, onMove, onDone }: { item: TodoItem; date: string; today: string; onMove: (p: DragPayload, to: string) => void; onDone: () => void }) {
   const [to, setTo] = useState(date < today ? today : date)
   const valid = to >= today && to !== date
+  const hint = `move-hint-${item.key}`
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (!valid) return
     onMove({ kind: item.kind as 'task' | 'practice', id: item.id, title: item.title, from: date }, to)
     onDone()
+    // The row leaves the list, so its focus would fall to the page: keep it in the panel.
+    requestAnimationFrame(() => document.querySelector<HTMLElement>('[role="dialog"]')?.focus())
   }
   return (
     <form onSubmit={submit} className="mt-2 flex flex-wrap items-center gap-2">
@@ -26,6 +29,8 @@ function MoveField({ item, date, today, onMove, onDone }: { item: TodoItem; date
         min={today}
         value={to}
         onChange={(e) => setTo(e.target.value)}
+        aria-invalid={!valid}
+        aria-describedby={valid ? undefined : hint}
         className="h-10 rounded-md border border-border-strong bg-surface-raised px-3 text-sm text-text"
       />
       <Button type="submit" variant="secondary" isDisabled={!valid}>
@@ -34,6 +39,11 @@ function MoveField({ item, date, today, onMove, onDone }: { item: TodoItem; date
       <Button variant="quiet" onPress={onDone}>
         Cancel
       </Button>
+      {!valid && (
+        <p id={hint} className="basis-full text-xs text-text-muted">
+          Pick a day from today on, other than this one.
+        </p>
+      )}
     </form>
   )
 }

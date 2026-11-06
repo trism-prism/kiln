@@ -160,6 +160,22 @@ describe('week view', () => {
     expect(document.activeElement).toBe(dayButton('2026-11-18'))
   })
 
+  it('steps from the focused day, and a key that changes nothing does not leave a focus jump behind', async () => {
+    const user = userEvent.setup()
+    render(<Harness items={[]} start="week" />)
+    dayButton(TODAY).focus() // Wednesday
+    await user.keyboard('{ArrowRight}') // Thursday 12th
+    await user.click(screen.getByRole('button', { name: 'Next week' }))
+    expect(screen.getByRole('grid', { name: 'Nov 16 to Nov 22, 2026' })).toBeTruthy()
+    expect(dayButton('2026-11-19').tabIndex).toBe(0) // the Thursday, not the Monday
+    // Home on the first day of the week moves nothing; a later toolbar press must not pull focus into the grid.
+    dayButton('2026-11-16').focus()
+    await user.keyboard('{Home}')
+    expect(document.activeElement).toBe(dayButton('2026-11-16'))
+    await user.click(screen.getByRole('button', { name: 'Previous week' }))
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Previous week' }))
+  })
+
   it('keeps the focused day when switching between the views', async () => {
     const user = userEvent.setup()
     render(<Harness items={[]} />)

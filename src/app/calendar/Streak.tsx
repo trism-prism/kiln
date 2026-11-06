@@ -29,11 +29,11 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 export function Heatmap({ days, today }: { days: ReadonlyMap<string, DayStudy>; today: string }) {
   const cols = heatmapColumns(days, today)
   const scroller = useRef<HTMLDivElement>(null)
-  // Show the latest week first: on a phone the 52 weeks are wider than the screen.
+  // Show the latest week first: on a phone the 52 weeks are wider than the screen. Once, so later data changes keep where you scrolled.
   useEffect(() => {
     const el = scroller.current
     if (el) el.scrollLeft = el.scrollWidth
-  }, [days, today])
+  }, [])
   return (
     <div>
       <div className="flex gap-2">
