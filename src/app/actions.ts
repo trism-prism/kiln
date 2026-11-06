@@ -1,6 +1,6 @@
 // Writes the screens share. Each reports through a toast.
-import { db, scheduleAll, skipTask, unskipTask, updateRecord } from '../data'
-import { toLocalISODate } from '../lib/date'
+import { db, revertWrite, scheduleAll, skipTask, unskipTask, updateRecord } from '../data'
+import { formatDay, toLocalISODate } from '../lib/date'
 import { toasts } from '../ui/overlay'
 
 const today = () => toLocalISODate(new Date())
@@ -62,6 +62,44 @@ export async function pinTask(taskId: string, date: string | undefined): Promise
   try {
     await updateRecord(db, 'tasks', taskId, date ? { pinnedDate: date, scheduledDate: date, backlog: undefined } : { pinnedDate: undefined })
     toasts.add({ title: date ? `Pinned to ${date}` : 'Unpinned' }, { timeout: 4000 })
+  } catch (e) {
+    fail(e)
+  }
+}
+
+/**
+ * Moves a task (pinning it to the day, like pinTask) or a daily problem to another day. Toasts the
+ * move with Undo, and a second toast with `warnings` (broken dependencies) when there are any.
+ */
+export async function moveItem(item: { kind: 'task' | 'practice'; id: string; title: string }, date: string, warnings: string[] = []): Promise<void> {
+  try {
+    let undo: () => Promise<boolean>
+    if (item.kind === 'task') {
+      const before = await db.tasks.get(item.id)
+      const after = before && !before.deleted ? await updateRecord(db, 'tasks', item.id, { pinnedDate: date, scheduledDate: date, backlog: undefined }) : undefined
+      if (!before || !after) throw new Error('That task no longer exists.')
+      undo = () => revertWrite(db, { restore: [['tasks', before, after.updatedAt]] })
+    } else {
+      const before = await db.practiceItems.get(item.id)
+      const after = before && !before.deleted ? await updateRecord(db, 'practiceItems', item.id, { date }) : undefined
+      if (!before || !after) throw new Error('That problem no longer exists.')
+      undo = () => revertWrite(db, { restore: [['practiceItems', before, after.updatedAt]] })
+    }
+    toasts.add(
+      {
+        title: `Moved to ${formatDay(date)}`,
+        description: item.title,
+        action: {
+          label: 'Undo',
+          onPress: () =>
+            void undo()
+              .then((ok) => ok || toasts.add({ title: 'Could not undo', description: 'It was changed after the move.' }, { timeout: 6000 }))
+              .catch(fail),
+        },
+      },
+      { timeout: 8000 },
+    )
+    if (warnings.length) toasts.add({ title: 'Dependency warning', description: warnings.join(' ') }, { timeout: 12000 })
   } catch (e) {
     fail(e)
   }

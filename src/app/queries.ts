@@ -2,19 +2,23 @@
 import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { badgeCount } from '../domain/badge'
+import { buildStudyDays, streakStats, type DayStudy, type StreakStats } from '../domain/streaks'
 import { buildTodoItems, type TodoItem } from '../domain/todo'
 import {
   db,
   dueCards,
+  getSettings,
   listModules,
   listPlans,
   masteryByPlan,
+  studyEvents,
   tasksScheduledBetween,
   type ModuleRecord,
   type PlanRecord,
+  type SettingsRecord,
   type TaskRecord,
 } from '../data'
-import { addDaysISO, toLocalISODate } from '../lib/date'
+import { addDaysISO, toLocalISODate, weekdayIndex } from '../lib/date'
 
 /** Today's local date. Re-checked every 30 s and when the tab regains focus, so it rolls over at midnight. */
 export function useToday(): string {
@@ -56,26 +60,64 @@ export function useBadgeCount(today: string): number {
   )
 }
 
+async function loadTodo(today: string, horizonDays: number) {
+  const plans = await listPlans(db)
+  const allTasks = alive(await db.tasks.toArray())
+  const problems = alive(await db.practiceItems.toArray())
+  const cards = await dueCards(db, addDaysISO(today, horizonDays))
+  const taskTitle = new Map(allTasks.map((t) => [t.id, t.title]))
+  const problemTitle = new Map(problems.map((p) => [p.slug, p.title]))
+  const items = buildTodoItems(
+    {
+      tasks: allTasks,
+      problems,
+      cards,
+      planTitles: new Map(plans.map((p) => [p.id, p.title])),
+      cardTitle: (c) => (c.taskId && taskTitle.get(c.taskId)) || (c.slug && (problemTitle.get(c.slug) ?? c.slug)) || '',
+    },
+    today,
+  )
+  return { items, hasPlans: plans.length > 0, tasks: allTasks }
+}
+
 /** Everything the To Do page lists, from today - 28 days to today + 28 days. undefined while loading. */
 export function useTodoItems(today: string): { items: TodoItem[]; hasPlans: boolean } | undefined {
   return useLiveQuery(async () => {
-    const plans = await listPlans(db)
-    const allTasks = alive(await db.tasks.toArray())
-    const problems = alive(await db.practiceItems.toArray())
-    const cards = await dueCards(db, addDaysISO(today, 28))
-    const taskTitle = new Map(allTasks.map((t) => [t.id, t.title]))
-    const problemTitle = new Map(problems.map((p) => [p.slug, p.title]))
-    const items = buildTodoItems(
-      {
-        tasks: allTasks,
-        problems,
-        cards,
-        planTitles: new Map(plans.map((p) => [p.id, p.title])),
-        cardTitle: (c) => (c.taskId && taskTitle.get(c.taskId)) || (c.slug && (problemTitle.get(c.slug) ?? c.slug)) || '',
-      },
-      today,
-    )
-    return { items, hasPlans: plans.length > 0 }
+    const { items, hasPlans } = await loadTodo(today, 28)
+    return { items, hasPlans }
+  }, [today])
+}
+
+export interface CalendarData {
+  /** Every dated item (tasks, daily problems, reviews up to a year ahead), as on the To Do page. */
+  items: TodoItem[]
+  /** Live tasks, for dependency checks when one is moved. */
+  tasks: TaskRecord[]
+  hasPlans: boolean
+  settings: SettingsRecord
+}
+
+/** What the calendar draws: all dated items, the tasks, and the settings (week start, daily minutes, blackout dates). */
+export function useCalendarData(today: string): CalendarData | undefined {
+  return useLiveQuery(async () => {
+    const { items, hasPlans, tasks } = await loadTodo(today, 366)
+    return { items, tasks, hasPlans, settings: await getSettings(db) }
+  }, [today])
+}
+
+export interface StudySummary {
+  days: Map<string, DayStudy>
+  stats: StreakStats
+}
+
+/** Streak numbers and the per-day completions behind the heatmap. Blackout dates and weekdays with no minutes do not break a streak. */
+export function useStudy(today: string): StudySummary | undefined {
+  return useLiveQuery(async () => {
+    const days = buildStudyDays(await studyEvents(db))
+    const { blackoutDates, minutesPerWeekday } = await getSettings(db)
+    const blackout = new Set(blackoutDates)
+    const stats = streakStats(days, today, (d) => blackout.has(d) || (minutesPerWeekday[weekdayIndex(d)] ?? 0) === 0)
+    return { days, stats }
   }, [today])
 }
 
