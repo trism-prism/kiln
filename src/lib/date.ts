@@ -31,3 +31,15 @@ export function weekdayIndex(s: string): number {
   if (!m) throw new Error(`not a yyyy-mm-dd date: ${s}`)
   return (new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))).getUTCDay() + 6) % 7
 }
+
+/** "Thu, Nov 12" for a yyyy-mm-dd date; with `withYear`, "Thu, Nov 12, 2026". Uses the device's local calendar. */
+export function formatDay(s: string, withYear = false): string {
+  const m = ISO_DATE.exec(s)
+  if (!m) return s
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    ...(withYear ? { year: 'numeric' } : {}),
+  })
+}

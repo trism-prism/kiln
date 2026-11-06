@@ -87,12 +87,12 @@ export async function softDelete(db: KilnDB, name: TableName, id: string): Promi
   await updateRecord(db, name, id, { deleted: true } as Partial<Records[typeof name]>)
 }
 
-/** Tombstones a plan with its modules, tasks, review cards and logs, and its practice log rows. */
+/** Tombstones a plan with its modules, tasks, review cards and logs, its practice log rows and its generated daily problems. */
 export async function softDeletePlan(db: KilnDB, planId: string): Promise<void> {
   const deviceId = await getDeviceId(db)
   const now = Date.now()
   const tomb = <T extends Base>(rows: T[]) => rows.filter((r) => !r.deleted).map((r) => ({ ...r, deleted: true, updatedAt: now, deviceId }))
-  await db.transaction('rw', [db.plans, db.modules, db.tasks, db.reviewCards, db.reviewLogs, db.practiceLog], async () => {
+  await db.transaction('rw', [db.plans, db.modules, db.tasks, db.reviewCards, db.reviewLogs, db.practiceLog, db.practiceItems], async () => {
     const plan = await db.plans.get(planId)
     if (plan) await db.plans.put({ ...plan, deleted: true, updatedAt: now, deviceId })
     await db.modules.bulkPut(tomb(await db.modules.where('planId').equals(planId).toArray()))
@@ -102,6 +102,33 @@ export async function softDeletePlan(db: KilnDB, planId: string): Promise<void> 
     await db.reviewLogs.bulkPut(tomb(await db.reviewLogs.where('cardId').anyOf(cards.map((c) => c.id)).toArray()))
     // ponytail: practiceLog has no planId index; a scan is fine at one row per study day.
     await db.practiceLog.bulkPut(tomb(await db.practiceLog.filter((r) => r.planId === planId).toArray()))
+    await db.practiceItems.bulkPut(tomb(await db.practiceItems.where('planId').equals(planId).toArray()))
+  })
+}
+
+/**
+ * Undo for a multi-record write: puts the earlier copies back (with a fresh updatedAt, so the undo
+ * also wins a sync) and tombstones the records the write created. All or nothing. Each restore names
+ * the `updatedAt` the write left on the record; if the record changed since (another rating, a pin,
+ * a sync), nothing is undone and this returns false, so an old undo cannot overwrite newer work.
+ */
+export async function revertWrite(
+  db: KilnDB,
+  change: { restore?: [Exclude<TableName, 'settings'>, Base, number][]; remove?: [Exclude<TableName, 'settings'>, string][] },
+): Promise<boolean> {
+  const restore = change.restore ?? []
+  const remove = change.remove ?? []
+  const deviceId = await getDeviceId(db)
+  const now = Date.now()
+  const names = [...new Set([...restore, ...remove].map(([n]) => n))]
+  return db.transaction('rw', names.map((n) => db.table(n)), async () => {
+    for (const [n, rec, after] of restore) {
+      const cur = (await db.table(n).get(rec.id)) as Base | undefined
+      if (!cur || cur.updatedAt !== after) return false
+    }
+    for (const [n, rec] of restore) await db.table(n).put({ ...rec, updatedAt: now, deviceId })
+    for (const [n, id] of remove) await softDelete(db, n, id)
+    return true
   })
 }
 

@@ -103,6 +103,14 @@ describe('two devices', () => {
     expect(ok(await sync(a))).toMatchObject({ pulled: 0, pushed: 0 })
   })
 
+  it('syncs generated daily problems (practiceItems)', async () => {
+    const { a, b } = await twoDevices()
+    const item = await insertRecord(a, 'practiceItems', { planId: 'p', date: '2026-11-09', slug: 'two-sum', title: 'Two Sum', difficulty: 'easy', minutes: 25, status: 'open' })
+    ok(await sync(a))
+    ok(await sync(b))
+    expect(await b.practiceItems.get(item.id)).toEqual(item)
+  })
+
   it('syncs every table, settings included', async () => {
     const { a, b } = await twoDevices()
     await updateSettings(a, { theme: 'dark' })

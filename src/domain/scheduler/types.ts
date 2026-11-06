@@ -11,6 +11,8 @@ export interface SchedPlan {
   startDate: string
   /** End of the last day to finish core and recommended work. Also opens the "final 14 days" of the ramp. */
   deadline?: string
+  /** Send this plan's open optional tasks to the backlog (like the input's skipOptional, for one plan). */
+  skipOptional?: boolean
   dailyPractice?: {
     source: 'neetcode' | 'plan'
     perDay: number

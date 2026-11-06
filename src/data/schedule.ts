@@ -4,6 +4,7 @@ import { schedule, BACKLOG, type SchedPlan, type SchedTask, type ScheduleInput, 
 import { addDaysISO } from '../lib/date'
 import type { KilnDB } from './db'
 import { reviewsDue } from './mastery'
+import { persistPractice } from './practice'
 import { getDeviceId, getSettings, isPlanComplete, listModules, listPlans, listTasks } from './repo'
 import type { TaskRecord } from './types'
 
@@ -21,7 +22,7 @@ export interface ScheduleAllOptions {
  * Reads plans, tasks and settings, runs the scheduler for `today` ("yyyy-mm-dd") and writes the
  * results in one transaction: `scheduledDate` for placed tasks, `backlog: true` (and no date) for
  * deferred ones. Plans with missing parts are left out. Returns the scheduler's output.
- * Generated daily problems are returned, not stored.
+ * Generated daily problems are returned and also stored (practice.ts persistPractice), so they stay stable.
  */
 export async function scheduleAll(db: KilnDB, today: string, opts: ScheduleAllOptions = {}): Promise<ScheduleOutput> {
   const deviceId = await getDeviceId(db)
@@ -29,7 +30,7 @@ export async function scheduleAll(db: KilnDB, today: string, opts: ScheduleAllOp
   opts = { ...opts, reviewsDue: opts.reviewsDue ?? (await reviewsDue(db, today, addDaysISO(today, REVIEW_HORIZON_DAYS))) }
   // The callback must itself be an async function: Dexie only keeps the transaction alive across native
   // awaits when it can see that, and an arrow returning run()'s promise commits after the first await.
-  return db.transaction('rw', [db.plans, db.modules, db.tasks, db.practiceLog, db.settings], async () => run(db, deviceId, today, opts))
+  return db.transaction('rw', [db.plans, db.modules, db.tasks, db.practiceLog, db.practiceItems, db.settings], async () => run(db, deviceId, today, opts))
 }
 
 async function run(db: KilnDB, deviceId: string, today: string, opts: ScheduleAllOptions): Promise<ScheduleOutput> {
@@ -45,6 +46,7 @@ async function run(db: KilnDB, deviceId: string, today: string, opts: ScheduleAl
       weight: plan.weight,
       startDate: plan.startDate,
       deadline: plan.deadline,
+      skipOptional: plan.skipOptional,
       dailyPractice: plan.dailyPractice && {
         source: plan.dailyPractice.source,
         perDay: plan.dailyPractice.perDay ?? 1,
@@ -106,5 +108,6 @@ async function run(db: KilnDB, deviceId: string, today: string, opts: ScheduleAl
     if (next.scheduledDate !== t.scheduledDate || next.backlog !== t.backlog) changed.push({ ...next, updatedAt: now, deviceId })
   }
   await db.tasks.bulkPut(changed)
+  await persistPractice(db, deviceId, today, out.practice, plans.map((p) => ({ id: p.id, generates: p.dailyPractice?.source === 'neetcode' })), opts.mode === 'reschedule')
   return out
 }

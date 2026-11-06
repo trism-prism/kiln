@@ -12,20 +12,20 @@ Plan: docs/plan.md.
 | 3 | Data layer | done (merged, fe3b485) |
 | 4 | Scheduler + LC ramp | done (merged, b2d0f47) |
 | 5 | Mastery | done (merged, 61e3051) |
-| 6 | Design system + shell | done (PR pending); design self-approved overnight per the user's instruction; user reviews docs/design in the morning |
-| 7 | Core screens | pending |
+| 6 | Design system + shell | done (PR pending, branch `feat/design-shell`); design self-approved overnight per the user's instruction; user reviews docs/design in the morning |
+| 7 | Core screens | done (PR pending) |
 | 8 | Calendar + streaks | pending |
-| 9 | Import + create | done (PR pending) |
+| 9 | Import + create | done (merged, fd495ec) |
 | 10 | PWA | pending |
 | 11 | Worker: push + analytics | server half merged (b651130) (SW push handler and UI pending in the PWA stage) |
-| 12 | Sync | non-UI done (PR pending); Settings > Sync UI pending |
+| 12 | Sync | non-UI done (merged, ef075a5); Settings > Sync UI pending |
 | 13 | Production | pending |
 
 ## Current branch
-`feat/design-shell` (stage 6, PR pending). Stages 3, 4 and 5 merged (fe3b485, b2d0f47, 61e3051).
+`feat/core-screens` (stage 7, PR pending), built on stage 6 (`feat/design-shell`, PR pending). Stages 3, 4 and 5 merged (fe3b485, b2d0f47, 61e3051).
 
 ## Next exact step
-Stage 7: core screens (`feat/core-screens`). Start from docs/design/README.md (tokens, components, how to use the shell). Wire `src/app/useTodoCount.ts` to `src/domain/badge` + `src/data`, then build To Do (Today / 7 / 28, plus past 7 / 28), task page, dashboard cards, plan/modules page, brush-up and the rating sheet on the existing routes.
+Stage 8: calendar + streaks (`feat/calendar-streaks`). Month and week calendar on `/calendar` with drag to reschedule (React Aria DnD), streak and heatmap from `practiceLog` and `reviewLogs`. Reuse `src/domain/todo` (`buildTodoItems`, `dayLabel`), `src/app/queries.ts` and `pinTask` in `src/app/actions.ts` (dropping a task on a day pins it).
 
 ## Open questions
 - Domain name (user buys, ~$10-12/yr).
