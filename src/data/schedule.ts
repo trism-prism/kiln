@@ -5,7 +5,7 @@ import { addDaysISO } from '../lib/date'
 import type { KilnDB } from './db'
 import { reviewsDue } from './mastery'
 import { persistPractice } from './practice'
-import { getDeviceId, getSettings, isPlanComplete, listModules, listPlans, listTasks } from './repo'
+import { getDeviceId, getSettings, stampAfter, isPlanComplete, listModules, listPlans, listTasks } from './repo'
 import type { TaskRecord } from './types'
 
 const REVIEW_HORIZON_DAYS = 3 * 365 // the scheduler's own horizon
@@ -98,14 +98,13 @@ async function run(db: KilnDB, deviceId: string, today: string, opts: ScheduleAl
     solved,
   })
 
-  const now = Date.now()
   const changed: TaskRecord[] = []
   for (const t of records) {
     const target = out.assignments[t.id]
     if (target === undefined) continue
     const backlog = target === BACKLOG
     const next = backlog ? { ...t, scheduledDate: undefined, backlog: true } : { ...t, scheduledDate: target, backlog: undefined }
-    if (next.scheduledDate !== t.scheduledDate || next.backlog !== t.backlog) changed.push({ ...next, updatedAt: now, deviceId })
+    if (next.scheduledDate !== t.scheduledDate || next.backlog !== t.backlog) changed.push({ ...next, updatedAt: stampAfter(t.updatedAt), deviceId })
   }
   await db.tasks.bulkPut(changed)
   await persistPractice(db, deviceId, today, out.practice, plans.map((p) => ({ id: p.id, generates: p.dailyPractice?.source === 'neetcode' })), opts.mode === 'reschedule')
