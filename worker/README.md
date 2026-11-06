@@ -6,34 +6,34 @@ Cloudflare Worker with D1: anonymous Web Push reminders and the anonymous daily 
 
 | Table | Columns | Purpose |
 |---|---|---|
-| `push_subscriptions` | `endpoint` (unique), `p256dh`, `auth`, `reminder_time` (HH:MM), `nudge_time` (HH:MM or null), `timezone` (IANA), `last_reminder_date`, `last_nudge_date`, timestamps | Who to push, and when |
+| `push_subscriptions` | `endpoint` (unique), `token_hash`, `p256dh`, `auth`, `reminder_time` (HH:MM), `nudge_time` (HH:MM or null), `timezone` (IANA), `last_reminder_date`, `last_nudge_date`, `last_attempt_at`, timestamps | Who to push, and when |
 | `active_devices` | `device_hash`, `day` (UTC), unique together | Count of active devices per day |
 
 It never stores: names, emails, accounts, IP addresses, user agents, task or plan content, study data, or the raw device id (only its SHA-256). The task count shown in a notification is computed on the device.
 
 ## Routes
 
-All bodies are JSON (`Content-Type: application/json`), max 4 KB. Errors are `{"error": "..."}` with a status code (400 invalid, 403 origin, 404, 405, 413, 415, 500).
+All bodies are JSON (`Content-Type: application/json`), max 4096 bytes, counted while streaming (Content-Length is not trusted). Errors are `{"error": "..."}` with a status code (400 invalid, 403 origin, 404, 405, 413, 415, 500).
 
 | Route | Body | Result |
 |---|---|---|
 | `GET /health` | | `200 {"ok":true}` |
-| `POST /push/subscription` | `{endpoint, p256dh, auth, reminderTime, nudgeTime|null, timezone}` | `204`. Upsert by endpoint |
-| `DELETE /push/subscription` | `{endpoint}` | `204` (idempotent) |
+| `POST /push/subscription` | `{endpoint, p256dh, auth, reminderTime, nudgeTime|null, timezone, token}` | `204`. Upsert by endpoint; 403 if the endpoint exists with a different token; 503 when the table holds 50,000 rows (`MAX_SUBSCRIPTIONS` var overrides) |
+| `DELETE /push/subscription` | `{endpoint, token}` | `204` (idempotent); 403 on a wrong token |
 | `POST /ping` | `{deviceId}` 16-128 chars of `A-Za-z0-9_-`, random, made by the client | `204`. Stores `sha256(deviceId)` once per device per UTC day |
 
 Validation is strict: unknown fields are rejected; `endpoint` must be an `https` URL on a known push service (`fcm.googleapis.com`, `push.services.mozilla.com`, `push.apple.com`, `notify.windows.com`), so the cron cannot be pointed at arbitrary hosts; `p256dh` is a base64url 65-byte uncompressed P-256 key, `auth` is 16 base64url bytes; times are `HH:MM`; `timezone` must be accepted by `Intl.DateTimeFormat`.
 
-CORS: requests carrying an `Origin` not in `ALLOWED_ORIGINS` (comma separated, in `wrangler.toml`) get 403. Default is the Vite dev and preview origins; add the production origin at deploy time. There is no per-IP rate limit (a Cloudflare rate-limiting rule on the zone can add one later).
+CORS: requests carrying an `Origin` not in `ALLOWED_ORIGINS` (comma separated, in `wrangler.toml`) get 403. Default is the Vite dev and preview origins; add the production origin at deploy time. There is no per-IP limit in code; add the Cloudflare rate-limiting rule from the deploy steps. Subscription rows are capped as a backstop.
 
 ## Cron
 
 Triggered every 15 minutes (`*/15 * * * *`). For each subscription it works out the local date and time in the subscription's timezone and sends a kind when:
 
 - local time is at or after `reminder_time` (or `nudge_time`, only if set), and no more than 120 minutes after it, and
-- `last_<kind>_date` is not today's local date.
+- `last_<kind>_date` is not the local date of that occurrence. An occurrence more than 12 hours ahead counts as yesterday's, so a 23:50 reminder fires at the 00:00 tick, recorded against the previous date, and is not repeated.
 
-`last_<kind>_date` is written only after the push service answers 2xx, so a failed send retries on the next run (within the 120-minute window). `404`/`410` delete the subscription. Other statuses and network errors are logged and retried.
+Each send first claims the date with a conditional `UPDATE` (so overlapping runs cannot double send), then calls the push service. On 2xx the claim stays. `404`/`410` delete the subscription. Other statuses and network errors release the claim and are retried on the next run (within the 120-minute window). One failing subscription never aborts the run. Rows are processed oldest `last_attempt_at` first, so failures rotate to the back and cannot starve others when the 40-send cap is hit.
 
 Edge cases, all covered by tests: half-hour zones (Asia/Kolkata); a time skipped by spring-forward fires when the clock reaches 03:00; the repeated hour on fall-back does not send twice because the date marker is per local day. When a subscription is saved and its time has already passed that local day, the marker is set to today so it does not fire immediately.
 
@@ -60,7 +60,9 @@ No counts, titles or user data. The service worker `push` handler must:
 3. Call `self.registration.showNotification(...)` and `navigator.setAppBadge(count)`. Always show a notification, including for a nudge when nothing remains (for example "All done today"): Safari/iOS revokes subscriptions that receive pushes without a visible notification.
 4. For `kind: "nudge"`, show nothing alarming when the count is zero; the wording above is enough.
 
-Client registration: after `pushManager.subscribe({userVisibleOnly: true, applicationServerKey: <VAPID public key>})`, POST `subscription.toJSON()` fields `endpoint`, `keys.p256dh`, `keys.auth` as `endpoint`, `p256dh`, `auth` together with `reminderTime`, `nudgeTime` and `timezone` (`Intl.DateTimeFormat().resolvedOptions().timeZone`). Re-POST whenever the reminder settings change. DELETE on unsubscribe.
+Client registration: after `pushManager.subscribe({userVisibleOnly: true, applicationServerKey: <VAPID public key>})`, POST `subscription.toJSON()` fields `endpoint`, `keys.p256dh`, `keys.auth` as `endpoint`, `p256dh`, `auth` together with `reminderTime`, `nudgeTime` and `timezone` (`Intl.DateTimeFormat().resolvedOptions().timeZone`). Re-POST whenever the reminder settings change (an unchanged time keeps its already-sent marker). DELETE on unsubscribe.
+
+Management token: the client generates a random secret once (for example `crypto.randomUUID()`, or 16+ random bytes base64url; 16-128 chars of `A-Za-z0-9_-`), keeps it locally, and sends it as `token` on every POST and DELETE. The server stores only its SHA-256. A re-POST or DELETE for an existing endpoint with a different token gets 403, so someone who learns an endpoint cannot change or remove another device's subscription.
 
 Active-device ping: generate `deviceId` once (`crypto.randomUUID()` with dashes kept, or 16 random bytes base64url) and store it locally; POST `/ping` at most once per day when the app opens.
 
@@ -95,7 +97,8 @@ and the matching public key in `wrangler.toml`. `npm run vapid` prints a new pai
 4. Add the production site origin to `ALLOWED_ORIGINS`.
 5. `npx wrangler d1 migrations apply kiln --remote`.
 6. `npx wrangler deploy`.
-7. Verify: `curl https://<worker-url>/health`, then subscribe from the installed PWA.
+7. Rate limiting: in the Cloudflare dashboard (Security > WAF > Rate limiting rules) add a rule for URI path starting with `/push/` or equal to `/ping`, for example 30 requests per minute per IP, action Block. The 50,000-row cap in the Worker is only a backstop.
+8. Verify: `curl https://<worker-url>/health`, then subscribe from the installed PWA.
 
 ## Web Analytics
 

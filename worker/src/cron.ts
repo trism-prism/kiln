@@ -39,21 +39,41 @@ export function localNow(now: Date, timeZone: string): { date: string; time: str
 
 const minutes = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3))
 
-/** Local date to record as "already sent" when the time has already passed today (so subscribing late does not fire at once). */
-export function seedSentDate(time: string | null, now: Date, timeZone: string): string | null {
-  if (!time) return null
-  const l = localNow(now, timeZone)
-  return minutes(l.time) >= minutes(time) ? l.date : null
+function previousDay(date: string): string {
+  const d = new Date(`${date}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() - 1)
+  return d.toISOString().slice(0, 10)
 }
 
-/** Kinds due now: local time reached the set time (within the window) and not yet sent on this local date. */
-export function dueKinds(s: SubRow, now: Date): Kind[] {
-  const l = localNow(now, s.timezone)
-  const out: Kind[] = []
+/**
+ * Minutes since `time` last occurred and the local date that occurrence belongs to.
+ * An occurrence more than 12 hours ahead is really yesterday's (so 23:50 is 10 minutes late at 00:00).
+ */
+function sinceOccurrence(now: Date, timeZone: string, time: string): { late: number; date: string } {
+  const l = localNow(now, timeZone)
+  const late = minutes(l.time) - minutes(time)
+  return late < -720 ? { late: late + 1440, date: previousDay(l.date) } : { late, date: l.date }
+}
+
+/** Date to record as "already sent" when the time has already passed (so subscribing late does not fire at once). */
+export function seedSentDate(time: string | null, now: Date, timeZone: string): string | null {
+  if (!time) return null
+  const o = sinceOccurrence(now, timeZone, time)
+  return o.late >= 0 ? o.date : null
+}
+
+export interface Due {
+  kind: Kind
+  date: string
+}
+
+/** Kinds due now: the time was reached (within the window) and not yet sent for that occurrence's local date. */
+export function dueKinds(s: SubRow, now: Date): Due[] {
+  const out: Due[] = []
   const check = (time: string | null, last: string | null, kind: Kind) => {
-    if (!time || last === l.date) return
-    const late = minutes(l.time) - minutes(time)
-    if (late >= 0 && late < WINDOW_MIN) out.push(kind)
+    if (!time) return
+    const o = sinceOccurrence(now, s.timezone, time)
+    if (o.late >= 0 && o.late < WINDOW_MIN && last !== o.date) out.push({ kind, date: o.date })
   }
   check(s.reminder_time, s.last_reminder_date, 'reminder')
   check(s.nudge_time, s.last_nudge_date, 'nudge')
@@ -67,36 +87,49 @@ export async function runCron(
   fetchImpl: typeof fetch = fetch,
 ): Promise<{ sent: number; removed: number; failed: number }> {
   // ponytail: loads every row; fine for thousands of devices, shard by timezone beyond that.
-  const { results } = await db.prepare('SELECT * FROM push_subscriptions').all<SubRow>()
+  const { results } = await db
+    .prepare('SELECT * FROM push_subscriptions ORDER BY last_attempt_at ASC, id ASC')
+    .all<SubRow>()
   const stats = { sent: 0, removed: 0, failed: 0 }
+  const iso = now.toISOString()
   let budget = MAX_SENDS
   for (const s of results) {
-    for (const kind of dueKinds(s, now)) {
+    for (const { kind, date } of dueKinds(s, now)) {
       if (budget-- <= 0) return stats
-      let status: number
+      const col = kind === 'reminder' ? 'last_reminder_date' : 'last_nudge_date'
+      const previous = kind === 'reminder' ? s.last_reminder_date : s.last_nudge_date
+      let claimed = false
       try {
-        status = await sendPush(vapid, s, { kind }, Math.floor(now.getTime() / 1000), fetchImpl)
+        // Claim first so an overlapping run cannot send the same reminder twice.
+        const claim = await db
+          .prepare(`UPDATE push_subscriptions SET ${col} = ?, last_attempt_at = ? WHERE id = ? AND (${col} IS NULL OR ${col} != ?)`)
+          .bind(date, iso, s.id, date)
+          .run()
+        if (claim.meta.changes !== 1) continue
+        claimed = true
+        const status = await sendPush(vapid, s, { kind }, Math.floor(now.getTime() / 1000), fetchImpl)
+        if (status >= 200 && status < 300) {
+          stats.sent++
+        } else if (status === 404 || status === 410) {
+          await db.prepare('DELETE FROM push_subscriptions WHERE id = ?').bind(s.id).run()
+          stats.removed++
+          break
+        } else {
+          console.error('push rejected', s.id, status)
+          stats.failed++
+          await release(db, col, s.id, date, previous)
+        }
       } catch (e) {
         console.error('push failed', s.id, e instanceof Error ? e.message : e)
         stats.failed++
-        continue
-      }
-      if (status >= 200 && status < 300) {
-        const col = kind === 'reminder' ? 'last_reminder_date' : 'last_nudge_date'
-        await db
-          .prepare(`UPDATE push_subscriptions SET ${col} = ? WHERE id = ?`)
-          .bind(localNow(now, s.timezone).date, s.id)
-          .run()
-        stats.sent++
-      } else if (status === 404 || status === 410) {
-        await db.prepare('DELETE FROM push_subscriptions WHERE id = ?').bind(s.id).run()
-        stats.removed++
-        break
-      } else {
-        console.error('push rejected', s.id, status)
-        stats.failed++
+        if (claimed) await release(db, col, s.id, date, previous).catch(() => {})
       }
     }
   }
   return stats
+}
+
+/** Undo a claim after a failed send so the next tick retries. */
+async function release(db: D1Database, col: string, id: number, date: string, previous: string | null): Promise<void> {
+  await db.prepare(`UPDATE push_subscriptions SET ${col} = ? WHERE id = ? AND ${col} = ?`).bind(previous, id, date).run()
 }

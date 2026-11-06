@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest'
 import worker from '../src/index'
 import { ENDPOINT, makeSubscription } from './helpers'
 
+const TOKEN = 'token-aaaaaaaaaaaaaaaa'
+const OTHER = 'token-bbbbbbbbbbbbbbbb'
+
 const ORIGIN = 'http://localhost:5173'
 
 function call(method: string, path: string, body?: unknown, headers: Record<string, string> = {}) {
@@ -16,7 +19,7 @@ function call(method: string, path: string, body?: unknown, headers: Record<stri
 
 async function validBody(over: Record<string, unknown> = {}) {
   const s = await makeSubscription()
-  return { endpoint: ENDPOINT, p256dh: s.p256dh, auth: s.auth, reminderTime: '08:00', nudgeTime: '20:00', timezone: 'America/New_York', ...over }
+  return { endpoint: ENDPOINT, p256dh: s.p256dh, auth: s.auth, reminderTime: '08:00', nudgeTime: '20:00', timezone: 'America/New_York', token: TOKEN, ...over }
 }
 
 const rows = () => env.DB.prepare('SELECT * FROM push_subscriptions').all<Record<string, unknown>>().then((r) => r.results)
@@ -71,6 +74,8 @@ describe('POST /push/subscription', () => {
     ['24:00', (b) => ({ ...b, reminderTime: '24:00' })],
     ['bad nudge time', (b) => ({ ...b, nudgeTime: '20:60' })],
     ['bad timezone', (b) => ({ ...b, timezone: 'Mars/Olympus' })],
+    ['missing token', (b) => ({ ...b, token: undefined })],
+    ['short token', (b) => ({ ...b, token: 'abc' })],
     ['extra field', (b) => ({ ...b, extra: 1 })],
   ]
   it.each(bad)('400s on %s', async (_n, mutate) => {
@@ -94,15 +99,82 @@ describe('POST /push/subscription', () => {
   })
 })
 
+describe('ownership, re-POST and capacity', () => {
+  it('stores only the token hash, and 403s a re-POST with another token without changing the row', async () => {
+    await call('POST', '/push/subscription', await validBody())
+    const [r] = await rows()
+    const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(TOKEN)))]
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('')
+    expect(r.token_hash).toBe(hash)
+    expect(JSON.stringify(r)).not.toContain(TOKEN)
+
+    const hijack = await validBody({ token: OTHER, reminderTime: '03:00' })
+    expect((await call('POST', '/push/subscription', hijack)).status).toBe(403)
+    expect((await rows())[0]).toMatchObject({ reminder_time: '08:00', token_hash: hash })
+  })
+
+  it('re-POST with the right token keeps last_*_date unless the time changed', async () => {
+    await call('POST', '/push/subscription', await validBody({ reminderTime: '00:00', nudgeTime: '00:00', timezone: 'UTC' }))
+    await env.DB.prepare("UPDATE push_subscriptions SET last_reminder_date = '2000-01-01', last_nudge_date = '2000-01-02'").run()
+
+    await call('POST', '/push/subscription', await validBody({ reminderTime: '00:00', nudgeTime: '00:00', timezone: 'UTC' }))
+    expect((await rows())[0]).toMatchObject({ last_reminder_date: '2000-01-01', last_nudge_date: '2000-01-02' })
+
+    // only the nudge time changes: reminder date kept, nudge reseeded (00:30 has not necessarily passed, 00:00 has)
+    await call('POST', '/push/subscription', await validBody({ reminderTime: '00:00', nudgeTime: '23:59', timezone: 'UTC' }))
+    const r = (await rows())[0]
+    expect(r.last_reminder_date).toBe('2000-01-01')
+    expect(r.last_nudge_date).not.toBe('2000-01-02')
+  })
+
+  it('refuses new subscriptions at the row cap but still updates existing ones', async () => {
+    const capped = { ...env, MAX_SUBSCRIPTIONS: '1' }
+    const post = (b: unknown) =>
+      worker.fetch(new Request('https://kiln.test/push/subscription', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }), capped)
+    expect((await post(await validBody())).status).toBe(204)
+    expect((await post(await validBody({ endpoint: 'https://fcm.googleapis.com/fcm/send/second' }))).status).toBe(503)
+    expect((await post(await validBody({ reminderTime: '09:00' }))).status).toBe(204)
+    expect(await rows()).toHaveLength(1)
+  })
+})
+
+describe('request body limit', () => {
+  it('counts streamed bytes even when Content-Length lies or is absent', async () => {
+    const stream = () =>
+      new ReadableStream<Uint8Array>({
+        start(c) {
+          for (let i = 0; i < 6; i++) c.enqueue(new TextEncoder().encode('x'.repeat(1000)))
+          c.close()
+        },
+      })
+    for (const headers of [{}, { 'content-length': '10' }]) {
+      const req = new Request('https://kiln.test/ping', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...headers },
+        body: stream(),
+        duplex: 'half',
+      } as RequestInit)
+      expect((await worker.fetch(req, env)).status).toBe(413)
+    }
+  })
+})
+
 describe('DELETE /push/subscription', () => {
   it('deletes by endpoint and is idempotent', async () => {
     await call('POST', '/push/subscription', await validBody())
-    expect((await call('DELETE', '/push/subscription', { endpoint: ENDPOINT })).status).toBe(204)
+    expect((await call('DELETE', '/push/subscription', { endpoint: ENDPOINT, token: TOKEN })).status).toBe(204)
     expect(await rows()).toHaveLength(0)
-    expect((await call('DELETE', '/push/subscription', { endpoint: ENDPOINT })).status).toBe(204)
+    expect((await call('DELETE', '/push/subscription', { endpoint: ENDPOINT, token: TOKEN })).status).toBe(204)
   })
-  it('400s without a valid endpoint', async () => {
+  it('400s without a valid endpoint or token', async () => {
     expect((await call('DELETE', '/push/subscription', {})).status).toBe(400)
+    expect((await call('DELETE', '/push/subscription', { endpoint: ENDPOINT })).status).toBe(400)
+  })
+  it('403s with the wrong token and keeps the row', async () => {
+    await call('POST', '/push/subscription', await validBody())
+    expect((await call('DELETE', '/push/subscription', { endpoint: ENDPOINT, token: OTHER })).status).toBe(403)
+    expect(await rows()).toHaveLength(1)
   })
 })
 

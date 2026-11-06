@@ -17,6 +17,7 @@ const sub = (over: Partial<SubRow> = {}): SubRow => ({
   ...over,
 })
 const at = (iso: string) => new Date(iso)
+const kinds = (s: SubRow, now: Date) => dueKinds(s, now).map((d) => d.kind)
 
 describe('localNow', () => {
   it('reads date and time in the zone', () => {
@@ -28,43 +29,51 @@ describe('localNow', () => {
 describe('dueKinds', () => {
   it('Asia/Kolkata half-hour offset: 08:00 local is 02:30Z', () => {
     const s = sub({ timezone: 'Asia/Kolkata' })
-    expect(dueKinds(s, at('2026-11-05T02:15:00Z'))).toEqual([])
-    expect(dueKinds(s, at('2026-11-05T02:30:00Z'))).toEqual(['reminder'])
+    expect(kinds(s, at('2026-11-05T02:15:00Z'))).toEqual([])
+    expect(kinds(s, at('2026-11-05T02:30:00Z'))).toEqual(['reminder'])
   })
 
   it('same instant is due in one zone and not another', () => {
     const now = at('2026-11-05T13:00:00Z') // 08:00 EST, 18:30 IST
-    expect(dueKinds(sub({ timezone: 'America/New_York' }), now)).toEqual(['reminder'])
-    expect(dueKinds(sub({ timezone: 'Asia/Kolkata', reminder_time: '19:00' }), now)).toEqual([])
+    expect(kinds(sub({ timezone: 'America/New_York' }), now)).toEqual(['reminder'])
+    expect(kinds(sub({ timezone: 'Asia/Kolkata', reminder_time: '19:00' }), now)).toEqual([])
   })
 
   it('US spring forward (2027-03-14): a nonexistent 02:30 fires once the clock reaches 03:00', () => {
     const s = sub({ timezone: 'America/New_York', reminder_time: '02:30' })
-    expect(dueKinds(s, at('2027-03-14T06:45:00Z'))).toEqual([]) // 01:45 EST
-    expect(dueKinds(s, at('2027-03-14T07:00:00Z'))).toEqual(['reminder']) // 03:00 EDT
+    expect(kinds(s, at('2027-03-14T06:45:00Z'))).toEqual([]) // 01:45 EST
+    expect(kinds(s, at('2027-03-14T07:00:00Z'))).toEqual(['reminder']) // 03:00 EDT
   })
 
   it('US fall back (2026-11-01): 08:00 EST arrives at 13:00Z, not 12:00Z', () => {
     const s = sub({ timezone: 'America/New_York' })
-    expect(dueKinds(s, at('2026-11-01T12:00:00Z'))).toEqual([]) // 07:00 EST
-    expect(dueKinds(s, at('2026-11-01T13:00:00Z'))).toEqual(['reminder'])
+    expect(kinds(s, at('2026-11-01T12:00:00Z'))).toEqual([]) // 07:00 EST
+    expect(kinds(s, at('2026-11-01T13:00:00Z'))).toEqual(['reminder'])
   })
 
   it('nudge only when nudge_time is set, and independently of the reminder', () => {
     const now = at('2026-11-05T20:05:00Z')
-    expect(dueKinds(sub({ reminder_time: '08:00', last_reminder_date: '2026-11-05' }), now)).toEqual([])
+    expect(kinds(sub({ reminder_time: '08:00', last_reminder_date: '2026-11-05' }), now)).toEqual([])
     expect(
-      dueKinds(sub({ reminder_time: '08:00', last_reminder_date: '2026-11-05', nudge_time: '20:00' }), now),
+      kinds(sub({ reminder_time: '08:00', last_reminder_date: '2026-11-05', nudge_time: '20:00' }), now),
     ).toEqual(['nudge'])
   })
 
   it('skips kinds already sent on this local date, and ones more than the window late', () => {
-    expect(dueKinds(sub({ last_reminder_date: '2026-11-05' }), at('2026-11-05T08:15:00Z'))).toEqual([])
-    expect(dueKinds(sub({ last_reminder_date: '2026-11-04' }), at('2026-11-05T08:15:00Z'))).toEqual(['reminder'])
-    expect(dueKinds(sub(), at('2026-11-05T10:00:00Z'))).toEqual([])
+    expect(kinds(sub({ last_reminder_date: '2026-11-05' }), at('2026-11-05T08:15:00Z'))).toEqual([])
+    expect(kinds(sub({ last_reminder_date: '2026-11-04' }), at('2026-11-05T08:15:00Z'))).toEqual(['reminder'])
+    expect(kinds(sub(), at('2026-11-05T10:00:00Z'))).toEqual([])
+  })
+
+  it('midnight wrap: 23:50 is not due at 23:45, is due at 00:00 for the previous local date', () => {
+    const s = sub({ reminder_time: '23:50' })
+    expect(dueKinds(s, at('2026-11-05T23:45:00Z'))).toEqual([])
+    expect(dueKinds(s, at('2026-11-06T00:00:00Z'))).toEqual([{ kind: 'reminder', date: '2026-11-05' }])
+    expect(dueKinds(sub({ ...s, last_reminder_date: '2026-11-05' }), at('2026-11-06T00:00:00Z'))).toEqual([])
   })
 
   it('seedSentDate marks a time already passed today', () => {
+    expect(seedSentDate('23:50', at('2026-11-06T00:10:00Z'), 'UTC')).toBe('2026-11-05')
     expect(seedSentDate('08:00', at('2026-11-05T09:00:00Z'), 'UTC')).toBe('2026-11-05')
     expect(seedSentDate('08:00', at('2026-11-05T07:00:00Z'), 'UTC')).toBeNull()
     expect(seedSentDate(null, at('2026-11-05T09:00:00Z'), 'UTC')).toBeNull()
@@ -111,6 +120,64 @@ describe('runCron', () => {
     // next day sends again
     await runCron(env.DB, vapid, at('2026-11-06T08:00:00Z'), f)
     expect(f).toHaveBeenCalledTimes(3)
+  })
+
+  it('midnight wrap: reminder 23:50 with ticks at 23:45 and 00:00 fires exactly once, on the right date', async () => {
+    const f = fetchWith(201)
+    const vapid = await makeVapid()
+    await insert({ reminder_time: '23:50' })
+    await runCron(env.DB, vapid, at('2026-11-05T23:45:00Z'), f)
+    expect(f).not.toHaveBeenCalled()
+    await runCron(env.DB, vapid, at('2026-11-06T00:00:00Z'), f)
+    await runCron(env.DB, vapid, at('2026-11-06T00:15:00Z'), f)
+    expect(f).toHaveBeenCalledTimes(1)
+    expect((await row())!.last_reminder_date).toBe('2026-11-05')
+  })
+
+  it('midnight wrap: a send at 23:55 is not repeated at 00:05', async () => {
+    const f = fetchWith(201)
+    const vapid = await makeVapid()
+    await insert({ reminder_time: '23:50' })
+    await runCron(env.DB, vapid, at('2026-11-05T23:55:00Z'), f)
+    await runCron(env.DB, vapid, at('2026-11-06T00:05:00Z'), f)
+    expect(f).toHaveBeenCalledTimes(1)
+  })
+
+  it('overlapping runs send once (the claim is atomic)', async () => {
+    const f = fetchWith(201)
+    const vapid = await makeVapid()
+    await insert()
+    await Promise.all([
+      runCron(env.DB, vapid, at('2026-11-05T08:00:00Z'), f),
+      runCron(env.DB, vapid, at('2026-11-05T08:00:00Z'), f),
+    ])
+    expect(f).toHaveBeenCalledTimes(1)
+  })
+
+  it('one failing subscription does not abort the tick, and its claim is released', async () => {
+    const f = fetchWith(201)
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await insert({ endpoint: 'https://fcm.googleapis.com/fcm/send/bad', p256dh: 'AAAA' })
+    await insert({ endpoint: 'https://fcm.googleapis.com/fcm/send/good' })
+    expect(await runCron(env.DB, await makeVapid(), at('2026-11-05T08:00:00Z'), f)).toEqual({ sent: 1, removed: 0, failed: 1 })
+    const bad = await env.DB.prepare("SELECT * FROM push_subscriptions WHERE endpoint LIKE '%/bad'").first<SubRow>()
+    expect(bad!.last_reminder_date).toBeNull()
+    err.mockRestore()
+  })
+
+  it('failures rotate to the back of the queue', async () => {
+    const urls: string[] = []
+    const f = vi.fn(async (u: string) => (urls.push(u), new Response(null, { status: 503 }))) as unknown as typeof fetch
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const vapid = await makeVapid()
+    for (let i = 1; i <= MAX_SENDS + 1; i++) await insert({ endpoint: `https://fcm.googleapis.com/fcm/send/${i}` })
+    await runCron(env.DB, vapid, at('2026-11-05T08:00:00Z'), f)
+    expect(urls).toHaveLength(MAX_SENDS)
+    expect(urls).not.toContain(`https://fcm.googleapis.com/fcm/send/${MAX_SENDS + 1}`)
+    urls.length = 0
+    await runCron(env.DB, vapid, at('2026-11-05T08:15:00Z'), f)
+    expect(urls[0]).toBe(`https://fcm.googleapis.com/fcm/send/${MAX_SENDS + 1}`)
+    err.mockRestore()
   })
 
   it('does not send a nudge when nudge_time is null', async () => {

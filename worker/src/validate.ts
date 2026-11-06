@@ -7,6 +7,7 @@ export interface SubscriptionInput {
   reminderTime: string
   nudgeTime: string | null
   timezone: string
+  token: string
 }
 
 const HHMM = /^([01][0-9]|2[0-3]):[0-5][0-9]$/
@@ -46,7 +47,7 @@ function keyOfLength(v: unknown, bytes: number, first?: number): v is string {
 export function parseSubscription(body: unknown): SubscriptionInput | string {
   if (typeof body !== 'object' || body === null || Array.isArray(body)) return 'body must be an object'
   const b = body as Record<string, unknown>
-  const allowed = new Set(['endpoint', 'p256dh', 'auth', 'reminderTime', 'nudgeTime', 'timezone'])
+  const allowed = new Set(['endpoint', 'p256dh', 'auth', 'reminderTime', 'nudgeTime', 'timezone', 'token'])
   for (const k of Object.keys(b)) if (!allowed.has(k)) return `unknown field: ${k}`
 
   if (!isPushEndpoint(b.endpoint)) return 'endpoint must be an https URL of a known push service'
@@ -56,7 +57,9 @@ export function parseSubscription(body: unknown): SubscriptionInput | string {
   const nudge = b.nudgeTime ?? null
   if (nudge !== null && (typeof nudge !== 'string' || !HHMM.test(nudge))) return 'nudgeTime must be HH:MM or null'
   if (!isTimeZone(b.timezone)) return 'timezone must be an IANA time zone'
+  if (!isSecretString(b.token)) return 'token must be 16-128 chars of A-Z a-z 0-9 _ -'
   return {
+    token: b.token,
     endpoint: b.endpoint,
     p256dh: b.p256dh as string,
     auth: b.auth as string,
@@ -68,8 +71,11 @@ export function parseSubscription(body: unknown): SubscriptionInput | string {
 
 const DEVICE_ID = /^[A-Za-z0-9_-]{16,128}$/
 
+/** Random client-made secret used as device id and as subscription management token. */
+export const isSecretString = (v: unknown): v is string => typeof v === 'string' && DEVICE_ID.test(v)
+
 export function parsePing(body: unknown): string | null {
   if (typeof body !== 'object' || body === null) return null
   const id = (body as Record<string, unknown>).deviceId
-  return typeof id === 'string' && DEVICE_ID.test(id) ? id : null
+  return isSecretString(id) ? id : null
 }

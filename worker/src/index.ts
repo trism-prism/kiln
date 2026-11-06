@@ -1,5 +1,5 @@
 import { runCron, seedSentDate } from './cron'
-import { isPushEndpoint, parsePing, parseSubscription } from './validate'
+import { isPushEndpoint, isSecretString, parsePing, parseSubscription } from './validate'
 
 export interface Env {
   DB: D1Database
@@ -7,7 +7,11 @@ export interface Env {
   VAPID_PUBLIC_KEY: string
   VAPID_SUBJECT: string
   VAPID_PRIVATE_KEY: string
+  /** Optional override of the subscription row cap. */
+  MAX_SUBSCRIPTIONS?: string
 }
+
+const DEFAULT_MAX_SUBSCRIPTIONS = 50_000
 
 const MAX_BODY = 4096
 
@@ -24,16 +28,32 @@ function json(data: unknown, status: number, headers: HeadersInit = {}): Respons
   return Response.json(data, { status, headers })
 }
 
+/** Reads the body with a byte counter, so a lying or missing Content-Length cannot get past the limit. */
 async function readJson(req: Request): Promise<unknown> {
   if (!(req.headers.get('content-type') ?? '').toLowerCase().startsWith('application/json')) {
     throw new HttpError(415, 'content-type must be application/json')
   }
-  const len = Number(req.headers.get('content-length') ?? 0)
-  if (len > MAX_BODY) throw new HttpError(413, 'body too large')
-  const text = await req.text()
-  if (text.length > MAX_BODY) throw new HttpError(413, 'body too large')
+  const chunks: Uint8Array[] = []
+  let total = 0
+  const reader = req.body?.getReader()
+  while (reader) {
+    const { done, value } = await reader.read()
+    if (done) break
+    total += value.length
+    if (total > MAX_BODY) {
+      await reader.cancel()
+      throw new HttpError(413, 'body too large')
+    }
+    chunks.push(value)
+  }
+  const bytes = new Uint8Array(total)
+  let o = 0
+  for (const c of chunks) {
+    bytes.set(c, o)
+    o += c.length
+  }
   try {
-    return JSON.parse(text)
+    return JSON.parse(new TextDecoder().decode(bytes))
   } catch {
     throw new HttpError(400, 'invalid JSON')
   }
@@ -42,6 +62,13 @@ async function readJson(req: Request): Promise<unknown> {
 async function sha256Hex(s: string): Promise<string> {
   const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s))
   return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+/** Constant-time string compare (both are hex digests of equal length when they match). */
+function safeEqual(a: string, b: string): boolean {
+  let diff = a.length ^ b.length
+  for (let i = 0; i < Math.max(a.length, b.length); i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0)
+  return diff === 0
 }
 
 async function route(req: Request, env: Env, url: URL): Promise<Response> {
@@ -53,17 +80,33 @@ async function route(req: Request, env: Env, url: URL): Promise<Response> {
   if (pathname === '/push/subscription' && m === 'POST') {
     const s = parseSubscription(await readJson(req))
     if (typeof s === 'string') throw new HttpError(400, s)
+    const tokenHash = await sha256Hex(s.token)
+    const existing = await env.DB.prepare('SELECT token_hash FROM push_subscriptions WHERE endpoint = ?')
+      .bind(s.endpoint)
+      .first<{ token_hash: string }>()
+    if (existing) {
+      if (!safeEqual(existing.token_hash, tokenHash)) throw new HttpError(403, 'wrong token for this endpoint')
+    } else {
+      const cap = Number(env.MAX_SUBSCRIPTIONS ?? DEFAULT_MAX_SUBSCRIPTIONS)
+      const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM push_subscriptions').first<{ n: number }>()
+      if ((n?.n ?? 0) >= cap) throw new HttpError(503, 'subscription capacity reached')
+    }
     const now = new Date()
     const iso = now.toISOString()
-    await env.DB.prepare(
+    // Re-POST keeps last_*_date unless that kind's time (or the timezone) changed.
+    const res = await env.DB.prepare(
       `INSERT INTO push_subscriptions
-         (endpoint, p256dh, auth, reminder_time, nudge_time, timezone, last_reminder_date, last_nudge_date, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         (endpoint, p256dh, auth, reminder_time, nudge_time, timezone, last_reminder_date, last_nudge_date, token_hash, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(endpoint) DO UPDATE SET
-         p256dh = excluded.p256dh, auth = excluded.auth, reminder_time = excluded.reminder_time,
-         nudge_time = excluded.nudge_time, timezone = excluded.timezone,
-         last_reminder_date = excluded.last_reminder_date, last_nudge_date = excluded.last_nudge_date,
-         updated_at = excluded.updated_at`,
+         p256dh = excluded.p256dh, auth = excluded.auth,
+         last_reminder_date = CASE WHEN push_subscriptions.reminder_time = excluded.reminder_time AND push_subscriptions.timezone = excluded.timezone
+           THEN push_subscriptions.last_reminder_date ELSE excluded.last_reminder_date END,
+         last_nudge_date = CASE WHEN push_subscriptions.nudge_time IS excluded.nudge_time AND push_subscriptions.timezone = excluded.timezone
+           THEN push_subscriptions.last_nudge_date ELSE excluded.last_nudge_date END,
+         reminder_time = excluded.reminder_time, nudge_time = excluded.nudge_time, timezone = excluded.timezone,
+         updated_at = excluded.updated_at
+       WHERE push_subscriptions.token_hash = excluded.token_hash`,
     )
       .bind(
         s.endpoint,
@@ -74,18 +117,27 @@ async function route(req: Request, env: Env, url: URL): Promise<Response> {
         s.timezone,
         seedSentDate(s.reminderTime, now, s.timezone),
         seedSentDate(s.nudgeTime, now, s.timezone),
+        tokenHash,
         iso,
         iso,
       )
       .run()
+    if (res.meta.changes !== 1) throw new HttpError(403, 'wrong token for this endpoint')
     return new Response(null, { status: 204 })
   }
 
   if (pathname === '/push/subscription' && m === 'DELETE') {
-    const b = await readJson(req)
-    const endpoint = (b as { endpoint?: unknown } | null)?.endpoint
-    if (!isPushEndpoint(endpoint)) throw new HttpError(400, 'endpoint must be an https URL of a known push service')
-    await env.DB.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').bind(endpoint).run()
+    const b = (await readJson(req)) as { endpoint?: unknown; token?: unknown } | null
+    if (!isPushEndpoint(b?.endpoint)) throw new HttpError(400, 'endpoint must be an https URL of a known push service')
+    if (!isSecretString(b?.token)) throw new HttpError(400, 'token must be 16-128 chars of A-Z a-z 0-9 _ -')
+    const row = await env.DB.prepare('SELECT token_hash FROM push_subscriptions WHERE endpoint = ?')
+      .bind(b.endpoint)
+      .first<{ token_hash: string }>()
+    if (row) {
+      const hash = await sha256Hex(b.token)
+      if (!safeEqual(row.token_hash, hash)) throw new HttpError(403, 'wrong token for this endpoint')
+      await env.DB.prepare('DELETE FROM push_subscriptions WHERE endpoint = ? AND token_hash = ?').bind(b.endpoint, hash).run()
+    }
     return new Response(null, { status: 204 })
   }
 
