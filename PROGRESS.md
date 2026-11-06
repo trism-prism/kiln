@@ -17,7 +17,7 @@ Plan: docs/plan.md.
 | 8 | Calendar + streaks | pending |
 | 9 | Import + create | pending |
 | 10 | PWA | pending |
-| 11 | Worker: push + analytics | pending |
+| 11 | Worker: push + analytics | server half done on feat/worker-push (SW push handler and UI pending in the PWA stage) |
 | 12 | Sync | pending |
 | 13 | Production | pending |
 
