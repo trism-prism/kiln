@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, updateSettings, type SettingsRecord } from '../../data'
 import { availability, disablePush, enablePush, isPushOn, readPushEnv, syncPush, type PushAvailability } from '../../pwa/push-client'
-import { Button, Link } from '../../ui/button'
+import { Button } from '../../ui/button'
 import { Switch, TextField } from '../../ui/form'
 import { toasts } from '../../ui/overlay'
 import { Card } from '../../ui/surface'
@@ -87,8 +87,7 @@ export function ReminderSection({ settings }: { settings: SettingsRecord }) {
         <div className="grid gap-1">
           <h2 id="reminder-heading" className="text-base font-medium">Reminders</h2>
           <p className="text-sm text-text-muted">
-            A notification at your reminder time with today&apos;s task count. The server only knows your push address, reminder time and time zone; the count is worked out on your device.{' '}
-            <Link href="/privacy">Privacy</Link>
+            A notification at your reminder time with today&apos;s task count. The server only knows your push address, reminder time and time zone; the count is worked out on your device.
           </p>
         </div>
         <TextField label="Daily reminder" type="time" value={time} onChange={setTime} isInvalid={!TIME.test(time)} errorMessage="Enter a time" className="max-w-48" />

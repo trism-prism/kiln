@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { CheckboxGroup, Input, Label, Text, TextField as AriaTextField } from 'react-aria-components'
 import { NEETCODE_POOL } from '../../domain/practice'
+import { PRIORITY_HINT, PRIORITY_LABEL } from '../priority'
 import { PRIORITY_VALUES, TYPE_VALUES } from './builder-options'
 import { Button } from '../../ui/button'
 import { Checkbox, ListBoxItem, Select, TextField } from '../../ui/form'
@@ -71,10 +72,10 @@ export function BuildTab() {
                       ))}
                     </Select>
                     <TextField label="Minutes" inputMode="numeric" value={t.minutes} onChange={(minutes) => setTask(mi, ti, { minutes })} description="5 to 90 for most tasks; 0 for a milestone" />
-                    <Select label="Priority" selectedKey={t.priority} onSelectionChange={(k) => setTask(mi, ti, { priority: k as DraftTask['priority'] })}>
+                    <Select label="Priority" description={PRIORITY_HINT[t.priority]} selectedKey={t.priority} onSelectionChange={(k) => setTask(mi, ti, { priority: k as DraftTask['priority'] })}>
                       {PRIORITY_VALUES.map((v) => (
                         <ListBoxItem key={v} id={v}>
-                          {v}
+                          {PRIORITY_LABEL[v]}
                         </ListBoxItem>
                       ))}
                     </Select>

@@ -37,13 +37,13 @@ test('imports the DSA plan in three parts, then system design', async ({ page })
   await paste(page, fixture('dsa-part3'))
   await expect(page.getByTestId('match')).toHaveText(/^Add part 3 of 3 to /)
   // Complete now: the preview has a projected finish and a 14-day schedule.
-  await expect(page.getByTestId('projection')).toContainText('Projected finish')
+  await expect(page.getByTestId('projection')).toContainText('Expected finish')
   await expect(page.getByRole('heading', { name: 'First 14 days' })).toBeVisible()
   await importIt(page, /^Add part \d of 3 to "DSA Zero to Hero in Python"/)
 
   await paste(page, fixture('system-design'))
   await expect(page.getByTestId('match')).toHaveText('New plan')
-  await expect(page.getByTestId('projection')).toContainText('Projected finish')
+  await expect(page.getByTestId('projection')).toContainText('Expected finish')
   await importIt(page)
 })
 
@@ -122,7 +122,7 @@ test.describe('clipboard', () => {
     test(`${button} puts the prompt on the clipboard`, async ({ page }) => {
       await page.goto('/import')
       await page.getByRole('button', { name: button }).click()
-      await expect(page.getByText('Prompt copied')).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Copied' })).toBeVisible()
       const text = await page.evaluate(() => navigator.clipboard.readText())
       expect(text.length).toBeGreaterThan(2000)
       expect(text).toContain(mentions)

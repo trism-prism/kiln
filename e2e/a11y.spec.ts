@@ -5,7 +5,7 @@ import { openSeeded } from './seed'
 for (const colorScheme of ['light', 'dark'] as const) {
   test.describe(`axe, ${colorScheme}`, () => {
     test.use({ colorScheme })
-    for (const path of ['/', '/todo', '/design', '/settings', '/privacy']) {
+    for (const path of ['/', '/todo', '/design', '/settings', '/privacy', '/terms', '/licenses']) {
       test(`${path} has no serious or critical violations`, async ({ page }) => {
         await page.goto(path)
         await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
@@ -45,7 +45,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 
     test('/ dashboard', async ({ page }) => {
       await openSeeded(page, '/')
-      await expect(page.getByText(/Projected finish/).first()).toBeVisible()
+      await expect(page.getByText(/Expected finish/).first()).toBeVisible()
       expect(await seriousViolations(page)).toEqual([])
     })
 
