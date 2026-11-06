@@ -175,10 +175,12 @@ export function Review({ input }: { input: Input }) {
           {match.choices.length > 0 && (
             <RadioGroup value={choice} onChange={(v) => setChoice(v as Choice)} className="grid gap-2 text-sm">
               <Label className="sr-only">What to do with the existing plan</Label>
-              <Radio value="update" className="flex items-center gap-2">
+              <Radio value="update" className="group flex items-center gap-3">
+                <Dot />
                 Update it: keep progress, match tasks by id
               </Radio>
-              <Radio value="copy" className="flex items-center gap-2">
+              <Radio value="copy" className="group flex items-center gap-3">
+                <Dot />
                 Import as a copy with a new id
               </Radio>
             </RadioGroup>
@@ -313,5 +315,14 @@ function Stat({ label, value }: { label: string; value: string }) {
       <dt className="text-text-muted">{label}</dt>
       <dd className="tabular-nums">{value}</dd>
     </div>
+  )
+}
+
+/** The circle of a radio button; the selected one gets an accent ring around a dot. */
+function Dot() {
+  return (
+    <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-border-strong bg-surface-raised group-data-selected:border-accent group-data-focus-visible:outline-2 group-data-focus-visible:outline-offset-2 group-data-focus-visible:outline-focus">
+      <span className="size-2.5 rounded-full bg-accent opacity-0 group-data-selected:opacity-100" />
+    </span>
   )
 }
