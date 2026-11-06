@@ -1,20 +1,21 @@
+import { lazy } from 'react'
 import { LucideProvider } from 'lucide-react'
 import { RouterProvider } from 'react-aria-components'
 import { Route, Routes, useHref, useNavigate } from 'react-router'
-import { DesignPage } from './DesignPage'
-import {
-  BrushUpPage,
-  CalendarPage,
-  DashboardPage,
-  ImportPage,
-  NotFoundPage,
-  PlanPage,
-  PlansPage,
-  SettingsPage,
-  TaskPage,
-  TodoPage,
-} from './pages'
 import { Shell } from './Shell'
+
+// One chunk per page, so the shell loads first and each screen loads when visited.
+const DashboardPage = lazy(() => import('./pages/Dashboard'))
+const TodoPage = lazy(() => import('./pages/Todo'))
+const TaskPage = lazy(() => import('./pages/Task'))
+const CalendarPage = lazy(() => import('./pages/Calendar'))
+const PlansPage = lazy(() => import('./pages/Plans'))
+const PlanPage = lazy(() => import('./pages/Plan'))
+const BrushUpPage = lazy(() => import('./pages/BrushUp'))
+const ImportPage = lazy(() => import('./pages/Import'))
+const SettingsPage = lazy(() => import('./pages/Settings'))
+const DesignPage = lazy(() => import('./pages/Design'))
+const NotFoundPage = lazy(() => import('./pages/NotFound'))
 
 export function App() {
   const navigate = useNavigate()

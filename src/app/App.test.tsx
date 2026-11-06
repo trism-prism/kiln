@@ -21,13 +21,13 @@ const routes: [string, string][] = [
 ]
 
 describe('shell routes', () => {
-  it.each(routes)('%s renders the shell and its page heading', (path, title) => {
+  it.each(routes)('%s renders the shell and its page heading', async (path, title) => {
     render(
       <MemoryRouter initialEntries={[path]}>
         <App />
       </MemoryRouter>,
     )
-    expect(screen.getByRole('heading', { level: 1, name: title })).toBeTruthy()
+    expect(await screen.findByRole('heading', { level: 1, name: title })).toBeTruthy()
     expect(screen.getAllByRole('navigation', { name: 'Main' }).length).toBeGreaterThan(0)
     expect(screen.getByRole('main')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Skip to content' })).toBeTruthy()

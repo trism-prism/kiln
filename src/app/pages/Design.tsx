@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react'
 import { Plus, RotateCcw } from 'lucide-react'
 import { DialogTrigger, MenuTrigger } from 'react-aria-components'
-import { Button, IconButton, Link } from '../ui/button'
-import { Checkbox, ListBox, ListBoxItem, Select, Switch, TextField } from '../ui/form'
-import { Menu, MenuItem, Sheet, toasts } from '../ui/overlay'
-import { Badge, Card, CountBadge, KilnMark, Meter, ProgressBar, Skeleton } from '../ui/surface'
-import { Tab, TabList, TabPanel, Tabs } from '../ui/tabs'
-import { Page } from './Page'
+import { Button, IconButton, Link } from '../../ui/button'
+import { Checkbox, ListBox, ListBoxItem, Select, Switch, TextField } from '../../ui/form'
+import { Menu, MenuItem, Sheet, toasts } from '../../ui/overlay'
+import { Badge, Card, CountBadge, KilnMark, Meter, ProgressBar, Skeleton } from '../../ui/surface'
+import { Tab, TabList, TabPanel, Tabs } from '../../ui/tabs'
+import { Page } from '../Page'
 
 const colors = [
   ['surface', 'Page background'],
@@ -233,7 +233,7 @@ function Gallery({ theme }: { theme: 'light' | 'dark' }) {
 }
 
 /** Every token and component in both themes, side by side. Used for design review screenshots. */
-export function DesignPage() {
+export default function DesignPage() {
   return (
     <Page title="Design system">
       <div className="grid gap-6 lg:grid-cols-2">

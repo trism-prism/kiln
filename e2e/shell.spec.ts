@@ -61,7 +61,7 @@ test('phone tab bar and More menu navigate', async ({ page }) => {
   for (const name of ['Brush up', 'Import', 'Settings']) {
     await nav.getByRole('button', { name: 'More' }).click()
     await page.getByRole('menuitem', { name }).click()
-    await expect(page.getByRole('heading', { level: 1, name })).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1, name })).toBeFocused()
   }
 })
 
@@ -83,4 +83,23 @@ test('To Do range tabs switch with the keyboard', async ({ page }) => {
   await page.keyboard.press('ArrowRight')
   await expect(page.getByRole('tab', { name: '7 days' })).toHaveAttribute('aria-selected', 'true')
   await expect(page.getByRole('heading', { name: 'Nothing due in the next 7 days' })).toBeVisible()
+})
+
+test('focus moves to the page heading after navigation, not on first load', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).not.toBeFocused()
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Calendar' }).click()
+  await expect(page.getByRole('heading', { level: 1, name: 'Calendar' })).toBeFocused()
+  await page.goBack()
+  await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeFocused()
+})
+
+test('rail background spans the full height of a long page', async ({ page }) => {
+  await page.goto('/design')
+  const nav = page.getByRole('navigation', { name: 'Main' })
+  const railHeight = await nav.evaluate((el) => el.parentElement!.getBoundingClientRect().height)
+  const pageHeight = await page.evaluate(() => document.documentElement.scrollHeight)
+  expect(railHeight).toBeGreaterThanOrEqual(pageHeight)
+  await page.mouse.wheel(0, 2000)
+  await expect(nav.getByRole('link', { name: 'Settings' })).toBeInViewport()
 })

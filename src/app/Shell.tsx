@@ -1,12 +1,14 @@
-import type { ComponentType } from 'react'
+import { Suspense, lazy, type ComponentType } from 'react'
 import { BookOpen, CalendarDays, Ellipsis, FileUp, LayoutDashboard, ListTodo, RotateCcw, Settings } from 'lucide-react'
 import { NavLink, Outlet, useLocation } from 'react-router'
-import { Button as AriaButton, MenuTrigger } from 'react-aria-components'
-import { Menu, MenuItem, ToastRegion } from '../ui/overlay'
 import { CountBadge, KilnMark, badgeLabel } from '../ui/surface'
 import { useTodoCount } from './useTodoCount'
 
-type NavItem = { to: string; label: string; icon: ComponentType; badge?: boolean; onTabBar?: boolean }
+// Menus and toasts pull in most of React Aria's overlay code; keep it out of the first load.
+const MoreMenu = lazy(() => import('./MoreMenu'))
+const ToastRegion = lazy(() => import('../ui/overlay').then((m) => ({ default: m.ToastRegion })))
+
+export type NavItem = { to: string; label: string; icon: ComponentType; badge?: boolean; onTabBar?: boolean }
 
 export const navItems: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, onTabBar: true },
@@ -20,34 +22,37 @@ export const navItems: NavItem[] = [
 
 function Rail({ count }: { count: number }) {
   return (
-    <nav aria-label="Main" className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-border bg-surface-raised px-3 py-4 md:flex">
-      <NavLink to="/" className="mb-6 flex h-10 items-center gap-2 rounded-md px-3 text-lg font-semibold">
-        <KilnMark className="size-5 text-accent" />
-        Kiln
-      </NavLink>
-      <ul className="grid gap-1">
-        {navItems.map(({ to, label, icon: Icon, badge }) => (
-          <li key={to}>
-            <NavLink
-              to={to}
-              end={to === '/'}
-              aria-label={badge ? badgeLabel(label, count) : undefined}
-              className={({ isActive }) =>
-                `group flex h-9 items-center gap-3 rounded-md px-3 text-sm transition-colors ${
-                  isActive ? 'bg-surface-muted font-medium text-text' : 'text-text-muted hover:bg-surface-muted hover:text-text'
-                }`
-              }
-            >
-              <span className="flex text-text-muted group-aria-[current=page]:text-accent">
-                <Icon />
-              </span>
-              {label}{' '}
-              {badge && <CountBadge count={count} className="ml-auto" />}
-            </NavLink>
-          </li>
-        ))}
-      </ul>
-    </nav>
+    // The wrapper stretches to the page height and carries the background; the nav inside sticks to the viewport.
+    <div className="hidden w-60 shrink-0 border-r border-border bg-surface-raised md:block">
+      <nav aria-label="Main" className="sticky top-0 flex h-dvh flex-col overflow-y-auto px-3 py-4">
+        <NavLink to="/" className="mb-6 flex h-10 items-center gap-2 rounded-md px-3 text-lg font-semibold">
+          <KilnMark className="size-5 text-accent" />
+          Kiln
+        </NavLink>
+        <ul className="grid gap-1">
+          {navItems.map(({ to, label, icon: Icon, badge }) => (
+            <li key={to}>
+              <NavLink
+                to={to}
+                end={to === '/'}
+                aria-label={badge ? badgeLabel(label, count) : undefined}
+                className={({ isActive }) =>
+                  `group flex h-9 items-center gap-3 rounded-md px-3 text-sm transition-colors ${
+                    isActive ? 'bg-surface-muted font-medium text-text' : 'text-text-muted hover:bg-surface-muted hover:text-text'
+                  }`
+                }
+              >
+                <span className="flex text-text-muted group-aria-[current=page]:text-accent">
+                  <Icon />
+                </span>
+                {label}{' '}
+                {badge && <CountBadge count={count} className="ml-auto" />}
+              </NavLink>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    </div>
   )
 }
 
@@ -80,20 +85,10 @@ function TabBar({ count }: { count: number }) {
             {badge && <CountBadge count={count} className="absolute top-1 left-1/2 ml-1" />}
           </NavLink>
         ))}
-      <MenuTrigger>
-        <AriaButton className={`${tabClass(moreActive)} cursor-default`}>
-          <Ellipsis />
-          More
-        </AriaButton>
-        <Menu aria-label="More pages" placement="top end">
-          {more.map(({ to, label, icon: Icon }) => (
-            <MenuItem key={to} id={to} href={to}>
-              <Icon />
-              {label}
-            </MenuItem>
-          ))}
-        </Menu>
-      </MenuTrigger>
+      {/* Loaded lazily with the menu code; the placeholder keeps the cell from jumping. */}
+      <Suspense fallback={<span className={tabClass(moreActive)} aria-hidden="true"><Ellipsis />More</span>}>
+        <MoreMenu items={more} className={tabClass(moreActive)} />
+      </Suspense>
     </nav>
   )
 }
@@ -110,10 +105,14 @@ export function Shell() {
       </a>
       <Rail count={count} />
       <main id="main" tabIndex={-1} className="min-w-0 flex-1 pb-24 outline-none md:pb-0">
-        <Outlet />
+        <Suspense>
+          <Outlet />
+        </Suspense>
       </main>
       <TabBar count={count} />
-      <ToastRegion />
+      <Suspense>
+        <ToastRegion />
+      </Suspense>
     </div>
   )
 }
