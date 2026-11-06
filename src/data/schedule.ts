@@ -21,7 +21,9 @@ export interface ScheduleAllOptions {
  */
 export async function scheduleAll(db: KilnDB, today: string, opts: ScheduleAllOptions = {}): Promise<ScheduleOutput> {
   const deviceId = await getDeviceId(db)
-  return db.transaction('rw', [db.plans, db.modules, db.tasks, db.practiceLog, db.settings], () => run(db, deviceId, today, opts))
+  // The callback must itself be an async function: Dexie only keeps the transaction alive across native
+  // awaits when it can see that, and an arrow returning run()'s promise commits after the first await.
+  return db.transaction('rw', [db.plans, db.modules, db.tasks, db.practiceLog, db.settings], async () => run(db, deviceId, today, opts))
 }
 
 async function run(db: KilnDB, deviceId: string, today: string, opts: ScheduleAllOptions): Promise<ScheduleOutput> {
