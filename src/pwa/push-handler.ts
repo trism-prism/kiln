@@ -8,6 +8,8 @@ export interface PushDeps {
   /** Shows the notification (registration.showNotification). */
   show: (title: string, options: NotificationOptions) => Promise<void>
   badge: BadgeTarget
+  /** The app's database name; the default is the real one. Tests pass their own. */
+  dbName?: string
 }
 
 /** The `kind` of a decrypted push body; anything unreadable counts as a reminder. */
@@ -27,7 +29,7 @@ export async function handlePush(data: { json(): unknown } | null | undefined, d
   let total = 0
   let counted = false
   try {
-    const counts = await readBreakdown(deps.indexedDB, deps.now())
+    const counts = await readBreakdown(deps.indexedDB, deps.now(), deps.dbName)
     body = notificationText(kind, counts)
     total = counts.total
     counted = true

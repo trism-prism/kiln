@@ -3,7 +3,7 @@ import { encode } from 'uqr'
 
 /** The QR modules for `text` (true = dark), no quiet zone. */
 export function qrModules(text: string): boolean[][] {
-  return encode(text, { ecc: 'M' }).data
+  return encode(text, { ecc: 'M', border: 0 }).data
 }
 
 /** SVG path data: one rectangle per horizontal run of dark modules. */
