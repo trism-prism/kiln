@@ -101,7 +101,7 @@ export function ReminderSection({ settings }: { settings: SettingsRecord }) {
         </div>
 
         <div className="grid gap-3 border-t border-border pt-4" data-testid="push-state">
-          {on ? (
+          {on === undefined ? null : on ? (
             <>
               <p className="text-sm">Reminders are on for this device.</p>
               <div>

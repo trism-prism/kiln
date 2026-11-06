@@ -1,5 +1,6 @@
 // "Reset local data" when sync may be on. The theme choice lives in localStorage and is left alone.
 import { resetLocalData, tombstoneAll, type KilnDB } from '../../data'
+import { disablePush } from '../../pwa/push-client'
 import { disableSync, type SyncSummary } from '../../sync'
 
 export type EraseMode = 'device' | 'everywhere'
@@ -15,6 +16,7 @@ export type EraseMode = 'device' | 'everywhere'
 export async function erase(db: KilnDB, mode: EraseMode, sync: () => Promise<SyncSummary>): Promise<void> {
   if (mode === 'device') {
     await disableSync(db)
+    await stopReminders(db)
     await resetLocalData(db)
     return
   }
@@ -28,5 +30,9 @@ export async function erase(db: KilnDB, mode: EraseMode, sync: () => Promise<Syn
   if (summary.tooLarge.length > 0) {
     throw new Error(`${summary.tooLarge.length} items are too large to upload their deletion, so other devices would keep them. Nothing was cleared.`)
   }
+  await stopReminders(db)
   await resetLocalData(db)
 }
+
+/** Reminders belong to the data being erased: remove the server entry and the browser subscription too. */
+const stopReminders = (db: KilnDB) => disablePush(db).catch(() => undefined)

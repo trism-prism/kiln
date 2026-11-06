@@ -1,11 +1,14 @@
+import { lazy, Suspense } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useLocation } from 'react-router'
 import { db, listPlans } from '../data'
 import { getMeta, setMeta } from '../pwa/meta'
 import { useInstall } from '../pwa/install'
 import { Button } from '../ui/button'
-import { Onboarding } from './onboarding/Onboarding'
 import { IosSteps } from './settings/InstallSection'
+
+// Loaded only on the dashboard, after the first screen, to keep the main chunk small.
+const Onboarding = lazy(() => import('./onboarding/Onboarding').then((m) => ({ default: m.Onboarding })))
 
 const META_DISMISSED = 'installDismissed'
 
@@ -36,7 +39,9 @@ export function HomeExtras() {
   if (useLocation().pathname !== '/') return null
   return (
     <>
-      <Onboarding />
+      <Suspense>
+        <Onboarding />
+      </Suspense>
       <InstallBanner />
     </>
   )

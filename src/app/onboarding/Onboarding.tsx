@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router'
 import { db, updateSettings } from '../../data'
 import { addDaysISO, toLocalISODate } from '../../lib/date'
-import { finishOnboarding, META_START_DATE, readOnboardingFacts, shouldShowOnboarding } from '../../pwa/onboarding'
+import { finishOnboarding, markOnboardingStarted, META_START_DATE, readOnboardingFacts, shouldShowOnboarding } from '../../pwa/onboarding'
 import { setMeta } from '../../pwa/meta'
 import { availability, enablePush, readPushEnv } from '../../pwa/push-client'
 import { Button } from '../../ui/button'
@@ -28,8 +28,9 @@ const STEPS = ['Study time', 'Start date', 'Reminder', 'Your plan'] as const
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 /**
- * A short first-run setup above the dashboard. It decides once, when the page first loads, whether
- * to show: saving settings in step 1 would otherwise make it vanish halfway through.
+ * A short first-run setup above the dashboard. It decides when it first loads whether to show, and
+ * keeps showing: saving settings in step 1 would otherwise make it vanish halfway through. The
+ * "started" flag brings it back if the person leaves before finishing.
  */
 export function Onboarding() {
   const facts = useLiveQuery(() => readOnboardingFacts(db))
@@ -43,12 +44,21 @@ function Flow({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate()
   const today = toLocalISODate(new Date())
   const [step, setStep] = useState(0)
+  useEffect(() => {
+    void markOnboardingStarted(db)
+  }, [])
   const [values, setValues] = useState(['120', '120', '120', '120', '120', '180', '180'])
   const [start, setStart] = useState(today)
   const [time, setTime] = useState('08:00')
   const [pushOn, setPushOn] = useState(false)
   const [problem, setProblem] = useState<string>()
   const [busy, setBusy] = useState(false)
+  // The button that was pressed disappears when reminders turn on; move focus to the message that replaces it.
+  const note = useRef<HTMLParagraphElement | null>(null)
+  const onNote = (el: HTMLParagraphElement | null) => {
+    if (el && !note.current) el.focus()
+    note.current = el
+  }
 
   const parsed = values.map(parseMinutes)
   const budgetOk = parsed.every((v) => v !== undefined)
@@ -153,7 +163,7 @@ function Flow({ onClose }: { onClose: () => void }) {
             <p className="text-sm text-text-muted">A daily notification with your task count. Optional: you can turn it on later in Settings.</p>
             <TextField label="Reminder time" type="time" value={time} onChange={setTime} isInvalid={!timeOk} errorMessage="Enter a time" className="max-w-48" />
             {pushOn ? (
-              <p role="status" className="text-sm text-success">Reminders are on.</p>
+              <p role="status" tabIndex={-1} ref={onNote} className="text-sm text-success outline-none">Reminders are on.</p>
             ) : push === 'ready' ? (
               <Button variant="secondary" className="justify-self-start" onPress={turnOnReminders} isDisabled={!timeOk || busy}>Turn on reminders</Button>
             ) : (

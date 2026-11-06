@@ -121,7 +121,9 @@ export async function enablePush(db: KilnDB, times: ReminderTimes, fetchImpl: ty
   const env = readPushEnv()
   const a = availability({ ...env, permission: env.permission === 'denied' ? 'denied' : 'default' })
   if (a !== 'ready') return fail('unsupported', 'Reminders are not available here.')
-  if ((await Notification.requestPermission()) !== 'granted') {
+  const asked = await Notification.requestPermission()
+  if (asked === 'default') return fail('denied', 'Permission was not given. Press the button again and choose Allow when asked.')
+  if (asked !== 'granted') {
     return fail('denied', 'Notifications are blocked for Kiln. Allow them in your browser or device settings, then try again.')
   }
   const reg = await navigator.serviceWorker.getRegistration()

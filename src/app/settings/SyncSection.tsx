@@ -142,7 +142,7 @@ export function SyncSection() {
     <Card>
       <section aria-labelledby="sync-heading" className="grid gap-4">
         <div className="grid gap-1">
-          <h2 id="sync-heading" className="text-base font-medium">Sync</h2>
+          <h2 id="sync-heading" tabIndex={-1} className="text-base font-medium outline-none">Sync</h2>
           <p className="text-sm text-text-muted">
             Keep your phone and laptop in step. Everything is encrypted on your device with a key only you hold; the server stores unreadable data.
           </p>
@@ -157,7 +157,12 @@ export function SyncSection() {
 
         {status === undefined ? null : !on ? (
           joining ? (
-            <JoinForm onDone={() => setJoining(false)} onCancel={() => setJoining(false)} />
+            <JoinForm
+              onDone={() => {
+                setJoining(false)
+                // The form is gone; keep keyboard focus on the section.
+                setTimeout(() => document.getElementById('sync-heading')?.focus(), 0)
+              }} onCancel={() => setJoining(false)} />
           ) : (
             <div className="flex flex-wrap gap-2">
               <Button onPress={create} isDisabled={!configured}>Create a sync key</Button>

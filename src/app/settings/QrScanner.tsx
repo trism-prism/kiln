@@ -34,6 +34,7 @@ export function QrScanner({ onText, onCancel }: { onText: (text: string) => void
         if (!el) return
         el.srcObject = stream
         await el.play()
+        if (stopped) return
         const detector = new (window as unknown as { BarcodeDetector: DetectorCtor }).BarcodeDetector({ formats: ['qr_code'] })
         timer = setInterval(async () => {
           try {
@@ -47,6 +48,7 @@ export function QrScanner({ onText, onCancel }: { onText: (text: string) => void
           }
         }, 300)
       } catch (e) {
+        stream?.getTracks().forEach((t) => t.stop())
         const denied = e instanceof DOMException && (e.name === 'NotAllowedError' || e.name === 'SecurityError')
         setError(denied ? 'Camera access was blocked. Allow it in your browser settings, or type the words instead.' : 'Could not start the camera. Type the words instead.')
       }

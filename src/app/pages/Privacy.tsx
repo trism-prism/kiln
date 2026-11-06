@@ -33,7 +33,7 @@ export default function PrivacyPage() {
             To send a reminder while your device is asleep, a small server keeps three things: the push address your browser gave Kiln, your reminder time (and evening nudge time, if on), and your time zone. It also keeps a random code made on your device and stored only as a hash, so only your device can change or remove its entry.
           </p>
           <p>
-            It does not receive your plans, tasks or progress. The notification only says &ldquo;wake up&rdquo;; the count in it (for example &ldquo;3 tasks today&rdquo;) is worked out on your device. The push address belongs to your browser&apos;s push service (Google, Apple, Mozilla or Microsoft), which routes the message.
+            It does not receive your plans, tasks or progress. The server only tells your device that a reminder is due; the text of the notification (for example &ldquo;3 tasks today&rdquo;) is worked out on your device. The push address belongs to your browser&apos;s push service (Google, Apple, Mozilla or Microsoft), which routes the message.
           </p>
         </Section>
 
@@ -64,13 +64,13 @@ export default function PrivacyPage() {
         <Section id="delete" title="How to delete your data">
           <ul className="grid list-disc gap-1 pl-5">
             <li>
-              <strong className="font-medium">Reminders:</strong> turn them off under Settings &gt; Reminders. The server removes this device&apos;s entry.
+              <strong className="font-medium">Reminders:</strong> turn them off under Settings &gt; Reminders. This asks the server to remove this device; if it cannot be reached, the server drops the device the next time a reminder cannot be delivered.
             </li>
             <li>
               <strong className="font-medium">Sync:</strong> turn it off under Settings &gt; Sync to stop syncing. The encrypted copy stays on the server (it cannot be read without your key, and there is no delete button for it yet). To remove your data from every device, use &ldquo;Erase everywhere&rdquo; in the danger zone while sync is on.
             </li>
             <li>
-              <strong className="font-medium">This device:</strong> Settings &gt; Danger zone erases all local data. Clearing the site&apos;s data in your browser does the same and also forgets the random device ID.
+              <strong className="font-medium">This device:</strong> Settings &gt; Danger zone erases all local data and turns reminders off. Clearing the site&apos;s data in your browser does the same and also forgets the random device ID.
             </li>
           </ul>
           <p>
