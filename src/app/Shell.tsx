@@ -2,6 +2,7 @@ import { Suspense, lazy, type ComponentType } from 'react'
 import { BookOpen, CalendarDays, Ellipsis, FileUp, LayoutDashboard, ListTodo, RotateCcw, Settings } from 'lucide-react'
 import { NavLink, Outlet, useLocation } from 'react-router'
 import { CountBadge, KilnMark, Skeleton, badgeLabel } from '../ui/surface'
+import { HomeExtras } from './HomeExtras'
 import { useTodoCount } from './useTodoCount'
 
 // Menus and toasts pull in most of React Aria's overlay code. Splitting them off shrinks the first chunk;
@@ -123,6 +124,7 @@ export function Shell() {
       <main id="main" tabIndex={-1} className="min-w-0 flex-1 pb-24 outline-none md:pb-0">
         {/* Shows only on first load: the router wraps navigations in startTransition, so React keeps
             the old page on screen while the next page's chunk loads. */}
+        <HomeExtras />
         <Suspense fallback={<PageSkeleton />}>
           <Outlet />
         </Suspense>

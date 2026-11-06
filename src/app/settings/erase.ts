@@ -4,9 +4,6 @@ import { disableSync, type SyncSummary } from '../../sync'
 
 export type EraseMode = 'device' | 'everywhere'
 
-/** Sync server address for this build (a `VITE_*` value with https://). Empty: not configured. */
-export const SYNC_URL: string = (import.meta.env.VITE_SYNC_URL as string | undefined) ?? ''
-
 /**
  * 'device': turn sync off here (the key and cursors in meta go too), then clear this device. Other
  * devices and the server keep their data.
