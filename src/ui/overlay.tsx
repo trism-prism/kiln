@@ -82,7 +82,7 @@ export function MenuItem({ children, ...props }: Omit<MenuItemProps, 'className'
   )
 }
 
-export type ToastContentValue = { title: string; description?: string }
+export type ToastContentValue = { title: string; description?: string; action?: { label: string; onPress: () => void } }
 
 /** App-wide toast queue: toasts.add({ title: 'Plan imported' }, { timeout: 5000 }). */
 export const toasts = new ToastQueue<ToastContentValue>({ maxVisibleToasts: 3 })
@@ -109,6 +109,15 @@ export function ToastRegion() {
               </Text>
             )}
           </ToastContent>
+          {toast.content.action && (
+            <AriaButton
+              slot="close"
+              onPress={toast.content.action.onPress}
+              className="h-8 shrink-0 self-center rounded-md px-3 text-sm font-medium underline transition-colors data-hovered:bg-[color-mix(in_oklab,var(--kiln-surface)_16%,transparent)]"
+            >
+              {toast.content.action.label}
+            </AriaButton>
+          )}
           <AriaButton
             slot="close"
             aria-label="Dismiss"

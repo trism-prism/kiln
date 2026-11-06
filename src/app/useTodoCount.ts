@@ -1,8 +1,9 @@
+import { useBadgeCount, useToday } from './queries'
+
 /**
- * Number of To Do items to show on the badge: today's open tasks plus overdue ones.
- * Returns 0 (no badge) until stage 7 replaces the body with a useLiveQuery over src/data that feeds
- * src/domain/badge. Callers stay the same.
+ * Number on the To Do badge: open tasks and daily problems for today, overdue ones, and reviews due
+ * (src/domain/badge). Live: it updates as soon as anything is completed, skipped or rescheduled.
  */
 export function useTodoCount(): number {
-  return 0
+  return useBadgeCount(useToday())
 }
