@@ -4,6 +4,9 @@ import type { PlanRecord, Share } from './types'
 
 export const SHARES: Share[] = ['less', 'even', 'more']
 
+/** UI label per share. */
+export const SHARE_LABEL: Record<Share, string> = { less: 'Less', even: 'Even', more: 'More' }
+
 /** Scheduler weight per share: Less 2, Even 3, More 5. */
 export const SHARE_WEIGHT: Record<Share, number> = { less: 2, even: 3, more: 5 }
 

@@ -49,8 +49,8 @@ async function gzip(text: string): Promise<string> {
 }
 
 async function gunzip(data: string): Promise<string> {
-  const bytes = b64uDecode(data)
-  if (!bytes) throw new Error('This version is damaged')
+  const bytes = data ? b64uDecode(data) : null // empty: a pruned or deleted version
+  if (!bytes) throw new Error('This version is damaged or no longer available')
   return new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).text()
 }
 

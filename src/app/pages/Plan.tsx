@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
-import { db, scheduleAll, setPlanShare, shareFromWeight, SHARES, softDeletePlan, updateRecord, type Share, type TaskRecord } from '../../data'
+import { db, scheduleAll, setPlanShare, SHARE_LABEL, shareFromWeight, SHARES, softDeletePlan, updateRecord, type Share, type TaskRecord } from '../../data'
 import { formatDay, isRealISODate, toLocalISODate } from '../../lib/date'
 import { Button, Link } from '../../ui/button'
 import { ListBoxItem, Select, Switch, TextField } from '../../ui/form'
@@ -76,11 +76,16 @@ function Settings({ detail }: { detail: PlanDetail }) {
         label="Share of study time"
         description="How much of each day this plan gets compared with the others."
         selectedKey={plan.share ?? shareFromWeight(plan.weight)}
-        onSelectionChange={(k) => void safely(() => setPlanShare(db, plan.id, k as Share))}
+        onSelectionChange={(k) =>
+          void safely(async () => {
+            await setPlanShare(db, plan.id, k as Share)
+            await scheduleAll(db, toLocalISODate(new Date()))
+          })
+        }
       >
         {SHARES.map((s) => (
           <ListBoxItem key={s} id={s}>
-            {s[0]!.toUpperCase() + s.slice(1)}
+            {SHARE_LABEL[s]}
           </ListBoxItem>
         ))}
       </Select>

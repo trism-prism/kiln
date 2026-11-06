@@ -30,7 +30,7 @@ export interface PlanRecord extends Base {
   // App settings for this plan
   /**
    * Scheduler weight against other plans, 1-5. Kept in step with `share` (SHARE_WEIGHT) by setPlanShare
-   * so older devices still read it; the scheduler uses `share` when it is set (planWeight in repo.ts).
+   * so older devices still read it; the scheduler uses `share` when it is set (planWeight in plan-settings.ts).
    */
   weight: number
   /** "Share of study time" (schema 4). Less, Even, More = scheduler weight 2, 3, 5. */
@@ -39,7 +39,7 @@ export interface PlanRecord extends Base {
   favorite?: boolean
   /**
    * Daily practice problem setting (schema 4). Unset: on when the plan file has `dailyPractice`. False:
-   * off. True without a `dailyPractice` config: NeetCode, one a day (practiceConfig in repo.ts).
+   * off. True without a `dailyPractice` config: NeetCode, one a day (practiceConfig in plan-settings.ts).
    */
   dailyPracticeOn?: boolean
   /** Day 1 of the plan. */
@@ -212,7 +212,7 @@ export interface EventRecord extends Base {
 }
 
 /**
- * A saved version of a plan's content (schema 4), written after each edit. At most 20 live per plan
+ * A saved version of a plan's content (schema 4); the plan edit screen calls snapshotPlan after each save. At most 20 live per plan
  * (snapshotPlan prunes). `snapshot` is a plan file (domain/plan-format Plan) as gzip + base64url; read it with readSnapshot.
  */
 export interface PlanVersionRecord extends Base {
@@ -238,7 +238,7 @@ export interface FeedResult {
   error?: string
 }
 
-/** A calendar link kept in sync (schema 4). The URL is a secret: it syncs end-to-end encrypted, never in plain text. */
+/** A calendar link kept in sync (schema 4). The URL is a secret: sync carries it end-to-end encrypted; the JSON backup (the user's own file) holds it in plain text. */
 export interface FeedRecord extends Base {
   lms: Lms
   /** https URL of the .ics feed. */

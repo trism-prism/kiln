@@ -169,6 +169,7 @@ describe('plan versions', () => {
     expect(list.map((v) => v.id)).toEqual(ids.slice(3).reverse())
     expect((await readSnapshot(list[0]!)).title).toBe(`Title ${MAX_VERSIONS + 3}`)
     for (const id of ids.slice(0, 3)) expect(await db.planVersions.get(id)).toMatchObject({ deleted: true, snapshot: '' })
+    await expect(readSnapshot((await db.planVersions.get(ids[0]!))!)).rejects.toThrow('no longer available')
   })
 
   it('planFromRecords leaves out app state and tasks of missing modules', async () => {

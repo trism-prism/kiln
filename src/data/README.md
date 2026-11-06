@@ -15,7 +15,7 @@ Dexie (IndexedDB) database `kiln`, a small repository API, and JSON backup. No R
 | `practiceItems` | generated daily LeetCode problems placed on a date, open or done (added in schema 3) | `[planId+date+slug]`, `date`, `planId` |
 | `personalTodos` | one-off to-dos outside plans: title, optional date and minutes, done, completedAt, notes (schema 4) | `date` |
 | `events` | dated items that take no study time (LMS classes, exams): date, endDate, allDay, start/end ms, course, url, planId, feedId, uid (schema 4) | `date`, `planId`, `feedId`, `uid` |
-| `planVersions` | a plan's content after each edit, newest 20 per plan: createdAt, label, summary, snapshot (schema 4) | `planId` |
+| `planVersions` | a plan's content, saved by `snapshotPlan` (the plan edit path calls it after saving), newest 20 per plan: createdAt, label, summary, snapshot (schema 4) | `planId` |
 | `feeds` | calendar links kept in sync: lms, url, name, planIds, lastFetchedAt, lastResult (schema 4) | |
 | `settings` | singleton, id `settings`: minutes per weekday (Mon first), week start, reminder 08:00, optional 20:00 nudge, theme, review cap 25%, blackout dates | |
 | `meta` | device-local (`deviceId`, sync key and state); never exported or synced | |
