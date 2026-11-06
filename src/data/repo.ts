@@ -247,6 +247,11 @@ export interface ImportOptions {
   deadline?: string
   /** Share of study time, default even. Used when the plan is created. */
   share?: Share
+  /**
+   * Make the plan's modules and tasks match the file exactly (plan edits and version restores):
+   * deleted ones that are in the file come back with their progress, live ones not in it are deleted.
+   */
+  replace?: boolean
 }
 
 export interface ImportResult {
@@ -330,9 +335,17 @@ export async function importPlan(db: KilnDB, plan: Plan, opts: ImportOptions): P
         await db.modules.add(rec)
         moduleIds.set(m.id, rec.id)
         modulesAdded++
-      } else if (!old.deleted) {
-        const next = { ...old, ...fields }
+      } else if (!old.deleted || opts.replace) {
+        const next = { ...old, ...fields, deleted: false }
         if (json(next) !== json(old)) await db.modules.put({ ...next, ...stamp(old.updatedAt) })
+        moduleIds.set(m.id, old.id)
+      }
+    }
+    const notIn = <T extends { key: string; deleted: boolean }>(rows: Iterable<T>, keys: Set<string>) => [...rows].filter((r) => !r.deleted && !keys.has(r.key))
+    if (opts.replace) {
+      for (const m of notIn(oldModules.values(), new Set(plan.modules.map((m) => m.id)))) {
+        await db.modules.put({ ...m, deleted: true, ...stamp(m.updatedAt) })
+        moduleIds.delete(m.key)
       }
     }
 
@@ -351,14 +364,17 @@ export async function importPlan(db: KilnDB, plan: Plan, opts: ImportOptions): P
         const rec = { ...fields, id: uuidv7(), planId, status: 'open', pinnedDate: t.fixedDate, deleted: false, ...stamp() } as TaskRecord
         await db.tasks.add(rec)
         tasksAdded++
-      } else if (!old.deleted) {
-        const next = { ...old, ...fields, id: old.id } as TaskRecord
+      } else if (!old.deleted || opts.replace) {
+        const next = { ...old, ...fields, id: old.id, deleted: false } as TaskRecord
         if (t.fixedDate && t.fixedDate !== old.fixedDate) next.pinnedDate = t.fixedDate
         if (json(next) !== json(old)) {
           await db.tasks.put({ ...next, ...stamp(old.updatedAt) })
           tasksUpdated++
         }
       }
+    }
+    if (opts.replace) {
+      for (const t of notIn(oldTasks.values(), new Set(plan.tasks.map((t) => t.id)))) await db.tasks.put({ ...t, deleted: true, ...stamp(t.updatedAt) })
     }
 
     return { planId, created: !existing, modulesAdded, tasksAdded, tasksUpdated, partsIn, complete: isPlanComplete(planRec) }
