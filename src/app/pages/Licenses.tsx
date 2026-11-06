@@ -27,7 +27,7 @@ export default function LicensesPage() {
         <Card className="grid gap-3">
           <h2 className="text-base font-medium">Packages</h2>
           <ul className="divide-y divide-border text-sm">
-            {packages.map((p) => (
+            {packages.filter((p) => !CREDITS.some((c) => c.name === p.name)).map((p) => (
               <li key={p.name} className="flex flex-wrap items-baseline justify-between gap-x-4 py-2">
                 {p.url ? <Link href={p.url}>{p.name}</Link> : <span>{p.name}</span>}
                 <span className="text-text-muted">

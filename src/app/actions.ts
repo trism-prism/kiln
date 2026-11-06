@@ -7,8 +7,8 @@ import { describeMoves } from './moveSummary'
 
 const today = () => toLocalISODate(new Date())
 
-function fail(e: unknown) {
-  toasts.add({ title: 'Could not save', description: e instanceof Error ? e.message : String(e) }, { timeout: 8000 })
+function fail(e: unknown, title = 'Could not save') {
+  toasts.add({ title, description: e instanceof Error ? e.message : String(e) }, { timeout: 8000 })
 }
 
 /** Runs a write and reports a failure in a toast instead of losing it. */
@@ -32,14 +32,14 @@ export async function rescheduleOverdue(): Promise<boolean> {
     const late = out.violations.filter((v) => v.kind === 'plan-deadline').length
     toasts.add(
       {
-        title: describeMoves('Moved', 'overdue task', new Map(overdue.map((t) => [t.id, t.scheduledDate])), out.assignments),
+        title: describeMoves('Moved', 'overdue task', 'Nothing was overdue', new Map(overdue.map((t) => [t.id, t.scheduledDate])), out.assignments),
         description: late ? `${late} plan${late === 1 ? '' : 's'} will miss the deadline at this pace.` : undefined,
       },
       { timeout: 6000 },
     )
     return true
   } catch (e) {
-    fail(e)
+    fail(e, 'Could not reschedule')
     return false
   }
 }
@@ -49,10 +49,7 @@ export async function scheduleBacklogAgain(): Promise<void> {
   try {
     const waiting = (await db.tasks.toArray()).filter((t) => !t.deleted && t.status === 'open' && t.backlog)
     const out = await scheduleAll(db, today())
-    const title =
-      waiting.length === 0
-        ? 'Nothing was in the backlog'
-        : describeMoves('Placed', 'backlog task', new Map(waiting.map((t) => [t.id, BACKLOG])), out.assignments)
+    const title = describeMoves('Placed', 'backlog task', 'Nothing was in the backlog', new Map(waiting.map((t) => [t.id, BACKLOG])), out.assignments)
     toasts.add({ title }, { timeout: 5000 })
   } catch (e) {
     fail(e)

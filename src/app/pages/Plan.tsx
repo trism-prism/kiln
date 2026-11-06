@@ -12,7 +12,6 @@ import { minutesText, TitleLink } from '../parts'
 import { PRIORITY_LABEL } from '../priority'
 import { usePlanDetail, useToday, type PlanDetail } from '../queries'
 
-
 function TaskRow({ t, today }: { t: TaskRecord; today: string }) {
   const overdue = t.status === 'open' && !!t.scheduledDate && t.scheduledDate < today
   const done = t.status === 'done'
@@ -101,7 +100,7 @@ function Settings({ detail }: { detail: PlanDetail }) {
         value={deadline}
         onChange={setDeadline}
         onBlur={commitDeadline}
-        description="Optional. Optional. Kiln warns you if your expected finish is later."
+        description="Optional. Kiln warns you if your expected finish is later."
       />
       {plan.deadline && (
         <Button
