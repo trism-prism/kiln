@@ -14,7 +14,7 @@ Plan: docs/plan.md.
 | 5 | Mastery | done (merged, 61e3051) |
 | 6 | Design system + shell | done (PR pending, branch `feat/design-shell`); design self-approved overnight per the user's instruction; user reviews docs/design in the morning |
 | 7 | Core screens | done (PR pending) |
-| 8 | Calendar + streaks | pending |
+| 8 | Calendar + streaks | done (PR pending, branch `feat/calendar`) |
 | 9 | Import + create | done (merged, fd495ec) |
 | 10 | PWA | pending |
 | 11 | Worker: push + analytics | server half merged (b651130) (SW push handler and UI pending in the PWA stage) |
@@ -22,10 +22,12 @@ Plan: docs/plan.md.
 | 13 | Production | pending |
 
 ## Current branch
-`feat/core-screens` (stage 7, PR pending), built on stage 6 (`feat/design-shell`, PR pending). Stages 3, 4 and 5 merged (fe3b485, b2d0f47, 61e3051).
+`feat/calendar` (stage 8, PR pending), off main 227da20. Earlier: `feat/core-screens` (stage 7, PR pending), built on stage 6 (`feat/design-shell`, PR pending). Stages 3, 4 and 5 merged (fe3b485, b2d0f47, 61e3051).
 
 ## Next exact step
-Stage 8: calendar + streaks (`feat/calendar-streaks`). Month and week calendar on `/calendar` with drag to reschedule (React Aria DnD), streak and heatmap from `practiceLog` and `reviewLogs`. Reuse `src/domain/todo` (`buildTodoItems`, `dayLabel`), `src/app/queries.ts` and `pinTask` in `src/app/actions.ts` (dropping a task on a day pins it).
+Stage 10 (PWA) is in parallel on its own branch. After it: Settings > Sync UI, then production (stage 13).
+
+Stage 8 notes: `/calendar` (month and week, Monday start from settings, drag to reschedule, day panel with "Move to..."), streaks in `src/domain/streaks`, month and week math in `src/domain/calendar`, streak chip on the dashboard. Moving a daily problem changes its date only; a later Reschedule may regenerate it (it is not pinned).
 
 ## Open questions
 - Domain name (user buys, ~$10-12/yr).

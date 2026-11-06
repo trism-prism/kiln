@@ -12,9 +12,10 @@ The layout follows a familiar course-site pattern: left nav rail with a red coun
 |---|---|---|
 | Dashboard | [light](dashboard-desktop-light.png), [dark](dashboard-desktop-dark.png) | [light](dashboard-phone-light.png), [dark](dashboard-phone-dark.png) |
 | To Do | [light](todo-desktop-light.png), [dark](todo-desktop-dark.png) | [light](todo-phone-light.png), [dark](todo-phone-dark.png) |
+| Calendar (month view, full page with the streak heatmap) | [light](calendar-desktop-light.png), [dark](calendar-desktop-dark.png) | [light](calendar-phone-light.png), [dark](calendar-phone-dark.png) |
 | Design system (full page) | [light](design-desktop-light.png), [dark](design-desktop-dark.png) | [light](design-phone-light.png), [dark](design-phone-dark.png) |
 
-The /design page shows every token and component twice, light and dark side by side, whatever the system theme. Dashboard and To Do are shot with the sample plans three days in (one lesson done, the rest overdue); the design page has no data. Regenerate with `SCREENSHOTS=1 npx playwright test screenshots`.
+The /design page shows every token and component twice, light and dark side by side, whatever the system theme. Dashboard, To Do and Calendar are shot with the sample plans three days in (one lesson done, the rest overdue); the design page has no data. Regenerate with `SCREENSHOTS=1 npx playwright test screenshots`.
 
 ## Tokens
 
