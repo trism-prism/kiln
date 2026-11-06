@@ -52,6 +52,76 @@ describe('backup', () => {
     expect((await db.tasks.get(deleted))!.deleted).toBe(true)
   })
 
+  describe('validation', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rejects = async (mutate: (doc: any) => void, pattern: RegExp) => {
+      const { db } = await seeded()
+      const doc = JSON.parse(await exportBackup(db))
+      mutate(doc)
+      const other = newDb()
+      await expect(importBackup(other, JSON.stringify(doc))).rejects.toThrow(pattern)
+      for (const name of ['plans', 'modules', 'tasks', 'settings'] as const) expect(await other.table(name).count()).toBe(0)
+    }
+
+    it('rejects an updatedAt in the far future, negative, or fractional', async () => {
+      await rejects((d) => (d.tables.tasks[0].updatedAt = Date.now() + 2 * 86_400_000), /updatedAt/)
+      await rejects((d) => (d.tables.tasks[0].updatedAt = -1), /updatedAt/)
+      await rejects((d) => (d.tables.plans[0].updatedAt = 1.5), /updatedAt/)
+    })
+
+    it('rejects bad values in fields the app reads, even when the base fields are fine', async () => {
+      await rejects((d) => (d.tables.tasks[0].estimatedMinutes = -5), /estimatedMinutes/)
+      await rejects((d) => (d.tables.tasks[0].scheduledDate = 'tomorrow'), /scheduledDate/)
+      await rejects((d) => (d.tables.plans[0].weight = 9), /weight/)
+      await rejects((d) => (d.tables.settings[0].minutesPerWeekday = [1, 2, 3]), /minutesPerWeekday/)
+      await rejects((d) => (d.tables.modules[0].order = 'first'), /order/)
+    })
+
+    it('drops fields it does not know', async () => {
+      const { db } = await seeded()
+      const doc = JSON.parse(await exportBackup(db))
+      doc.tables.tasks[0].injected = 'x'
+      const other = newDb()
+      await importBackup(other, JSON.stringify(doc))
+      expect(await other.tasks.get(doc.tables.tasks[0].id)).not.toHaveProperty('injected')
+    })
+  })
+
+  it('dedupes rows with the same id, keeping the largest updatedAt, with correct counts', async () => {
+    const { db } = await seeded()
+    const doc = JSON.parse(await exportBackup(db))
+    const row = doc.tables.tasks[2]
+    const older = { ...row, status: 'skipped', updatedAt: row.updatedAt - 500 }
+    const newer = { ...row, status: 'done', updatedAt: row.updatedAt + 500 }
+    doc.tables.tasks = [newer, older, ...doc.tables.tasks.slice(0, 2), older]
+    doc.tables.tasks.push({ ...row, id: 'fresh-id', status: 'open', updatedAt: 5 }, { ...row, id: 'fresh-id', status: 'done', updatedAt: 9 })
+    const other = newDb()
+    const result = await importBackup(other, JSON.stringify(doc))
+    expect(result.tasks).toEqual({ added: 4, replaced: 0, kept: 0 })
+    expect((await other.tasks.get(row.id))!.status).toBe('done')
+    expect((await other.tasks.get('fresh-id'))!.status).toBe('done')
+    const again = await importBackup(other, JSON.stringify(doc))
+    expect(again.tasks).toEqual({ added: 0, replaced: 0, kept: 4 })
+  })
+
+  it('exports a consistent snapshot while writes are in flight', async () => {
+    const { db, planId } = await seeded()
+    // Many writes racing the export: each write bumps a task and its plan together in one transaction.
+    const bump = (n: number) =>
+      db.transaction('rw', db.plans, db.tasks, async () => {
+        const plan = (await db.plans.get(planId))!
+        const task = (await db.tasks.where('planId').equals(planId).first())!
+        await db.plans.put({ ...plan, partTotal: 1, updatedAt: n })
+        await db.tasks.put({ ...task, updatedAt: n })
+      })
+    const writes = Array.from({ length: 20 }, (_, i) => bump(1000 + i))
+    const doc = JSON.parse(await exportBackup(db))
+    await Promise.all(writes)
+    const plan = doc.tables.plans[0]
+    const first = doc.tables.tasks.find((t: { planId: string; updatedAt: number }) => t.planId === planId && t.updatedAt === plan.updatedAt)
+    expect(plan.updatedAt < 1000 || first !== undefined).toBe(true)
+  })
+
   it('rejects bad input without writing', async () => {
     const db = newDb()
     await expect(importBackup(db, 'nope')).rejects.toThrow(/JSON/)
