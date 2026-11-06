@@ -15,6 +15,10 @@ interface PracticeRow extends Row {
   status: string
   date: string
 }
+interface TodoRow extends Row {
+  done: boolean
+  date?: string
+}
 interface CardRow extends Row {
   taskId?: string
   due: number
@@ -50,10 +54,11 @@ export async function readBreakdown(idb: IDBFactory, now: Date, name = 'kiln'): 
   const db = await open(idb, name)
   if (!db) return badgeBreakdown([], [], today)
   try {
-    const [tasks, cards, problems] = await Promise.all([
+    const [tasks, cards, problems, todos] = await Promise.all([
       all<TaskRow>(db, 'tasks'),
       all<CardRow>(db, 'reviewCards'),
       all<PracticeRow>(db, 'practiceItems'), // stored daily problems; absent in a version 2 database
+      all<TodoRow>(db, 'personalTodos'), // absent before version 4
     ])
     const live = tasks.filter((t) => !t.deleted)
     const alive = new Set(live.map((t) => t.id))
@@ -69,7 +74,7 @@ export async function readBreakdown(idb: IDBFactory, now: Date, name = 'kiln'): 
       if (!c.suspended) due.push(c)
     }
     const items = [...live, ...problems.filter((p) => !p.deleted).map((p) => ({ status: p.status, scheduledDate: p.date }))]
-    return badgeBreakdown(items, due, today)
+    return badgeBreakdown(items, due, today, todos)
   } finally {
     db.close()
   }

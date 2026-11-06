@@ -506,3 +506,18 @@ describe('speed', () => {
     expect(ms).toBeLessThan(1500)
   })
 })
+
+describe('fixed minutes (personal to-dos)', () => {
+  it('count like a pinned task on their day: later tasks move on, the day load includes them', () => {
+    const out = run({ fixedMinutes: { [MON]: 45 }, tasks: tasks('p', [['a', 30], ['b', 30]]) })
+    // Monday has 15 minutes left after the to-do, so both tasks go to Tuesday.
+    expect(dates(out, ['a', 'b'])).toEqual(['2026-11-03', '2026-11-03'])
+    expect(out.days.find((d) => d.date === MON)?.taskMinutes).toBe(45)
+  })
+
+  it('ignores days before today', () => {
+    const out = run({ today: '2026-11-03', fixedMinutes: { [MON]: 60 }, tasks: tasks('p', [['a', 30]]) })
+    expect(dates(out, ['a'])).toEqual(['2026-11-03'])
+    expect(out.days.find((d) => d.date === MON)).toBeUndefined()
+  })
+})
