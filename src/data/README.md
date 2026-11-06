@@ -6,13 +6,17 @@ Dexie (IndexedDB) database `kiln`, a small repository API, and JSON backup. No R
 
 | Table | Holds | Main indexes |
 |---|---|---|
-| `plans` | plan-level fields, weight 1-5, startDate, deadline, part progress (`partTotal`, `partsIn`) | `key` |
+| `plans` | plan-level fields, `share` (less/even/more, schema 4) with the matching weight, `favorite`, `dailyPracticeOn`, startDate, deadline, part progress (`partTotal`, `partsIn`) | `key` |
 | `modules` | modules of a plan | `[planId+key]`, `planId` |
 | `tasks` | plan task fields plus app state: `scheduledDate`, `pinnedDate`, `backlog` (deferred by the scheduler), `status` (open/done/skipped), `completedAt` | `[planId+key]`, `planId`, `moduleId`, `scheduledDate`, `pinnedDate`, `status`, `*topics` |
 | `reviewCards` | FSRS card state as plain data (due, stability, difficulty, reps, lapses, state, learningSteps) plus `minutes` per review | `taskId`, `planId`, `due` |
 | `reviewLogs` | one row per review | `cardId`, `reviewedAt` |
 | `practiceLog` | daily LeetCode problems done | `date`, `slug` |
 | `practiceItems` | generated daily LeetCode problems placed on a date, open or done (added in schema 3) | `[planId+date+slug]`, `date`, `planId` |
+| `personalTodos` | one-off to-dos outside plans: title, optional date and minutes, done, completedAt, notes (schema 4) | `date` |
+| `events` | dated items that take no study time (LMS classes, exams): date, endDate, allDay, start/end ms, course, url, planId, feedId, uid (schema 4) | `date`, `planId`, `feedId`, `uid` |
+| `planVersions` | a plan's content, saved by `snapshotPlan` (the plan edit path calls it after saving), newest 20 per plan: createdAt, label, summary, snapshot (schema 4) | `planId` |
+| `feeds` | calendar links kept in sync: lms, url, name, planIds, lastFetchedAt, lastResult (schema 4) | |
 | `settings` | singleton, id `settings`: minutes per weekday (Mon first), week start, reminder 08:00, optional 20:00 nudge, theme, review cap 25%, blackout dates | |
 | `meta` | device-local (`deviceId`, sync key and state); never exported or synced | |
 
@@ -29,6 +33,13 @@ Use `insertRecord`, `updateRecord`, `softDelete`, `softDeletePlan`, `setTaskStat
 ## Sync
 
 Every table except `meta` syncs (`src/sync/README.md`). It reuses `rowSchemas` and `mergeRows` from `backup.ts`, so a new field must be added to the row schema there or it is dropped by backup import and by sync.
+
+## Plan settings, to-dos, events, versions (schema 4)
+
+- Share of study time: `setPlanShare(db, planId, share)` writes `share` and the matching `weight` (Less 2, Even 3, More 5) so devices on schema 3 schedule the same; the scheduler uses `planWeight(plan)`. Daily practice: `practiceConfig(plan)` is the effective config (`dailyPracticeOn` false turns it off; true without a file config uses NeetCode, one a day). Both in `plan-settings.ts`. Favorite: `updateRecord(db, 'plans', id, { favorite })`.
+- Personal to-dos, events and feeds use `insertRecord`, `updateRecord` and `softDelete`; `setPersonalTodoDone`, `listPersonalTodos` and `eventsBetween(db, from, to)` are in `repo.ts`. A dated to-do with minutes is fixed load on its day for the scheduler (done or not); events take no time. The badge counts open to-dos due today or earlier.
+- Versions (`versions.ts`): `snapshotPlan(db, planId, { summary, label? })` stores the plan's content as a plan file (gzip + base64url, built by `planFromRecords`) and tombstones versions beyond the newest 20, emptying their snapshot. `listPlanVersions` lists them newest first; `readSnapshot(v)` returns the plan file, which `importPlan` applies by key keeping progress. A plan of a few hundred tasks fits the 64 KB sync limit (the 85-task DSA fixture is about 20 KB).
+- `softDeletePlan` also tombstones the plan's events and versions.
 
 ## Scheduling
 

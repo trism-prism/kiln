@@ -60,6 +60,15 @@ describe('readBreakdown (what the service worker counts)', () => {
     expect(r.overdue).toBe(2) // 1 task + problem b
   })
 
+  it('counts open personal to-dos due today or earlier like the app badge does', async () => {
+    const { db } = await seeded()
+    const before = await readBreakdown(indexedDB, NOW, db.name)
+    const todo = (id: string, date: string | undefined, done = false) => ({ id, title: id, date, done, deleted: false, updatedAt: 1, deviceId: 'd' })
+    await db.personalTodos.bulkPut([todo('a', TODAY), todo('b', '2026-11-01'), todo('c', TODAY, true), todo('d', undefined), todo('e', '2026-11-10')])
+    const r = await readBreakdown(indexedDB, NOW, db.name)
+    expect([r.today - before.today, r.overdue - before.overdue]).toEqual([1, 1])
+  })
+
   it('returns zeros and creates nothing when the app never ran', async () => {
     const name = 'never-opened'
     const r = await readBreakdown(indexedDB, NOW, name)

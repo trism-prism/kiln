@@ -1,9 +1,14 @@
 import { cardMinutes } from '../domain/mastery'
 import Dexie, { type EntityTable } from 'dexie'
+import { SHARE_WEIGHT, shareFromWeight } from './plan-settings'
 import type {
+  EventRecord,
+  FeedRecord,
   MetaRecord,
   ModuleRecord,
+  PersonalTodoRecord,
   PlanRecord,
+  PlanVersionRecord,
   PracticeItemRecord,
   PracticeLogRecord,
   ReviewCardRecord,
@@ -21,6 +26,10 @@ export class KilnDB extends Dexie {
   practiceLog!: EntityTable<PracticeLogRecord, 'id'>
   practiceItems!: EntityTable<PracticeItemRecord, 'id'>
   settings!: EntityTable<SettingsRecord, 'id'>
+  personalTodos!: EntityTable<PersonalTodoRecord, 'id'>
+  events!: EntityTable<EventRecord, 'id'>
+  planVersions!: EntityTable<PlanVersionRecord, 'id'>
+  feeds!: EntityTable<FeedRecord, 'id'>
   meta!: EntityTable<MetaRecord, 'key'>
 
   constructor(name = 'kiln') {
@@ -67,6 +76,23 @@ export class KilnDB extends Dexie {
     this.version(3).stores({
       practiceItems: 'id, [planId+date+slug], date, planId, updatedAt',
     })
+
+    // 4: personal to-dos, calendar events, plan versions and calendar feeds; plans get `share` from
+    // their weight (1-2 less, 3 even, 4-5 more) and the weight moves to the share's (2, 3, 5).
+    // Raw writes without updatedAt/deviceId, as in version 2.
+    this.version(4)
+      .stores({
+        personalTodos: 'id, date, updatedAt',
+        events: 'id, date, planId, feedId, uid, updatedAt',
+        planVersions: 'id, planId, updatedAt',
+        feeds: 'id, updatedAt',
+      })
+      .upgrade(async (tx) => {
+        await tx.table('plans').toCollection().modify((p: PlanRecord) => {
+          p.share ??= shareFromWeight(p.weight)
+          p.weight = SHARE_WEIGHT[p.share]
+        })
+      })
   }
 }
 
