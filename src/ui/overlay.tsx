@@ -1,0 +1,123 @@
+import type { ReactNode } from 'react'
+import { X } from 'lucide-react'
+import {
+  Button as AriaButton,
+  Dialog,
+  Heading,
+  Menu as AriaMenu,
+  MenuItem as AriaMenuItem,
+  Modal,
+  ModalOverlay,
+  Popover,
+  Text,
+  UNSTABLE_Toast as AriaToast,
+  UNSTABLE_ToastContent as ToastContent,
+  UNSTABLE_ToastQueue as ToastQueue,
+  UNSTABLE_ToastRegion as AriaToastRegion,
+  type MenuItemProps,
+  type MenuProps,
+  type ModalOverlayProps,
+  type PopoverProps,
+} from 'react-aria-components'
+import { popoverClass } from './form'
+
+type SheetProps = Omit<ModalOverlayProps, 'className' | 'children'> & {
+  title: string
+  children: ReactNode | ((opts: { close: () => void }) => ReactNode)
+}
+
+/**
+ * Modal dialog: a bottom sheet on phones, a centered dialog from md up.
+ * Use inside a DialogTrigger, or control it with isOpen/onOpenChange.
+ */
+export function Sheet({ title, children, isDismissable = true, ...props }: SheetProps) {
+  return (
+    <ModalOverlay
+      {...props}
+      isDismissable={isDismissable}
+      className="fixed inset-0 z-50 flex items-end justify-center bg-(--kiln-scrim) data-entering:animate-fade md:items-center md:p-6"
+    >
+      <Modal className="max-h-[90dvh] w-full overflow-y-auto rounded-t-xl border border-border bg-surface-raised text-text shadow-lg data-entering:animate-sheet md:max-w-md md:rounded-xl">
+        <Dialog className="p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] outline-none">
+          {({ close }) => (
+            <>
+              <div className="mb-4 flex items-start justify-between gap-4">
+                <Heading slot="title" className="text-lg font-medium">
+                  {title}
+                </Heading>
+                <AriaButton
+                  onPress={close}
+                  aria-label="Close"
+                  className="-mt-2 -mr-2 flex size-10 items-center justify-center rounded-md text-text-muted transition-colors data-hovered:bg-surface-muted"
+                >
+                  <X />
+                </AriaButton>
+              </div>
+              {typeof children === 'function' ? children({ close }) : children}
+            </>
+          )}
+        </Dialog>
+      </Modal>
+    </ModalOverlay>
+  )
+}
+
+/** Dropdown menu. Wrap the trigger and this in a MenuTrigger. */
+export function Menu<T extends object>({ placement, ...props }: Omit<MenuProps<T>, 'className'> & Pick<PopoverProps, 'placement'>) {
+  return (
+    <Popover placement={placement} className={popoverClass}>
+      <AriaMenu {...props} className="outline-none" />
+    </Popover>
+  )
+}
+
+export function MenuItem({ children, ...props }: Omit<MenuItemProps, 'className' | 'children'> & { children: ReactNode }) {
+  return (
+    <AriaMenuItem
+      {...props}
+      className="flex h-9 cursor-default items-center gap-3 rounded-md px-3 text-sm text-text outline-none data-focused:bg-surface-muted data-focus-visible:outline-2 data-focus-visible:-outline-offset-2 [&_svg]:text-text-muted"
+    >
+      {children}
+    </AriaMenuItem>
+  )
+}
+
+export type ToastContentValue = { title: string; description?: string }
+
+/** App-wide toast queue: toasts.add({ title: 'Plan imported' }, { timeout: 5000 }). */
+export const toasts = new ToastQueue<ToastContentValue>({ maxVisibleToasts: 3 })
+
+/** Mounted once by the shell, above the phone tab bar. */
+export function ToastRegion() {
+  return (
+    <AriaToastRegion
+      queue={toasts}
+      className="fixed right-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] left-4 z-50 flex flex-col gap-2 outline-none md:bottom-6 md:left-auto md:w-80"
+    >
+      {({ toast }) => (
+        <AriaToast
+          toast={toast}
+          className="flex items-start gap-3 rounded-lg bg-text py-3 pr-2 pl-4 text-surface shadow-lg data-entering:animate-rise"
+        >
+          <ToastContent className="min-w-0 flex-1 py-1">
+            <Text slot="title" className="block text-sm font-medium">
+              {toast.content.title}
+            </Text>
+            {toast.content.description && (
+              <Text slot="description" className="mt-1 block text-sm">
+                {toast.content.description}
+              </Text>
+            )}
+          </ToastContent>
+          <AriaButton
+            slot="close"
+            aria-label="Dismiss"
+            className="flex size-8 shrink-0 items-center justify-center rounded-md transition-colors data-hovered:bg-[color-mix(in_oklab,var(--kiln-surface)_16%,transparent)]"
+          >
+            <X />
+          </AriaButton>
+        </AriaToast>
+      )}
+    </AriaToastRegion>
+  )
+}
