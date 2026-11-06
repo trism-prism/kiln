@@ -64,6 +64,10 @@ All in `src/ui/`, built on react-aria-components:
 - Empty-state copy on each page.
 - Theme switch under Settings (System, Light, Dark).
 
+## Using the shell
+
+Each route is a lazily loaded file in `src/app/pages/` that renders `<Page title actions>`; register it with `lazy()` in `src/app/App.tsx`. `Page` sets the document title, draws the top bar and moves focus to its heading on navigation. The phone More menu and the toast region load lazily too, which keeps the first chunk at about 267 kB (85 kB gzipped).
+
 ## Accessibility baseline
 
-Skip link, `nav` and `main` landmarks, `lang="en"`, a document title per route (`To Do · Kiln`), visible focus rings in the accent, keyboard navigation through the rail (Tab) and tabs (arrow keys), reduced motion. Playwright runs axe on /, /todo and /design in light and dark and fails on any serious or critical violation.
+Skip link, `nav` and `main` landmarks, focus moves to the page heading after each in-app navigation (not on first load), `lang="en"`, a document title per route (`To Do · Kiln`), visible focus rings in the accent, keyboard navigation through the rail (Tab) and tabs (arrow keys), reduced motion. Playwright runs axe on /, /todo and /design in light and dark and fails on any serious or critical violation.

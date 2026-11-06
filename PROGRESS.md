@@ -9,10 +9,10 @@ Plan: docs/plan.md.
 |---|---|---|
 | 1 | Repo + setup | done (bb8ed9e) |
 | 2 | Plan format + prompts | done (09cc8d0) |
-| 3 | Data layer | done (merged) |
+| 3 | Data layer | done (merged, fe3b485) |
 | 4 | Scheduler + LC ramp | done (merged, b2d0f47) |
-| 5 | Mastery | done (PR pending) |
-| 6 | Design system + shell | pending |
+| 5 | Mastery | done (merged, 61e3051) |
+| 6 | Design system + shell | done (PR pending); design self-approved overnight per the user's instruction; user reviews docs/design in the morning |
 | 7 | Core screens | pending |
 | 8 | Calendar + streaks | pending |
 | 9 | Import + create | pending |
@@ -22,10 +22,10 @@ Plan: docs/plan.md.
 | 13 | Production | pending |
 
 ## Current branch
-`feat/scheduler` (stage 4, PR pending). Stage 3 merged; stage 2 merged from `feat/plan-format` (PR 2, 09cc8d0).
+`feat/design-shell` (stage 6, PR pending). Stages 3, 4 and 5 merged (fe3b485, b2d0f47, 61e3051).
 
 ## Next exact step
-Stage 5: mastery (`feat/mastery`): ts-fsrs wrapper, rating to review tasks, mastery % per topic, brush-up query. It supplies `reviewsDue` to `scheduleAll` and should persist generated daily problems if the UI needs them stable.
+Stage 7: core screens (`feat/core-screens`). Start from docs/design/README.md (tokens, components, how to use the shell). Wire `src/app/useTodoCount.ts` to `src/domain/badge` + `src/data`, then build To Do (Today / 7 / 28, plus past 7 / 28), task page, dashboard cards, plan/modules page, brush-up and the rating sheet on the existing routes.
 
 ## Open questions
 - Domain name (user buys, ~$10-12/yr).
