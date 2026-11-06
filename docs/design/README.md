@@ -57,7 +57,7 @@ All in `src/ui/`, built on react-aria-components:
 
 ## What to look at
 
-- The To Do badge in the rail and the phone tab bar (count is a stub of 3 until stage 7, which is why the empty To Do page and the badge disagree).
+- The To Do badge: the shell shows none until stage 7 wires the real count; /design shows it at 1, 3, 42 and 99+.
 - Whether the terracotta accent and the crimson overdue red read as different things.
 - Dark mode: charcoal surfaces and the ember accent on the primary button.
 - The phone tab bar: Dashboard, To Do, Calendar, Plans, More (Brush up, Import, Settings).
