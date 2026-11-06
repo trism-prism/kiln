@@ -8,7 +8,7 @@ Plan: docs/plan.md.
 | # | Stage | Status |
 |---|---|---|
 | 1 | Repo + setup | done (bb8ed9e) |
-| 2 | Plan format + prompts | pending |
+| 2 | Plan format + prompts | done (09cc8d0) |
 | 3 | Data layer | pending |
 | 4 | Scheduler + LC ramp | pending |
 | 5 | Mastery | pending |
@@ -22,13 +22,14 @@ Plan: docs/plan.md.
 | 13 | Production | pending |
 
 ## Current branch
-main. Stage 1 merged from `feat/scaffold` (PR 1, bb8ed9e).
+main. Stage 2 merged from `feat/plan-format` (PR 2, 09cc8d0).
 
 ## Next exact step
-Start stage 2: plan format + prompts.
+User checkpoint: regenerate the DSA and new System Design plans in Gemini with the prompts in `docs/prompts/`, then import-check them with `validatePlan`. Then start stage 3: data layer.
 
 ## Open questions
 - Domain name (user buys, ~$10-12/yr).
+- DSA dev fixture uses `dailyPractice.source: "plan"` (59 plan problems only); switch to `neetcode` top-ups?
 
 ## User-only actions
 - Create the Cloudflare account and run `wrangler login`.
