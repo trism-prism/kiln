@@ -13,7 +13,7 @@ export default function ImportPage() {
     <Page title="Import">
       <div className="grid max-w-3xl gap-8">
         <PromptButtons />
-        <Tabs>
+        <Tabs className="data-focus-visible:outline-none">
           <TabList aria-label="How to add a plan">
             <Tab id="import">Import a plan</Tab>
             <Tab id="build">Build by hand</Tab>

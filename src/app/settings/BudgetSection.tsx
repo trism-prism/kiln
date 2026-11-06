@@ -39,6 +39,7 @@ export function BudgetSection({ settings, onChanged }: { settings: SettingsRecor
               onChange={(v) => setValues((vs) => vs.map((x, j) => (j === i ? v : x)))}
               isInvalid={parsed[i] === undefined}
               errorMessage="0 to 1440"
+              className="min-w-0"
             />
           ))}
         </div>
