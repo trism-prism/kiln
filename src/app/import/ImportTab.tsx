@@ -3,6 +3,7 @@ import { useMemo, useRef, useState } from 'react'
 import { ClipboardPaste, FileUp, X } from 'lucide-react'
 import { FileTrigger } from 'react-aria-components'
 import { Button, Link } from '../../ui/button'
+import { toasts } from '../../ui/overlay'
 import { Report } from './Report'
 import { Review } from './Review'
 import { FILE_TYPES, fileSizeIssue, type Input } from './logic'
@@ -15,8 +16,13 @@ export function ImportTab() {
   const [hint, setHint] = useState('')
   const [problem, setProblem] = useState<ReturnType<typeof fileSizeIssue>>()
   const box = useRef<HTMLTextAreaElement>(null)
+  // Counts loads (paste, file, edit, clear). A read that finishes after a newer load is dropped.
+  const loads = useRef(0)
+  const readFailed = (what: string, e: unknown) =>
+    toasts.add({ title: `Could not read ${what}`, description: e instanceof Error ? e.message : String(e) }, { timeout: 8000 })
 
   const load = (next: string, name?: string) => {
+    loads.current++
     setText(next)
     setProblem(undefined)
     setFile(name === undefined ? undefined : { name })
@@ -25,8 +31,10 @@ export function ImportTab() {
 
   async function paste() {
     setHint('')
+    const mine = ++loads.current
     try {
-      load(await navigator.clipboard.readText())
+      const pasted = await navigator.clipboard.readText()
+      if (mine === loads.current) load(pasted)
     } catch {
       // Denied, or not supported: the box is the fallback.
       setHint('Kiln could not read the clipboard. Click the box and paste with Ctrl+V (on a phone, press and hold, then Paste).')
@@ -38,15 +46,23 @@ export function ImportTab() {
     const f = files?.[0]
     if (!f) return
     setHint('')
+    const mine = ++loads.current
     const tooBig = fileSizeIssue(f.size)
     setProblem(tooBig)
     if (tooBig) return
-    if (f.name.toLowerCase().endsWith('.xlsx')) {
-      setText('')
-      setFile({ name: f.name, data: await f.arrayBuffer() })
-      setLoaded((n) => n + 1)
-    } else {
-      load(await f.text(), f.name)
+    try {
+      if (f.name.toLowerCase().endsWith('.xlsx')) {
+        const data = await f.arrayBuffer()
+        if (mine !== loads.current) return
+        setText('')
+        setFile({ name: f.name, data })
+        setLoaded((n) => n + 1)
+      } else {
+        const content = await f.text()
+        if (mine === loads.current) load(content, f.name)
+      }
+    } catch (e) {
+      if (mine === loads.current) readFailed(f.name, e)
     }
   }
 
@@ -67,6 +83,7 @@ export function ImportTab() {
           ref={box}
           value={text}
           onChange={(e) => {
+            loads.current++
             setText(e.target.value)
             setProblem(undefined)
             setFile(undefined)

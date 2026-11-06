@@ -131,6 +131,15 @@ export function fileSizeIssue(size: number): Issue | undefined {
 
 export type Choice = 'update' | 'copy'
 
+/**
+ * What to do when the id matches a stored plan and the user has not chosen. The same title means
+ * the same plan, so update it. A different title under the same id is more likely another plan that
+ * reused the id, so the default is a copy (an update would overwrite the stored plan's content).
+ */
+export function defaultChoice(existing: PlanRecord | undefined, plan: Pick<Plan, 'title'> | undefined): Choice {
+  return existing && plan && existing.title !== plan.title ? 'copy' : 'update'
+}
+
 export interface Match {
   kind: 'new' | 'update' | 'copy' | 'part' | 'blocked'
   /** Which choices the user gets (empty: the match is decided). */

@@ -88,7 +88,9 @@ export function buildPlan(draft: Draft, info: { id: string; goal?: string; start
         order: ti + 1,
         title: t.title.trim(),
         type: t.type,
-        estimatedMinutes: /^[0-9]+$/.test(t.minutes.trim()) ? Number(t.minutes.trim()) : t.minutes.trim() || undefined,
+        // Whole numbers become numbers; anything else stays text so the validator reports it
+        // (5-180 minutes, or 0 for a milestone). A blank milestone means 0.
+        estimatedMinutes: /^[0-9]+$/.test(t.minutes.trim()) ? Number(t.minutes.trim()) : t.minutes.trim() || (t.type === 'milestone' ? 0 : undefined),
         priority: t.priority,
       }
       const topics = t.topics.split(',').map((x) => x.trim()).filter((x) => x !== '')

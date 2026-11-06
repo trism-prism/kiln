@@ -4,6 +4,7 @@ import { Button } from '../../ui/button'
 import { Switch, TextField } from '../../ui/form'
 import { toasts } from '../../ui/overlay'
 import { Card } from '../../ui/surface'
+import { failed } from './BudgetSection'
 
 const TIME = /^([01][0-9]|2[0-3]):[0-5][0-9]$/
 
@@ -15,7 +16,11 @@ export function ReminderSection({ settings }: { settings: SettingsRecord }) {
   const valid = TIME.test(time) && (!nudge || TIME.test(nudgeTime))
 
   async function save() {
-    await updateSettings(db, { reminderTime: time, nudgeEnabled: nudge, nudgeTime: TIME.test(nudgeTime) ? nudgeTime : settings.nudgeTime })
+    try {
+      await updateSettings(db, { reminderTime: time, nudgeEnabled: nudge, nudgeTime: TIME.test(nudgeTime) ? nudgeTime : settings.nudgeTime })
+    } catch (e) {
+      return failed(e)
+    }
     toasts.add({ title: 'Reminders saved' }, { timeout: 4000 })
   }
 

@@ -7,6 +7,9 @@ import { toasts } from '../../ui/overlay'
 import { Card } from '../../ui/surface'
 import { formatHours, parseMinutes, WEEKDAYS, weekTotal } from './budget'
 
+export const failed = (e: unknown) =>
+  toasts.add({ title: 'Could not save', description: e instanceof Error ? e.message : String(e) }, { timeout: 8000 })
+
 /** Minutes per weekday, week start and the review cap. Saving calls `onChanged` so the page can offer a reschedule. */
 export function BudgetSection({ settings, onChanged }: { settings: SettingsRecord; onChanged: () => void }) {
   const [values, setValues] = useState(() => settings.minutesPerWeekday.map(String))
@@ -17,7 +20,11 @@ export function BudgetSection({ settings, onChanged }: { settings: SettingsRecor
 
   async function save() {
     if (!valid) return
-    await updateSettings(db, { minutesPerWeekday: parsed as number[], weekStartsOn: weekStart })
+    try {
+      await updateSettings(db, { minutesPerWeekday: parsed as number[], weekStartsOn: weekStart })
+    } catch (e) {
+      return failed(e)
+    }
     toasts.add({ title: 'Study time saved' }, { timeout: 4000 })
     onChanged()
   }
@@ -68,9 +75,15 @@ export function BlackoutSection({ settings, onChanged }: { settings: SettingsRec
   const [date, setDate] = useState('')
   const days = [...settings.blackoutDates].sort()
 
-  async function set(next: string[]) {
-    await updateSettings(db, { blackoutDates: next })
+  async function set(next: string[]): Promise<boolean> {
+    try {
+      await updateSettings(db, { blackoutDates: next })
+    } catch (e) {
+      failed(e)
+      return false
+    }
     onChanged()
+    return true
   }
 
   return (
@@ -86,8 +99,7 @@ export function BlackoutSection({ settings, onChanged }: { settings: SettingsRec
             variant="secondary"
             isDisabled={date === '' || days.includes(date)}
             onPress={async () => {
-              await set([...days, date])
-              setDate('')
+              if (await set([...days, date])) setDate('')
             }}
           >
             Add day off

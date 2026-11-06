@@ -12,7 +12,7 @@ async function paste(page: Page, text: string) {
 }
 
 /** Waits for the preview, imports, and checks that the app moved to the new plan's page. */
-async function importIt(page: Page, button = 'Import plan') {
+async function importIt(page: Page, button: string | RegExp = /^Import "/) {
   const go = page.getByRole('button', { name: button })
   await expect(go).toBeEnabled()
   await go.click()
@@ -29,14 +29,14 @@ test('imports the DSA plan in three parts, then system design', async ({ page })
 
   await paste(page, fixture('dsa-part2'))
   await expect(page.getByTestId('match')).toHaveText(/^Add part 2 of 3 to "DSA Zero to Hero in Python"/)
-  await importIt(page, 'Update plan')
+  await importIt(page, /^Add part \d of 3 to "DSA Zero to Hero in Python"/)
 
   await paste(page, fixture('dsa-part3'))
   await expect(page.getByTestId('match')).toHaveText(/^Add part 3 of 3 to /)
   // Complete now: the preview has a projected finish and a 14-day schedule.
   await expect(page.getByTestId('projection')).toContainText('Projected finish')
   await expect(page.getByRole('heading', { name: 'First 14 days' })).toBeVisible()
-  await importIt(page, 'Update plan')
+  await importIt(page, /^Add part \d of 3 to "DSA Zero to Hero in Python"/)
 
   await paste(page, fixture('system-design'))
   await expect(page.getByTestId('match')).toHaveText('New plan')
@@ -49,22 +49,37 @@ test('re-importing a plan offers update or copy', async ({ page }) => {
   await importIt(page)
   await paste(page, fixture('system-design'))
   await expect(page.getByTestId('match')).toContainText('is already in Kiln')
+  // Same title: update is the default, and the button and note say what it does.
+  await expect(page.getByRole('radio', { name: /^Update "/ })).toBeChecked()
+  await expect(page.getByRole('button', { name: /^Update "/ })).toBeVisible()
+  await expect(page.getByText(/missing from this file are kept, not removed/)).toBeVisible()
   await page.getByText('Import as a copy with a new id').click()
   await expect(page.getByLabel('Id of the copy')).toHaveValue(/-copy$/)
   await importIt(page)
 })
 
+test('the same id with a different title defaults to a copy', async ({ page }) => {
+  await paste(page, fixture('system-design'))
+  await importIt(page)
+  const renamed = JSON.parse(fixture('system-design')) as { title: string }
+  renamed.title = 'Some other plan that reused the id'
+  await paste(page, JSON.stringify(renamed))
+  await expect(page.getByRole('radio', { name: /Import as a copy/ })).toBeChecked()
+  await expect(page.getByRole('button', { name: /as a copy$/ })).toBeVisible()
+  await importIt(page, /as a copy$/)
+})
+
 test('part 2 without part 1 is blocked', async ({ page }) => {
   await paste(page, fixture('dsa-part2'))
   await expect(page.getByTestId('match')).toContainText('Import part 1 first')
-  await expect(page.getByRole('button', { name: /Import plan|Update plan/ })).toBeDisabled()
+  await expect(page.getByRole('button', { name: /^Import "/ })).toBeDisabled()
 })
 
 test('invalid JSON shows the line and column', async ({ page }) => {
   await paste(page, '{\n  "schemaVersion": 1,\n  "id": ,\n}')
   await expect(page.getByRole('status').filter({ hasText: /blocks? the import/ })).toBeVisible()
   await expect(page.getByText(/json: line 3, column \d+: unexpected/)).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Import plan' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^Import "/ })).toHaveCount(0)
 })
 
 test('plan errors are listed in the spec format', async ({ page }) => {
@@ -79,7 +94,7 @@ test('uploading the CSV template imports it', async ({ page }) => {
   await page.locator('input[type=file]').first().setInputFiles(publicFile('kiln-plan-template.csv'))
   await expect(page.getByLabel('Plan text')).toHaveValue(/^moduleId,/)
   await expect(page.getByText('Enter a title for the plan.').first()).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Import plan' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: /^Import "/ })).toBeDisabled()
   await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Template plan')
   await expect(page.getByLabel('Plan id')).toHaveValue('template-plan')
   await expect(page.getByRole('heading', { name: 'Preview' })).toBeVisible()
@@ -196,6 +211,8 @@ test('backup export, reset and import round trip', async ({ page }, info) => {
   expect(backup.tables.plans).toHaveLength(1)
 
   await page.getByRole('button', { name: 'Reset local data' }).click()
+  await expect(page.getByText(/no sync/)).toBeVisible()
+  await expect(page.getByRole('radio')).toHaveCount(0)
   const erase = page.getByRole('button', { name: 'Erase everything' })
   await expect(erase).toBeDisabled()
   await page.getByLabel('Confirmation').fill('reset')
@@ -204,6 +221,11 @@ test('backup export, reset and import round trip', async ({ page }, info) => {
   await expect(page.getByRole('textbox', { name: 'Tuesday' })).toHaveValue('120')
 
   await page.locator('input[type=file]').first().setInputFiles(file)
+  // Checked first: counts and a confirm step, nothing written yet.
+  await expect(page.getByText('backup.json is a valid backup')).toBeVisible()
+  await expect(page.getByText(/plans: 1 added, 0 replaced, 0 stale/)).toBeVisible()
+  await expect(page.getByRole('textbox', { name: 'Tuesday' })).toHaveValue('120')
+  await page.getByRole('button', { name: 'Import this backup' }).click()
   await expect(page.getByText('Backup imported')).toBeVisible()
   await expect(page.getByText(/plans: 1 added/)).toBeVisible()
   await expect(page.getByRole('textbox', { name: 'Tuesday' })).toHaveValue('77')

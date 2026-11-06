@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { newDbForTests, fixtureTexts, importPlan } from './test-support'
 import { validatePlan, formatIssue } from '../../domain/plan-format'
-import { analyze, decideMatch, detect, effectiveId, peekJson, slugify, splitIssues, summarize, type Details } from './logic'
+import { analyze, decideMatch, defaultChoice, detect, effectiveId, peekJson, slugify, splitIssues, summarize, type Details } from './logic'
 import { buildPlan, emptyDraft, emptyTask } from './builder'
 
 const csv = readFileSync(new URL('../../../public/kiln-plan-template.csv', import.meta.url), 'utf8')
@@ -157,5 +157,45 @@ describe('builder', () => {
     d.modules[0]!.tasks[1]!.slug = 'not-a-real-problem'
     const a = await analyze(newDbForTests(), { kind: 'build', draft: d }, { ...details, id: 'hand-made' })
     expect(splitIssues(a.result.issues).warnings.map(formatIssue).join('\n')).toContain('not-a-real-problem')
+  })
+})
+
+describe('defaultChoice', () => {
+  it('updates when the title matches and copies when it differs', async () => {
+    const db = newDbForTests()
+    const plan = validatePlan(fixtureTexts.sd).plan!
+    await importPlan(db, plan, { startDate: '2026-11-09' })
+    const existing = (await db.plans.toArray())[0]
+    expect(defaultChoice(existing, plan)).toBe('update')
+    expect(defaultChoice(existing, { title: 'Another plan with the same id' })).toBe('copy')
+    expect(defaultChoice(undefined, plan)).toBe('update')
+  })
+})
+
+describe('builder minutes', () => {
+  const base = () => {
+    const d = emptyDraft()
+    d.title = 'T'
+    d.modules[0]!.title = 'M'
+    d.modules[0]!.tasks[0]!.title = 'Task'
+    return d
+  }
+  const run = (minutes: string, type: 'lesson' | 'milestone' = 'lesson') => {
+    const d = base()
+    Object.assign(d.modules[0]!.tasks[0]!, { minutes, type })
+    return validatePlan(buildPlan(d, { id: 't', startDate: '2026-11-09' })).issues.filter((i) => i.severity === 'error').map(formatIssue)
+  }
+  it('accepts whole minutes from 5 to 180', () => {
+    expect(run('5')).toEqual([])
+    expect(run('180')).toEqual([])
+  })
+  it('rejects 4, 181, decimals, negatives and text', () => {
+    for (const bad of ['4', '181', '1.5', '-5', 'abc', '']) expect(run(bad)).toHaveLength(1)
+    expect(run('4')[0]).toContain('from 5 to 180')
+  })
+  it('allows 0 for a milestone, also when left blank', () => {
+    expect(run('0', 'milestone')).toEqual([])
+    expect(run('', 'milestone')).toEqual([])
+    expect(run('0')).toHaveLength(1)
   })
 })

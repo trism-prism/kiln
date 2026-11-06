@@ -69,3 +69,28 @@ describe('Settings', () => {
     await waitFor(async () => expect((await getSettings(db)).nudgeEnabled).toBe(true))
   })
 })
+
+describe('Settings reset dialog', () => {
+  const open = async (user: ReturnType<typeof userEvent.setup>) => {
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: 'Reset local data' }))
+  }
+
+  it('without sync there is no choice, and the theme is mentioned as kept', async () => {
+    const user = userEvent.setup()
+    await open(user)
+    expect(await screen.findByText(/no sync/)).toBeTruthy()
+    expect(screen.queryByRole('radio')).toBeNull()
+    expect(screen.getByText(/Your theme choice is kept/)).toBeTruthy()
+  })
+
+  it('with sync on, offers this-device-only and everywhere', async () => {
+    const { enableSync } = await import('../../sync')
+    await enableSync(db)
+    const user = userEvent.setup()
+    await open(user)
+    expect(await screen.findByRole('radio', { name: /Erase on this device only \(turns sync off\)/ })).toBeTruthy()
+    expect(screen.getByRole('radio', { name: /Erase everywhere/ })).toBeTruthy()
+    await db.meta.clear()
+  })
+})

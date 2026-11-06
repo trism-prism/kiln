@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { RadioGroup, Radio, Label } from 'react-aria-components'
+import { Dot } from './Dot'
 import { db, importPlan, previewImport, scheduleAll, type ImportPreview } from '../../data'
 import type { Plan } from '../../domain/plan-format'
 import { addDaysISO, toLocalISODate } from '../../lib/date'
@@ -13,6 +14,7 @@ import { Report } from './Report'
 import {
   analyze,
   decideMatch,
+  defaultChoice,
   effectiveId,
   hours,
   isValidId,
@@ -58,7 +60,7 @@ export function Review({ input }: { input: Input }) {
   const [goal, setGoal] = useState('')
   const [userStart, setUserStart] = useState<string | null>(null)
   const [deadline, setDeadline] = useState<string | null>(null)
-  const [choice, setChoice] = useState<Choice>('update')
+  const [chosen, setChosen] = useState<Choice | null>(null)
   const [copyId, setCopyId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<string>()
@@ -75,6 +77,7 @@ export function Review({ input }: { input: Input }) {
   const startDate = userStart ?? plan?.startDate ?? tomorrow
   const deadlineValue = deadline ?? plan?.deadline ?? ''
 
+  const choice: Choice = chosen ?? defaultChoice(a?.existing, plan)
   const match = plan && a ? decideMatch(plan, a.existing, choice) : undefined
   const suggestedCopyId = (() => {
     if (!plan || !a) return ''
@@ -185,17 +188,20 @@ export function Review({ input }: { input: Input }) {
           <p className="text-sm" data-testid="match">{match.label}</p>
           {match.kind === 'blocked' && <p role="alert" className="text-sm text-danger">This part cannot be imported yet.</p>}
           {match.choices.length > 0 && (
-            <RadioGroup value={choice} onChange={(v) => setChoice(v as Choice)} className="grid gap-2 text-sm">
+            <RadioGroup value={choice} onChange={(v) => setChosen(v as Choice)} className="grid gap-2 text-sm">
               <Label className="sr-only">What to do with the existing plan</Label>
-              <Radio value="update" className="group flex items-center gap-3">
+              <Radio value="update" className="group flex items-start gap-3">
                 <Dot />
-                Update it: keep progress, match tasks by id
+                <span>Update &quot;{a?.existing?.title}&quot;: keep progress and match tasks by id</span>
               </Radio>
-              <Radio value="copy" className="group flex items-center gap-3">
+              <Radio value="copy" className="group flex items-start gap-3">
                 <Dot />
-                Import as a copy with a new id
+                <span>Import as a copy with a new id</span>
               </Radio>
             </RadioGroup>
+          )}
+          {(match.kind === 'update' || match.kind === 'part') && (
+            <p className="text-sm text-text-muted">Tasks and modules that are in Kiln but missing from this file are kept, not removed.</p>
           )}
           {match.kind === 'copy' && (
             <TextField label="Id of the copy" value={newId} onChange={setCopyId} isInvalid={!!copyProblem} errorMessage={copyProblem} className="max-w-sm" />
@@ -211,7 +217,7 @@ export function Review({ input }: { input: Input }) {
       {plan && (
         <div>
           <Button onPress={run} isDisabled={!ready || busy || !p}>
-            {busy ? 'Importing...' : match?.kind === 'update' || match?.kind === 'part' ? 'Update plan' : 'Import plan'}
+            {busy ? 'Importing...' : buttonText(match?.kind, finalPlan)}
           </Button>
         </div>
       )}
@@ -331,11 +337,11 @@ function Stat({ label, value }: { label: string; value: string }) {
   )
 }
 
-/** The circle of a radio button; the selected one gets an accent ring around a dot. */
-function Dot() {
-  return (
-    <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-border-strong bg-surface-raised group-data-selected:border-accent group-data-focus-visible:outline-2 group-data-focus-visible:outline-offset-2 group-data-focus-visible:outline-focus">
-      <span className="size-2.5 rounded-full bg-accent opacity-0 group-data-selected:opacity-100" />
-    </span>
-  )
+/** "Update <title>", "Add part 2 of 3 to <title>", "Import <title>", "Import <title> as a copy". */
+function buttonText(kind: string | undefined, plan: Plan | undefined): string {
+  const t = `"${plan?.title ?? ''}"`
+  if (kind === 'update') return `Update ${t}`
+  if (kind === 'part') return `Add part ${plan?.part?.index} of ${plan?.part?.total} to ${t}`
+  if (kind === 'copy') return `Import ${t} as a copy`
+  return `Import ${t}`
 }
