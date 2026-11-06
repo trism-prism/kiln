@@ -9,9 +9,8 @@ import { Badge, Card, EmptyState, ProgressBar, Skeleton } from '../../ui/surface
 import { rescheduleOverdue, safely, scheduleBacklogAgain } from '../actions'
 import { Page } from '../Page'
 import { minutesText, TitleLink } from '../parts'
+import { PRIORITY_LABEL } from '../priority'
 import { usePlanDetail, useToday, type PlanDetail } from '../queries'
-
-const cap = (s: string) => s[0]!.toUpperCase() + s.slice(1)
 
 function TaskRow({ t, today }: { t: TaskRecord; today: string }) {
   const overdue = t.status === 'open' && !!t.scheduledDate && t.scheduledDate < today
@@ -25,7 +24,7 @@ function TaskRow({ t, today }: { t: TaskRecord; today: string }) {
         {done && <Badge tone="success">Done</Badge>}
         {t.status === 'skipped' && <Badge>Skipped</Badge>}
         {overdue && <Badge tone="danger">Overdue</Badge>}
-        <Badge>{cap(t.priority)}</Badge>
+        <Badge>{PRIORITY_LABEL[t.priority]}</Badge>
         <span>{t.scheduledDate ? formatDay(t.scheduledDate) : t.backlog ? 'Backlog' : 'Not scheduled'}</span>
         <span>{minutesText(t.estimatedMinutes)}</span>
       </span>
@@ -106,7 +105,7 @@ function Settings({ detail }: { detail: PlanDetail }) {
         value={deadline}
         onChange={setDeadline}
         onBlur={commitDeadline}
-        description="Optional. The scheduler warns when the projected finish is later."
+        description="Optional. Kiln warns you if your expected finish is later."
       />
       {plan.deadline && (
         <Button

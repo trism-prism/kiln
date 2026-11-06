@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, getSettings, scheduleAll } from '../../data'
-import { toLocalISODate } from '../../lib/date'
+import { db, getSettings } from '../../data'
 import { Button, Link } from '../../ui/button'
 import { ListBoxItem, Select } from '../../ui/form'
-import { toasts } from '../../ui/overlay'
 import { Card, Skeleton } from '../../ui/surface'
+import { rescheduleOverdue } from '../actions'
+import { CONTACT_EMAIL } from '../contact'
 import { Page } from '../Page'
 import { readTheme, saveTheme, type Theme } from '../theme'
 import { BlackoutSection, BudgetSection } from '../settings/BudgetSection'
@@ -20,13 +20,7 @@ export default function SettingsPage() {
   const settings = useLiveQuery(() => getSettings(db))
 
   async function reschedule() {
-    try {
-      await scheduleAll(db, toLocalISODate(new Date()), { mode: 'reschedule' })
-      setOffer(false)
-      toasts.add({ title: 'Rescheduled', description: 'Overdue tasks now fit your study time.' }, { timeout: 5000 })
-    } catch (e) {
-      toasts.add({ title: 'Could not reschedule', description: e instanceof Error ? e.message : String(e) }, { timeout: 8000 })
-    }
+    if (await rescheduleOverdue()) setOffer(false)
   }
 
   return (
@@ -71,9 +65,12 @@ export default function SettingsPage() {
         <InstallSection />
         <BackupSection />
         <DangerSection />
-        <p className="text-sm text-text-muted">
-          <Link href="/privacy">Privacy: what Kiln stores and sends</Link>
-        </p>
+        <nav aria-label="About Kiln" className="flex flex-wrap gap-2 border-t border-border pt-4">
+          <Link variant="quiet" href="/privacy">Privacy</Link>
+          <Link variant="quiet" href="/terms">Terms of use</Link>
+          <Link variant="quiet" href="/licenses">Open-source licenses</Link>
+          <Link variant="quiet" href={`mailto:${CONTACT_EMAIL}`}>Contact</Link>
+        </nav>
       </div>
     </Page>
   )

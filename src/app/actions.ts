@@ -1,12 +1,14 @@
 // Writes the screens share. Each reports through a toast.
 import { db, revertWrite, scheduleAll, skipTask, unskipTask, updateRecord } from '../data'
+import { BACKLOG } from '../domain/scheduler'
 import { formatDay, toLocalISODate } from '../lib/date'
 import { toasts } from '../ui/overlay'
+import { describeMoves } from './moveSummary'
 
 const today = () => toLocalISODate(new Date())
 
-function fail(e: unknown) {
-  toasts.add({ title: 'Could not save', description: e instanceof Error ? e.message : String(e) }, { timeout: 8000 })
+function fail(e: unknown, title = 'Could not save') {
+  toasts.add({ title, description: e instanceof Error ? e.message : String(e) }, { timeout: 8000 })
 }
 
 /** Runs a write and reports a failure in a toast instead of losing it. */
@@ -18,25 +20,37 @@ export async function safely(fn: () => Promise<unknown>): Promise<void> {
   }
 }
 
-/** Moves overdue open tasks (all plans share the daily budget) to the next days with room. */
-export async function rescheduleOverdue(): Promise<void> {
+/**
+ * Moves overdue open tasks (all plans share the daily budget) to the next days with room, and says where
+ * they went. Returns false when it failed (already reported in a toast).
+ */
+export async function rescheduleOverdue(): Promise<boolean> {
   try {
-    const out = await scheduleAll(db, today(), { mode: 'reschedule' })
+    const now = today()
+    const overdue = (await db.tasks.toArray()).filter((t) => !t.deleted && t.status === 'open' && !!t.scheduledDate && t.scheduledDate < now)
+    const out = await scheduleAll(db, now, { mode: 'reschedule' })
     const late = out.violations.filter((v) => v.kind === 'plan-deadline').length
     toasts.add(
-      { title: 'Overdue work rescheduled', description: late ? `${late} plan${late === 1 ? '' : 's'} will miss the deadline at this pace.` : undefined },
+      {
+        title: describeMoves('Moved', 'overdue task', 'Nothing was overdue', new Map(overdue.map((t) => [t.id, t.scheduledDate])), out.assignments),
+        description: late ? `${late} plan${late === 1 ? '' : 's'} will miss the deadline at this pace.` : undefined,
+      },
       { timeout: 6000 },
     )
+    return true
   } catch (e) {
-    fail(e)
+    fail(e, 'Could not reschedule')
+    return false
   }
 }
 
 /** Places tasks in the backlog again (all plans). Tasks that the plan's skip-optional switch holds back stay there. */
 export async function scheduleBacklogAgain(): Promise<void> {
   try {
-    await scheduleAll(db, today())
-    toasts.add({ title: 'Backlog scheduled again' }, { timeout: 5000 })
+    const waiting = (await db.tasks.toArray()).filter((t) => !t.deleted && t.status === 'open' && t.backlog)
+    const out = await scheduleAll(db, today())
+    const title = describeMoves('Placed', 'backlog task', 'Nothing was in the backlog', new Map(waiting.map((t) => [t.id, BACKLOG])), out.assignments)
+    toasts.add({ title }, { timeout: 5000 })
   } catch (e) {
     fail(e)
   }

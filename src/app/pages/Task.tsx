@@ -9,6 +9,7 @@ import { cardMinutes, localDate } from '../../domain/mastery'
 import { pinTask, rescheduleOverdue, toggleSkip } from '../actions'
 import { Page } from '../Page'
 import { DifficultyBadge, LeetCodeLink, minutesText } from '../parts'
+import { PRIORITY_LABEL } from '../priority'
 import { useTaskDetail } from '../queries'
 import { useCompleter } from '../rating'
 
@@ -99,13 +100,13 @@ export default function TaskPage() {
               {skipped && <Badge>Skipped</Badge>}
               {task.backlog && <Badge tone="warning">In the backlog</Badge>}
               <Badge>{cap(task.type)}</Badge>
-              <Badge>{cap(task.priority)}</Badge>
+              <Badge>{PRIORITY_LABEL[task.priority]}</Badge>
               {lc && <DifficultyBadge difficulty={lc.difficulty} />}
             </div>
             <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               <Fact label="Due">{task.scheduledDate ? formatDay(task.scheduledDate, true) : 'Not scheduled'}</Fact>
               <Fact label="Time">{minutesText(task.estimatedMinutes)}</Fact>
-              <Fact label="Priority">{cap(task.priority)}</Fact>
+              <Fact label="Priority">{PRIORITY_LABEL[task.priority]}</Fact>
               <Fact label="Type">{cap(task.type)}</Fact>
               {task.pinnedDate && <Fact label="Pinned to">{formatDay(task.pinnedDate, true)}</Fact>}
             </dl>

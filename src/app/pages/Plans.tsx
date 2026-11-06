@@ -31,13 +31,13 @@ export default function PlansPage() {
                     `${s.allTotal} tasks`,
                     plans.length > 1 ? `${SHARE_LABEL[s.plan.share ?? shareFromWeight(s.plan.weight)]} share of study time` : undefined,
                     s.plan.deadline ? `deadline ${formatDay(s.plan.deadline, true)}` : undefined,
-                    s.finish ? `projected finish ${formatDay(s.finish, true)}` : undefined,
+                    s.finish ? `expected finish ${formatDay(s.finish, true)}` : undefined,
                   ]
                     .filter(Boolean)
                     .join(' · ')}
                 </p>
               </div>
-              <ProgressBar label="Core tasks" value={s.coreTotal ? Math.round((s.coreDone / s.coreTotal) * 100) : 0} valueLabel={`${s.coreDone} of ${s.coreTotal}`} />
+              <ProgressBar label="Essential tasks" value={s.coreTotal ? Math.round((s.coreDone / s.coreTotal) * 100) : 0} valueLabel={`${s.coreDone} of ${s.coreTotal}`} />
             </li>
           ))}
         </ul>
