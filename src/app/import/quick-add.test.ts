@@ -19,6 +19,9 @@ describe('parseLine', () => {
     ['Quiz friday', { title: 'Quiz', due: '2026-11-13' }],
     ['Quiz tues', { title: 'Quiz', due: '2026-11-10' }],
     ['SAT prep', { title: 'SAT prep', due: undefined }],
+    ['Read sat notes', { title: 'Read sat notes', due: undefined }],
+    ['The sun', { title: 'The sun', due: undefined }],
+    ['Quiz saturday', { title: 'Quiz', due: '2026-11-07' }],
     ['Exam nov 20', { title: 'Exam', due: '2026-11-20' }],
     ['Exam November 20', { title: 'Exam', due: '2026-11-20' }],
     ['Exam nov 1', { title: 'Exam', due: '2027-11-01' }],
@@ -38,6 +41,10 @@ describe('parseLine', () => {
   it.each(cases)('%s', (line, want) => {
     const got = parseLine(line, today)
     for (const key of Object.keys(want) as (keyof ParsedLine)[]) expect(got[key], key).toEqual(want[key])
+  })
+  it('feb 29 after it has passed goes to the next leap year', () => {
+    expect(parseLine('Exam feb 29', '2028-03-01').due).toBe('2032-02-29')
+    expect(parseLine('Exam feb 29', '2027-01-01').due).toBe('2028-02-29')
   })
 })
 

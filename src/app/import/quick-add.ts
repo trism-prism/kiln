@@ -1,6 +1,6 @@
 // Quick add: one task per line, turned into the builder's draft modules. Pure, so the line syntax is
 // unit tested on its own. The draft still goes through buildPlan and validatePlan like any plan.
-import type { Priority } from '../../domain/plan-format'
+import type { Priority, Resource } from '../../domain/plan-format'
 import { addDaysISO, isRealISODate, weekdayIndex } from '../../lib/date'
 import type { DraftModule, DraftTask } from './builder'
 
@@ -34,8 +34,9 @@ function nextWeekday(today: string, index: number): string {
 function monthDay(today: string, month: number, day: number): string | undefined {
   const year = Number(today.slice(0, 4))
   const iso = (y: number) => `${y}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-  if (!isRealISODate(iso(year))) return isRealISODate(iso(year + 1)) ? iso(year + 1) : undefined
-  return iso(year) >= today ? iso(year) : iso(year + 1)
+  // Up to 8 years ahead, so feb 29 finds the next leap year.
+  for (let y = year; y <= year + 8; y++) if (isRealISODate(iso(y)) && iso(y) >= today) return iso(y)
+  return undefined
 }
 
 /** One task line: "Read chapter 3 45m fri ! https://..." -> its fields; the words left over are the title. */
@@ -54,8 +55,8 @@ export function parseLine(line: string, today: string): ParsedLine {
     else if (lower === 'today') out.due = today
     else if (lower === 'tomorrow') out.due = addDaysISO(today, 1)
     else if (isRealISODate(w)) out.due = w
-    // All capitals is an acronym ("SAT prep"), not a day.
-    else if (nameIndex(lower, FULL_WEEKDAYS) >= 0 && w !== w.toUpperCase()) out.due = nextWeekday(today, nameIndex(lower, FULL_WEEKDAYS))
+    // All capitals is an acronym ("SAT prep"), and "sat" / "sun" are ordinary words: not days.
+    else if (nameIndex(lower, FULL_WEEKDAYS) >= 0 && w !== w.toUpperCase() && lower !== 'sat' && lower !== 'sun') out.due = nextWeekday(today, nameIndex(lower, FULL_WEEKDAYS))
     else if (nameIndex(lower, FULL_MONTHS) >= 0 && /^[0-9]{1,2}$/.test(words[i + 1] ?? '')) {
       const due = monthDay(today, nameIndex(lower, FULL_MONTHS), Number(words[i + 1]))
       if (due) {
@@ -116,7 +117,7 @@ export function parseQuickAdd(text: string, today: string, times = 1): DraftModu
 }
 
 // Resource kind from the link's domain. Flashcard sites are "tool": the plan format has no flashcards kind.
-const KINDS: [string, string[]][] = [
+const KINDS: [Resource['kind'], string[]][] = [
   ['video', ['youtube.com', 'youtu.be', 'vimeo.com']],
   ['course', ['coursera.org', 'udemy.com', 'edx.org', 'khanacademy.org']],
   ['problem', ['leetcode.com', 'hackerrank.com', 'codewars.com', 'neetcode.io']],
@@ -125,7 +126,7 @@ const KINDS: [string, string[]][] = [
   ['article', ['wikipedia.org', 'medium.com', 'dev.to']],
 ]
 
-export function kindFromUrl(url: string): string {
+export function kindFromUrl(url: string): Resource['kind'] {
   const host = hostOf(url).toLowerCase()
   if (host.startsWith('docs.')) return 'docs'
   return KINDS.find(([, domains]) => domains.some((d) => host === d || host.endsWith(`.${d}`)))?.[0] ?? 'other'

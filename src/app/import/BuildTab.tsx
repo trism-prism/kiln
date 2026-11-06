@@ -62,7 +62,7 @@ export function BuildTab() {
         value={repeat}
         onChange={setRepeat}
         className="max-w-48"
-        description="Copies the list N times; {n} becomes 1, 2, 3..."
+        description="1 to 52. Copies the list N times; {n} becomes 1, 2, 3..."
       />
 
       {modules.length > 0 && (
@@ -83,7 +83,7 @@ export function BuildTab() {
               {modules.map((m) => (
                 <tbody key={m.uid}>
                   <tr>
-                    <th colSpan={6} scope="colgroup" className="p-1 pt-3 text-left font-semibold">
+                    <th colSpan={6} scope="rowgroup" className="p-1 pt-3 text-left font-semibold">
                       {m.title}
                     </th>
                   </tr>
