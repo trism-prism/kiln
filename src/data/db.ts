@@ -1,3 +1,4 @@
+import { cardMinutes } from '../domain/mastery'
 import Dexie, { type EntityTable } from 'dexie'
 import type {
   MetaRecord,
@@ -38,6 +39,26 @@ export class KilnDB extends Dexie {
       settings: 'id, updatedAt',
       meta: 'key',
     })
+
+    // 2: review cards follow ts-fsrs 6's card (learningSteps replaces elapsedDays) and keep their
+    // review-time estimate. No index changes. Raw writes without updatedAt/deviceId on purpose: the
+    // upgrade runs on every device, and bumping updatedAt would make every row win the next sync.
+    this.version(2)
+      .stores({})
+      .upgrade(async (tx) => {
+        const tasks = tx.table('tasks')
+        for (const c of await tx.table('reviewCards').toArray()) {
+          const task = c.taskId ? await tasks.get(c.taskId) : undefined
+          delete c.elapsedDays
+          c.learningSteps ??= 0
+          c.minutes ??= (task && cardMinutes(task)) ?? 10
+          await tx.table('reviewCards').put(c)
+        }
+        await tx.table('reviewLogs').toCollection().modify((l: Record<string, unknown>) => {
+          delete l.elapsedDays
+          l.learningSteps ??= 0
+        })
+      })
   }
 }
 

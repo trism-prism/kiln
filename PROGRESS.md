@@ -10,8 +10,8 @@ Plan: docs/plan.md.
 | 1 | Repo + setup | done (bb8ed9e) |
 | 2 | Plan format + prompts | done (09cc8d0) |
 | 3 | Data layer | done (merged) |
-| 4 | Scheduler + LC ramp | done (PR pending) |
-| 5 | Mastery | pending |
+| 4 | Scheduler + LC ramp | done (merged, b2d0f47) |
+| 5 | Mastery | done (PR pending) |
 | 6 | Design system + shell | pending |
 | 7 | Core screens | pending |
 | 8 | Calendar + streaks | pending |

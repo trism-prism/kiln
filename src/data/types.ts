@@ -67,7 +67,7 @@ export interface TaskRecord extends Base, Omit<Task, 'id' | 'moduleId'> {
   completedAt?: number
 }
 
-/** FSRS card state as plain data (the fields of ts-fsrs's Card, with times as ms). */
+/** FSRS card state as plain data (the fields of ts-fsrs's Card, with times as ms). See domain/mastery. */
 export interface ReviewCardRecord extends Base {
   planId: string
   /** The task being reviewed. */
@@ -79,13 +79,18 @@ export interface ReviewCardRecord extends Base {
   due: number
   stability: number
   difficulty: number
-  elapsedDays: number
   scheduledDays: number
+  /** ts-fsrs learning step index (always 0 in Kiln: short-term steps are off). */
+  learningSteps: number
   reps: number
   lapses: number
   /** FSRS state: 0 New, 1 Learning, 2 Review, 3 Relearning. */
   state: number
   lastReview?: number
+  /** Estimated minutes for one review of this card (domain/mastery cardMinutes). */
+  minutes: number
+  /** The task was skipped: the card is not due, listed or counted until resumed. */
+  suspended?: boolean
 }
 
 export interface ReviewLogRecord extends Base {
@@ -97,8 +102,8 @@ export interface ReviewLogRecord extends Base {
   due: number
   stability: number
   difficulty: number
-  elapsedDays: number
   scheduledDays: number
+  learningSteps: number
   /** When the review happened. */
   reviewedAt: number
 }
