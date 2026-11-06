@@ -87,6 +87,7 @@ function backupSchema(now: number) {
         state: fsrsState,
         lastReview: num.optional(),
         minutes: num.default(10),
+        suspended: z.boolean().optional(),
       }),
       reviewLogs: rows({
         cardId: str,

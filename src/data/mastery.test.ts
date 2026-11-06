@@ -3,7 +3,7 @@ import Dexie from 'dexie'
 import { describe, expect, it } from 'vitest'
 import { fixtureTexts, validateParts } from './fixtures'
 import { KilnDB } from './db'
-import { brushUp, completeTask, dueCards, masteryByPlan, masteryByTopic, reviewCard, reviewsDue } from './mastery'
+import { brushUp, completeTask, dueCards, masteryByPlan, masteryByTopic, reviewCard, reviewsDue, skipTask, unskipTask } from './mastery'
 import { importPlan, listTasks, softDelete } from './repo'
 import { newDb } from './test-db'
 import { uuidv7 } from './uuid'
@@ -144,6 +144,47 @@ describe('reviewCard and queries', () => {
     const plan = (await masteryByPlan(db, T0))[planId]!
     expect(plan.studied).toBe(1)
     expect(plan.total).toBeGreaterThanOrEqual(after.total)
+  })
+})
+
+describe('atomic writes and skipping', () => {
+  it('two concurrent completions of a new task make exactly one card', async () => {
+    const { db, lesson } = await seeded()
+    await Promise.all([completeTask(db, lesson.id, 'good', T0, NO_FUZZ), completeTask(db, lesson.id, 'good', T0, NO_FUZZ)])
+    expect(await db.reviewCards.where('taskId').equals(lesson.id).count()).toBe(1)
+    expect(await db.reviewLogs.count()).toBe(2)
+    expect((await db.reviewCards.toArray())[0]!.reps).toBe(2)
+  })
+
+  it('a failed completion writes nothing', async () => {
+    const { db, lesson } = await seeded()
+    await db.reviewLogs.hook('creating', () => {
+      throw new Error('boom')
+    })
+    await expect(completeTask(db, lesson.id, 'good', T0, NO_FUZZ)).rejects.toThrow()
+    expect((await db.tasks.get(lesson.id))!.status).toBe('open')
+    expect(await db.reviewCards.count()).toBe(0)
+  })
+
+  it('skipping suspends the card everywhere; unskipping or completing resumes it', async () => {
+    const { db, lesson } = await seeded()
+    const { card } = await completeTask(db, lesson.id, 'again', T0, NO_FUZZ)
+    const far = T0 + 400 * DAY
+    const seen = async () => [(await dueCards(db, '2030-01-01')).length, (await brushUp(db, far)).length, Object.keys(await reviewsDue(db, '2026-11-09', '2030-01-01')).length]
+    expect(await seen()).toEqual([1, 1, 1])
+
+    expect((await skipTask(db, lesson.id)).status).toBe('skipped')
+    expect((await db.reviewCards.get(card!.id))!.suspended).toBe(true)
+    expect(await seen()).toEqual([0, 0, 0])
+
+    await unskipTask(db, lesson.id)
+    expect((await db.reviewCards.get(card!.id))!.suspended).toBe(false)
+    expect(await seen()).toEqual([1, 1, 1])
+
+    await skipTask(db, lesson.id)
+    await completeTask(db, lesson.id, 'good', far, NO_FUZZ)
+    expect((await db.reviewCards.get(card!.id))!.suspended).toBe(false)
+    await expect(skipTask(db, 'nope')).rejects.toThrow(/not found/)
   })
 })
 

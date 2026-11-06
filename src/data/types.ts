@@ -89,6 +89,8 @@ export interface ReviewCardRecord extends Base {
   lastReview?: number
   /** Estimated minutes for one review of this card (domain/mastery cardMinutes). */
   minutes: number
+  /** The task was skipped: the card is not due, listed or counted until resumed. */
+  suspended?: boolean
 }
 
 export interface ReviewLogRecord extends Base {
