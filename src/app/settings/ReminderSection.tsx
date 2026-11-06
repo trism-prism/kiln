@@ -26,11 +26,11 @@ export function ReminderSection({ settings }: { settings: SettingsRecord }) {
           <h2 id="reminder-heading" className="text-base font-medium">Reminders</h2>
           <p className="text-sm text-text-muted">Times are saved now. Notifications start once Kiln is installed as an app.</p>
         </div>
-        <TextField label="Daily reminder" type="time" value={time} onChange={setTime} className="max-w-48" />
+        <TextField label="Daily reminder" type="time" value={time} onChange={setTime} isInvalid={!TIME.test(time)} errorMessage="Enter a time" className="max-w-48" />
         <Switch isSelected={nudge} onChange={setNudge}>
           Evening nudge if tasks remain
         </Switch>
-        {nudge && <TextField label="Nudge time" type="time" value={nudgeTime} onChange={setNudgeTime} className="max-w-48" />}
+        {nudge && <TextField label="Nudge time" type="time" value={nudgeTime} onChange={setNudgeTime} isInvalid={!TIME.test(nudgeTime)} errorMessage="Enter a time" className="max-w-48" />}
         <div>
           <Button onPress={save} isDisabled={!valid}>Save reminders</Button>
         </div>

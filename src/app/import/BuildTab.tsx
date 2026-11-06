@@ -27,6 +27,7 @@ export function BuildTab() {
       modules: d.modules.map((m, i) => (i === mi ? { ...m, tasks: m.tasks.map((t, j) => (j === ti ? { ...t, ...patch } : t)) } : m)),
     }))
   const all = draft.modules.flatMap((m) => m.tasks)
+  const numbers = new Map(draft.modules.flatMap((m, mi) => m.tasks.map((t, ti) => [t.uid, `${mi + 1}.${ti + 1}`] as const)))
 
   return (
     <div className="grid gap-6">
@@ -55,7 +56,7 @@ export function BuildTab() {
               )}
             </div>
             {m.tasks.map((t, ti) => {
-              const others = all.filter((o) => o.uid !== t.uid && o.title.trim() !== '')
+              const others = all.filter((o) => o.uid !== t.uid)
               const n = `${mi + 1}.${ti + 1}`
               return (
                 <fieldset key={t.uid} className="grid gap-4 rounded-md border border-border p-4">
@@ -91,7 +92,7 @@ export function BuildTab() {
                       <CheckboxGroup aria-label={`Task ${n} depends on`} value={t.dependsOn} onChange={(dependsOn) => setTask(mi, ti, { dependsOn })} className="mt-3 grid gap-2">
                         {others.map((o) => (
                           <Checkbox key={o.uid} value={o.uid}>
-                            {o.title}
+                            {o.title.trim() || `Task ${numbers.get(o.uid)} (untitled)`}
                           </Checkbox>
                         ))}
                       </CheckboxGroup>

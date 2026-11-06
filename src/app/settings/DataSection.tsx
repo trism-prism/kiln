@@ -96,9 +96,13 @@ export function DangerSection() {
                       variant="danger"
                       isDisabled={typed.trim().toLowerCase() !== CONFIRM}
                       onPress={async () => {
-                        await resetLocalData(db)
-                        toasts.add({ title: 'Local data erased' }, { timeout: 5000 })
-                        close()
+                        try {
+                          await resetLocalData(db)
+                          toasts.add({ title: 'Local data erased' }, { timeout: 5000 })
+                          close()
+                        } catch (e) {
+                          toasts.add({ title: 'Could not erase', description: message(e) }, { timeout: 8000 })
+                        }
                       }}
                     >
                       Erase everything

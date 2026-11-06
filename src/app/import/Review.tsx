@@ -110,9 +110,15 @@ export function Review({ input }: { input: Input }) {
     setFailure(undefined)
     try {
       const result = await importPlan(db, finalPlan, { startDate, deadline: deadlineValue || undefined })
-      await scheduleAll(db, toLocalISODate(new Date()))
       const parts = [`${result.tasksAdded} added`, ...(result.tasksUpdated > 0 ? [`${result.tasksUpdated} updated`] : [])]
-      toasts.add({ title: `Imported "${finalPlan.title}"`, description: `${parts.join(', ')} tasks` }, { timeout: 6000 })
+      let scheduled = ''
+      try {
+        await scheduleAll(db, toLocalISODate(new Date()))
+      } catch (e) {
+        // The plan is saved; only the dates are missing, and Settings can reschedule.
+        scheduled = ` Scheduling failed (${message(e)}); reschedule from Settings.`
+      }
+      toasts.add({ title: `Imported "${finalPlan.title}"`, description: `${parts.join(', ')} tasks.${scheduled}` }, { timeout: 6000 })
       void navigate(`/plans/${result.planId}`)
     } catch (e) {
       setFailure(message(e))
@@ -125,7 +131,7 @@ export function Review({ input }: { input: Input }) {
 
   return (
     <div className="grid gap-6" aria-busy={analysis.stale}>
-      {analysis.error && <p role="alert" className="text-sm text-danger">Could not read the input: {analysis.error}</p>}
+      {!analysis.stale && analysis.error && <p role="alert" className="text-sm text-danger">Could not read the input: {analysis.error}</p>}
       {!a && !analysis.error && <p className="text-sm text-text-muted" role="status">Checking the plan...</p>}
 
       {a && (
@@ -160,7 +166,13 @@ export function Review({ input }: { input: Input }) {
               onChange={setUserStart}
               description={match?.kind === 'update' || match?.kind === 'part' ? 'Not used: this plan already has a start date.' : undefined}
             />
-            <TextField label="Deadline (optional)" type="date" value={deadlineValue} onChange={setDeadline} />
+            <TextField
+              label="Deadline (optional)"
+              type="date"
+              value={deadlineValue}
+              onChange={setDeadline}
+              description={plan?.deadline ? 'Empty uses the deadline in the plan file.' : undefined}
+            />
           </div>
           {dateProblem && <p role="alert" className="text-sm text-danger">{dateProblem}</p>}
           {titleProblem && <p role="alert" className="text-sm text-danger">{titleProblem}</p>}
@@ -230,7 +242,8 @@ function PreviewCard({
   const lateTasks = preview?.output.violations.filter((v) => v.kind === 'task-deadline' && v.planId === planId).length ?? 0
   const backlog = preview?.tasks.filter((t) => t.backlog).length ?? 0
   const dated = preview?.tasks.filter((t) => t.scheduledDate !== undefined) ?? []
-  const first = dated.map((t) => t.scheduledDate as string).sort()[0] ?? startDate
+  const practiceDates = preview?.output.practice.filter((g) => g.planId === planId).map((g) => g.date) ?? []
+  const first = [...dated.map((t) => t.scheduledDate as string), ...practiceDates].sort()[0] ?? startDate
   const last = addDaysISO(first, 13)
   const days = new Map<string, { title: string; minutes: number }[]>()
   for (const t of dated) {

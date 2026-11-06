@@ -44,7 +44,7 @@ export function Report({ issues }: { issues: Issue[] }) {
   return (
     <div className="grid gap-4 rounded-lg border border-border bg-surface-raised p-5">
       <div className="flex items-center justify-between gap-4">
-        <p className="text-sm text-text-muted" role={errors.length > 0 ? 'alert' : 'status'}>
+        <p className="text-sm text-text-muted" role="status">
           {errors.length > 0
             ? `${errors.length} ${errors.length === 1 ? 'error blocks' : 'errors block'} the import. Fix ${errors.length === 1 ? 'it' : 'them'} and paste again.`
             : 'No errors. Warnings do not block the import.'}

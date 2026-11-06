@@ -1,5 +1,5 @@
 // Step 1 of docs/plan-import.md: paste box, "Paste from clipboard", file picker.
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { ClipboardPaste, FileUp, X } from 'lucide-react'
 import { FileTrigger } from 'react-aria-components'
 import { Button, Link } from '../../ui/button'
@@ -18,6 +18,7 @@ export function ImportTab() {
 
   const load = (next: string, name?: string) => {
     setText(next)
+    setProblem(undefined)
     setFile(name === undefined ? undefined : { name })
     setLoaded((n) => n + 1)
   }
@@ -49,11 +50,11 @@ export function ImportTab() {
     }
   }
 
-  const input: Input | undefined = file?.data
-    ? { kind: 'xlsx', data: file.data, fileName: file.name }
-    : text.trim() !== ''
-      ? { kind: 'text', text, fileName: file?.name }
-      : undefined
+  // Memoized: Review re-validates whenever this object changes.
+  const input = useMemo<Input | undefined>(
+    () => (file?.data ? { kind: 'xlsx', data: file.data, fileName: file.name } : text.trim() !== '' ? { kind: 'text', text, fileName: file?.name } : undefined),
+    [file, text],
+  )
 
   return (
     <div className="grid gap-6">
@@ -67,6 +68,7 @@ export function ImportTab() {
           value={text}
           onChange={(e) => {
             setText(e.target.value)
+            setProblem(undefined)
             setFile(undefined)
           }}
           disabled={!!file?.data}
@@ -87,13 +89,7 @@ export function ImportTab() {
             </Button>
           </FileTrigger>
           {(text !== '' || file) && (
-            <Button
-              variant="quiet"
-              onPress={() => {
-                load('')
-                setProblem(undefined)
-              }}
-            >
+            <Button variant="quiet" onPress={() => load('')}>
               <X /> Clear
             </Button>
           )}

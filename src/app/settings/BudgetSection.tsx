@@ -43,7 +43,7 @@ export function BudgetSection({ settings, onChanged }: { settings: SettingsRecor
             />
           ))}
         </div>
-        <p className="text-sm" aria-live="polite" data-testid="week-total">
+        <p className="text-sm" data-testid="week-total">
           Total per week: <strong className="font-medium tabular-nums">{total} min</strong> <span className="text-text-muted">({formatHours(total)})</span>
         </p>
         <div className="grid max-w-sm gap-4">

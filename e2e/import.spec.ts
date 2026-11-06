@@ -62,7 +62,7 @@ test('part 2 without part 1 is blocked', async ({ page }) => {
 
 test('invalid JSON shows the line and column', async ({ page }) => {
   await paste(page, '{\n  "schemaVersion": 1,\n  "id": ,\n}')
-  await expect(page.getByRole('alert').filter({ hasText: /blocks? the import/ })).toBeVisible()
+  await expect(page.getByRole('status').filter({ hasText: /blocks? the import/ })).toBeVisible()
   await expect(page.getByText(/json: line 3, column \d+: unexpected/)).toBeVisible()
   await expect(page.getByRole('button', { name: 'Import plan' })).toHaveCount(0)
 })

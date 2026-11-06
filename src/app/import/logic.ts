@@ -17,18 +17,11 @@ import {
 } from '../../domain/plan-format'
 import { NEETCODE_SLUGS } from '../../domain/practice'
 import { buildPlan, type Draft } from './builder'
+import { slugify } from './slug'
 
 export const FILE_TYPES = ['.md', '.txt', '.json', '.csv', '.xlsx']
 
-/** Lowercase slug for a plan id: letters, digits and hyphens, at most 64 characters. */
-export function slugify(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 64)
-    .replace(/-+$/, '')
-}
+export { slugify }
 
 // Same pattern as the plan format's id (src/domain/plan-format/schema.ts ID_PATTERN).
 export const isValidId = (id: string) => /^[a-z0-9][a-z0-9-]{0,63}$/.test(id)

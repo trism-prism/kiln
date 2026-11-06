@@ -18,9 +18,13 @@ export default function SettingsPage() {
   const settings = useLiveQuery(() => getSettings(db))
 
   async function reschedule() {
-    await scheduleAll(db, toLocalISODate(new Date()), { mode: 'reschedule' })
-    setOffer(false)
-    toasts.add({ title: 'Rescheduled', description: 'Overdue tasks now fit your study time.' }, { timeout: 5000 })
+    try {
+      await scheduleAll(db, toLocalISODate(new Date()), { mode: 'reschedule' })
+      setOffer(false)
+      toasts.add({ title: 'Rescheduled', description: 'Overdue tasks now fit your study time.' }, { timeout: 5000 })
+    } catch (e) {
+      toasts.add({ title: 'Could not reschedule', description: e instanceof Error ? e.message : String(e) }, { timeout: 8000 })
+    }
   }
 
   return (

@@ -2,6 +2,7 @@
 // not trusted: it goes through validatePlan like any pasted plan.
 import { NEETCODE_POOL } from '../../domain/practice'
 import type { Priority, TaskType } from '../../domain/plan-format'
+import { slugify } from './slug'
 
 export interface DraftTask {
   uid: string
@@ -50,13 +51,8 @@ export const emptyModule = (): DraftModule => ({ uid: uid(), title: '', tasks: [
 
 export const emptyDraft = (): Draft => ({ title: '', modules: [emptyModule()] })
 
-const slug = (s: string) =>
-  s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 60)
-    .replace(/-+$/, '')
+// 60, not 64: room for the "-2" that keeps ids unique.
+const slug = (s: string) => slugify(s, 60)
 
 const POOL = new Map(NEETCODE_POOL.map((p) => [p.slug, p]))
 

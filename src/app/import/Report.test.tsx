@@ -21,7 +21,7 @@ describe('Report', () => {
 
   it('groups errors and warnings, with the warning prefix, and says errors block the import', () => {
     render(<Report issues={issues} />)
-    expect(screen.getByRole('alert').textContent).toContain('2 errors block the import')
+    expect(screen.getByRole('status').textContent).toContain('2 errors block the import')
     const errors = screen.getByRole('region', { name: 'Errors' })
     expect(within(errors).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
       'tasks[13] "Two Sum": estimatedMinutes is required',
@@ -35,7 +35,6 @@ describe('Report', () => {
 
   it('warnings alone do not block', () => {
     render(<Report issues={[issues[1] as Issue]} />)
-    expect(screen.queryByRole('alert')).toBeNull()
     expect(screen.getByRole('status').textContent).toContain('Warnings do not block the import')
     expect(screen.queryByRole('region', { name: 'Errors' })).toBeNull()
   })
