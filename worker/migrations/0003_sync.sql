@@ -20,4 +20,4 @@ CREATE TABLE sync_records (
   PRIMARY KEY (space_id, record_key)
 ) WITHOUT ROWID;
 
-CREATE INDEX sync_records_seq ON sync_records (space_id, seq);
+CREATE UNIQUE INDEX sync_records_seq ON sync_records (space_id, seq);

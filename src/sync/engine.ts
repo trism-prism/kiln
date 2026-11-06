@@ -198,7 +198,7 @@ async function pullAll(db: KilnDB, keys: SyncKeys, post: Post, s: SyncSummary): 
     // The async callback keeps the transaction open across the awaits. Rows and cursor commit together.
     await db.transaction('rw', [...synced(db), db.meta], async () => {
       for (const [table, rows] of byTable) {
-        const r = await mergeRows(db.table(table) as Table<Base, string>, rows)
+        const r = await mergeRows(db.table(table) as Table<Base, string>, rows, { takeTies: true })
         s.applied += r.added + r.replaced
       }
       await db.meta.put({ key: META_CURSOR, value: String(page.cursor) })

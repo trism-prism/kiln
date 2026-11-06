@@ -146,9 +146,16 @@ function backupSchema(now: number) {
 /**
  * Last-write-wins merge of rows into one table, by id: a row is taken when it is new or its
  * updatedAt is larger than the stored one (ties keep the stored row). If an id appears twice, the
- * copy with the larger updatedAt counts. Call inside a read-write transaction on the table.
+ * copy with the larger updatedAt counts. With `takeTies` (sync: the incoming row comes from the
+ * server, which settles ties), an equal updatedAt from another device also replaces the stored
+ * row, so devices that wrote at the same millisecond end up identical. Call inside a read-write
+ * transaction on the table.
  */
-export async function mergeRows(t: Table<Base, string>, rows: Base[]): Promise<{ added: number; replaced: number; kept: number }> {
+export async function mergeRows(
+  t: Table<Base, string>,
+  rows: Base[],
+  opts: { takeTies?: boolean } = {},
+): Promise<{ added: number; replaced: number; kept: number }> {
   const byId = new Map<string, Base>()
   for (const r of rows) {
     const dup = byId.get(r.id)
@@ -162,7 +169,7 @@ export async function mergeRows(t: Table<Base, string>, rows: Base[]): Promise<{
   incoming.forEach((r, i) => {
     const old = stored[i]
     if (!old) added++
-    else if (r.updatedAt > old.updatedAt) replaced++
+    else if (r.updatedAt > old.updatedAt || (opts.takeTies && r.updatedAt === old.updatedAt && r.deviceId !== old.deviceId)) replaced++
     else return
     take.push(r)
   })

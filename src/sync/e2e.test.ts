@@ -74,7 +74,7 @@ const add = (db: KilnDB, slug: string) => insertRecord(db, 'practiceLog', proble
 /** A write at a chosen time (the repository stamps Date.now(), which two fast devices could tie on). */
 async function editAt(db: KilnDB, id: string, patch: Partial<PracticeLogRecord>, updatedAt: number) {
   const old = (await db.practiceLog.get(id))!
-  await db.practiceLog.put({ ...old, ...patch, updatedAt, deviceId: 'test' })
+  await db.practiceLog.put({ ...old, ...patch, updatedAt, deviceId: db.name })
 }
 const slugs = async (db: KilnDB) => (await db.practiceLog.toArray()).filter((r) => !r.deleted).map((r) => r.slug).sort()
 
@@ -139,6 +139,32 @@ describe('two devices', () => {
     expect(sa).toMatchObject({ applied: 1, pushed: 0 })
     expect((await a.practiceLog.get(r.id))?.title).toBe('new')
     expect(ok(await sync(b))).toMatchObject({ applied: 0 })
+  })
+
+  it('equal timestamps: the server keeps the first push and both devices end up identical', async () => {
+    const { a, b } = await twoDevices()
+    const r = await add(a, 'x')
+    ok(await sync(a))
+    ok(await sync(b))
+    await editAt(a, r.id, { title: 'from A' }, NOW + 1000)
+    await editAt(b, r.id, { title: 'from B' }, NOW + 1000)
+    ok(await sync(a)) // first to the server
+    expect(ok(await sync(b))).toMatchObject({ pulled: 1, applied: 1, pushed: 0, rejectedStale: 0 }) // B pulls A's edit first and takes it; nothing left to push
+    ok(await sync(a))
+    expect((await a.practiceLog.get(r.id))?.title).toBe('from A')
+    expect(await b.practiceLog.get(r.id)).toEqual(await a.practiceLog.get(r.id))
+    // Settled: nothing keeps bouncing.
+    expect(ok(await sync(b))).toMatchObject({ applied: 0, pushed: 0 })
+  })
+
+  it('a delete is a row with deleted=true: the server keeps one record, and the tombstone is inside the ciphertext', async () => {
+    const { a } = await twoDevices()
+    const r = await add(a, 'x')
+    ok(await sync(a))
+    await softDelete(a, 'practiceLog', r.id)
+    ok(await sync(a))
+    expect(await d1.prepare('SELECT COUNT(*) AS n FROM sync_records').first('n')).toBe(1)
+    expect(await d1.prepare('SELECT record_count FROM sync_spaces').first('record_count')).toBe(1)
   })
 
   it('a delete on B reaches A as a tombstone', async () => {

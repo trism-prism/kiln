@@ -159,30 +159,43 @@ export async function handleSync(kind: 'push' | 'pull', body: unknown, env: Sync
     deltaBytes += r.ciphertext.length - (o?.n ?? 0)
   }
 
-  if (space.record_count + newRecords > cap(env.MAX_SYNC_RECORDS, DEFAULT_MAX_RECORDS)) throw new HttpError(507, 'sync space is full (too many records)')
-  if (deltaBytes > 0 && space.bytes + deltaBytes > cap(env.MAX_SYNC_BYTES, DEFAULT_MAX_BYTES)) throw new HttpError(507, 'sync space is full (too much data)')
-
   if (accepted.length > 0) {
-    // One batch (a transaction): hand out n sequence numbers, then write all rows with consecutive ones.
-    // ponytail: the counters are a quota backstop; two simultaneous pushes to one space can skew them slightly.
+    // One batch (a transaction). The first statement hands out n sequence numbers and takes the
+    // quota in the same UPDATE, so the caps are enforced where the counters live and two pushes at
+    // once cannot both squeeze in. The insert only runs if that UPDATE changed a row (changes()).
+    // Counters move only for rows that are accepted: new ones, or replacements by their size change.
+    // ponytail: newRecords/deltaBytes come from the read above; a same-key race can skew them by one row.
     const n = accepted.length
-    await db.batch([
+    const maxRecords = cap(env.MAX_SYNC_RECORDS, DEFAULT_MAX_RECORDS)
+    const maxBytes = cap(env.MAX_SYNC_BYTES, DEFAULT_MAX_BYTES)
+    const [claim] = await db.batch([
       db
-        .prepare('UPDATE sync_spaces SET seq = seq + ?, record_count = record_count + ?, bytes = bytes + ? WHERE space_id = ?')
-        .bind(n, newRecords, deltaBytes, spaceId),
+        .prepare(
+          `UPDATE sync_spaces SET seq = seq + ?2, record_count = record_count + ?3, bytes = bytes + ?4
+           WHERE space_id = ?1 AND (?3 <= 0 OR record_count + ?3 <= ?5) AND (?4 <= 0 OR bytes + ?4 <= ?6)`,
+        )
+        .bind(spaceId, n, newRecords, deltaBytes, maxRecords, maxBytes),
       db
         .prepare(
           `INSERT INTO sync_records (space_id, record_key, updated_at, seq, iv, ciphertext)
            SELECT ?1, json_extract(value, '$[0]'), json_extract(value, '$[1]'),
                   (SELECT seq FROM sync_spaces WHERE space_id = ?1) - ?2 + 1 + key,
                   json_extract(value, '$[2]'), json_extract(value, '$[3]')
-           FROM json_each(?3) WHERE true
+           FROM json_each(?3) WHERE changes() = 1
            ON CONFLICT (space_id, record_key) DO UPDATE SET
              updated_at = excluded.updated_at, seq = excluded.seq, iv = excluded.iv, ciphertext = excluded.ciphertext
            WHERE excluded.updated_at > sync_records.updated_at`,
         )
         .bind(spaceId, n, JSON.stringify(accepted.map((r) => [r.recordKey, r.updatedAt, r.iv, r.ciphertext]))),
     ])
+    if (claim?.meta.changes !== 1) throw new HttpError(507, 'sync space is full')
   }
   return json({ accepted: accepted.length, stale: sent.length - accepted.length }, 200)
+}
+
+/** Cron: drops spaces that were created more than a day ago and never stored a record. */
+export async function cleanupSyncSpaces(db: D1Database, now: Date): Promise<number> {
+  const cutoff = new Date(now.getTime() - DAY_MS).toISOString()
+  const r = await db.prepare('DELETE FROM sync_spaces WHERE record_count = 0 AND created_at < ?').bind(cutoff).run()
+  return r.meta.changes
 }

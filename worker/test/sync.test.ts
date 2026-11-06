@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers'
 import { describe, expect, it } from 'vitest'
 import { b64uEncode } from '../src/b64'
 import worker, { type Env } from '../src/index'
+import { cleanupSyncSpaces } from '../src/sync'
 
 const id = () => b64uEncode(crypto.getRandomValues(new Uint8Array(32)))
 const ORIGIN = 'http://localhost:5173'
@@ -212,6 +213,68 @@ describe('quotas', () => {
   it('503 when the space cap is reached', async () => {
     await space().push([row(id(), 1)], { MAX_SYNC_SPACES: '1' })
     expect((await space().push([row(id(), 1)], { MAX_SYNC_SPACES: '1' })).status).toBe(503)
+  })
+})
+
+describe('quota enforcement inside the batch', () => {
+  it('two simultaneous pushes cannot both take the last slot', async () => {
+    const s = space()
+    const over = { MAX_SYNC_RECORDS: '1' }
+    const [x, y] = await Promise.all([s.push([row(id(), 1)], over), s.push([row(id(), 1)], over)])
+    expect([x.status, y.status].sort()).toEqual([200, 507])
+    expect(await count('sync_records')).toBe(1)
+    expect(await env.DB.prepare('SELECT record_count FROM sync_spaces').first('record_count')).toBe(1)
+  })
+
+  it('counts only accepted rows: stale and replaced rows do not add records, replacements add the size change', async () => {
+    const s = space()
+    const k = id()
+    await s.push([row(k, 10, 'A', 50)])
+    await s.push([row(k, 5, 'B', 90)]) // stale: nothing counted
+    await s.push([row(k, 20, 'C', 70)]) // replaced: +20 bytes, no new record
+    expect(await env.DB.prepare('SELECT record_count, bytes FROM sync_spaces').first()).toMatchObject({ record_count: 1, bytes: 70 })
+  })
+
+  it('a push over the cap changes no counter and no seq', async () => {
+    const s = space()
+    await s.push([row(id(), 1, 'A', 60)], { MAX_SYNC_BYTES: '100' })
+    expect((await s.push([row(id(), 1, 'A', 60)], { MAX_SYNC_BYTES: '100' })).status).toBe(507)
+    expect(await env.DB.prepare('SELECT seq, record_count, bytes FROM sync_spaces').first()).toMatchObject({ seq: 1, record_count: 1, bytes: 60 })
+  })
+})
+
+describe('storage rules', () => {
+  it('(space_id, seq) is unique', async () => {
+    const s = space()
+    await s.push([row(id(), 1)])
+    const insert = () =>
+      env.DB.prepare('INSERT INTO sync_records (space_id, record_key, updated_at, seq, iv, ciphertext) VALUES (?, ?, 1, 1, ?, ?)')
+        .bind(s.spaceId, id(), 'a', 'b')
+        .run()
+    await expect(insert()).rejects.toThrow()
+  })
+
+  it('a delete is an ordinary update of the same record: the server keeps the row and its size', async () => {
+    const s = space()
+    const k = id()
+    await s.push([row(k, 1, 'A', 100)])
+    await s.push([row(k, 2, 'T', 100)]) // the tombstone is ciphertext like any other version
+    expect(await count('sync_records')).toBe(1)
+    expect(await env.DB.prepare('SELECT record_count, bytes FROM sync_spaces').first()).toMatchObject({ record_count: 1, bytes: 100 })
+  })
+
+  it('cron removes empty spaces older than a day, and nothing else', async () => {
+    const old = new Date(Date.now() - 2 * 86_400_000).toISOString()
+    const fresh = new Date().toISOString()
+    const mk = (spaceId: string, n: number, at: string) =>
+      env.DB.prepare('INSERT INTO sync_spaces (space_id, token_hash, record_count, created_at) VALUES (?, ?, ?, ?)').bind(spaceId, 'h', n, at).run()
+    const [oldEmpty, freshEmpty, oldUsed] = [id(), id(), id()]
+    await mk(oldEmpty, 0, old)
+    await mk(freshEmpty, 0, fresh)
+    await mk(oldUsed, 3, old)
+    expect(await cleanupSyncSpaces(env.DB, new Date())).toBe(1)
+    const left = (await env.DB.prepare('SELECT space_id FROM sync_spaces').all<{ space_id: string }>()).results.map((r) => r.space_id).sort()
+    expect(left).toEqual([freshEmpty, oldUsed].sort())
   })
 })
 

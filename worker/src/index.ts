@@ -1,6 +1,6 @@
 import { runCron, seedSentDate } from './cron'
 import { HttpError, json, readJson, safeEqual, sha256Hex } from './http'
-import { handleSync } from './sync'
+import { cleanupSyncSpaces, handleSync } from './sync'
 import { isPushEndpoint, isSecretString, parsePing, parseSubscription } from './validate'
 
 export interface Env {
@@ -152,5 +152,6 @@ export default {
         new Date(),
       ).then((r) => console.log('cron', JSON.stringify(r))),
     )
+    ctx.waitUntil(cleanupSyncSpaces(env.DB, new Date()).then((n) => console.log('sync spaces removed', n)))
   },
 }

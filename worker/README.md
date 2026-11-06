@@ -38,12 +38,15 @@ End-to-end encrypted storage for the app's data. The client design is in `src/sy
 
 Rules:
 
-- **Ownership.** The first push to a `spaceId` stores `SHA-256(token)`; from then on push and pull need the same token (constant-time compare, 403 otherwise). Space ids and tokens come from 256-bit secrets, so neither can be guessed.
-- **Newest wins.** A row is stored only if its `updatedAt` is greater than the stored one (a tie keeps the stored row). Stale rows are counted in `stale`, not an error. Duplicates inside one push keep the newest.
+- **Access.** The first push to a `spaceId` stores `SHA-256(token)`; from then on push and pull both need the same token (constant-time compare, 403 otherwise). One token gates reading and writing: everyone who holds the sync key is fully trusted, and there are no read-only or per-device keys. Space ids and tokens come from 256-bit secrets, so neither can be guessed.
+- **Newest wins.** A row is stored only if its `updatedAt` is greater than the stored one. A tie keeps the stored row: the server is the tie arbiter (first stored wins), and clients take the server's row on a pull when the timestamps are equal, so devices that wrote in the same millisecond converge. Stale rows are counted in `stale`, not an error. Duplicates inside one push keep the newest.
 - **seq.** Each accepted write gets the next number of a per-space counter, assigned inside one D1 batch together with the quota counters, so pull order is write order and an updated record moves to the end. Gaps are normal.
-- **Quotas per space.** 20,000 records and 25,000,000 ciphertext characters; a push that would exceed either is refused whole with `507` (updates that do not grow the space still work). The number of spaces is capped at 5,000 (`503`). `MAX_SYNC_RECORDS`, `MAX_SYNC_BYTES` and `MAX_SYNC_SPACES` override these. The usage counters are a backstop and can drift slightly if two pushes to one space run at the same instant.
+- **Quotas per space.** 20,000 records and 25,000,000 ciphertext characters; a push that would exceed either is refused whole with `507` (updates that do not grow the space still work). The caps are checked in the same D1 batch statement that updates the counters, so simultaneous pushes cannot both pass; only rows that are actually accepted count (new records, or the size change of a replacement). The number of spaces is capped at 5,000 (`503`). `MAX_SYNC_RECORDS`, `MAX_SYNC_BYTES` and `MAX_SYNC_SPACES` override these.
 - **Errors.** 400 invalid, 403 wrong token or origin, 413 body over 1 MB, 415, 503, 507.
-- **CORS** is the same as for the other routes. Add the same rate-limiting rule for `/sync/` as for `/push/` at deploy time.
+- **CORS** is the same as for the other routes. Rate limiting is a Cloudflare rule (see Deploy, step 7); the Worker has no per-IP limit.
+- **Cleanup.** The cron deletes spaces that hold no records and were created more than a day ago, so abandoned first pushes and probes do not pile up.
+- **Deletes.** A delete is an ordinary update: the client pushes the record again with `deleted: true` inside the ciphertext, so the server cannot tell a delete from an edit. Storage does not shrink when records are deleted, and there is no compaction in v1; the quotas still apply to the tombstones.
+- **Clock skew.** `updatedAt` comes from the writing device's clock. The server refuses rows dated more than 24 hours ahead (400), and clients drop received rows dated more than 24 hours ahead. Because the newest `updatedAt` wins, a device whose clock runs ahead (but within a day) overrides other devices' later real edits until real time catches up; a clock behind loses its edits to older versions. Keep device clocks automatic.
 
 ### What the server sees (privacy)
 
@@ -126,7 +129,7 @@ and the matching public key in `wrangler.toml`. `npm run vapid` prints a new pai
 4. Add the production site origin to `ALLOWED_ORIGINS`.
 5. `npx wrangler d1 migrations apply kiln --remote`.
 6. `npx wrangler deploy`.
-7. Rate limiting: in the Cloudflare dashboard (Security > WAF > Rate limiting rules) add a rule for URI path starting with `/push/` or `/sync/` or equal to `/ping`, for example 30 requests per minute per IP, action Block. The 50,000-row cap in the Worker is only a backstop.
+7. Rate limiting: in the Cloudflare dashboard (Security > WAF > Rate limiting rules) add a rule for URI path starting with `/push/` or equal to `/ping`, for example 30 requests per minute per IP, action Block. Add a second rule for URI path starting with `/sync/`, for example 60 requests per minute per IP, action Block (a sync run is a few requests; the Worker enforces quotas but not request rates). The 50,000-row cap in the Worker is only a backstop.
 8. Verify: `curl https://<worker-url>/health`, then subscribe from the installed PWA.
 
 ## Web Analytics
