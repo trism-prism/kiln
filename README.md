@@ -11,7 +11,6 @@ Read by Vite at build time, so they are public and baked into the bundle: includ
 |---|---|---|
 | `VITE_API_URL` | The Worker's address for reminders, sync and the daily ping, no trailing slash. (`VITE_SYNC_URL` is the old name, still read for one release.) | Those features are off |
 | `VITE_VAPID_PUBLIC_KEY` | VAPID public key (base64url) from `npm run vapid` in `worker/`, the same one as in `worker/wrangler.toml` | Reminders are off |
-| `VITE_E2E` | `1` shows "Load sample plan" in the first-run setup (always on in `npm run dev`) | Hidden in production |
 
 ## Icons
 

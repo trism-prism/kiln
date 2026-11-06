@@ -115,7 +115,7 @@ test('the app icon badge follows today\'s task count', async ({ page }) => {
   await page.getByRole('button', { name: 'Skip setup' }).waitFor()
   // Step through to the plan step, then load the sample plan.
   for (let i = 0; i < 3; i++) await page.getByRole('button', { name: 'Next' }).click()
-  await page.getByRole('button', { name: 'Load sample plan' }).click()
+  await page.getByRole('button', { name: 'Load sample plan', exact: true }).click()
   await expect(page.getByText('Sample plan loaded')).toBeVisible()
   await expect.poll(() => page.evaluate(() => (window as unknown as { __badge: (number | null)[] }).__badge.at(-1) ?? 0)).toBeGreaterThan(0)
 })

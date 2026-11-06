@@ -33,7 +33,7 @@ test.describe('onboarding', () => {
     await page.getByRole('button', { name: 'Next' }).click()
     await expect(page.getByText('Step 3 of 4: Reminder')).toBeVisible()
     await page.getByRole('button', { name: 'Next' }).click()
-    await page.getByRole('button', { name: 'Load sample plan' }).click()
+    await page.getByRole('button', { name: 'Load sample plan', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Set up Kiln' })).toBeHidden()
     await page.reload()
     await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible()

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router'
 import { db, updateSettings } from '../../data'
+import { canSeed, loadSamplePlans } from '../devSeed'
 import { addDaysISO, toLocalISODate } from '../../lib/date'
 import { finishOnboarding, markOnboardingStarted, META_START_DATE, readOnboardingFacts, shouldShowOnboarding } from '../../pwa/onboarding'
 import { setMeta } from '../../pwa/meta'
@@ -12,9 +13,7 @@ import { toasts } from '../../ui/overlay'
 import { unavailableText } from '../settings/ReminderSection'
 import { formatHours, parseMinutes, WEEKDAYS, weekTotal } from '../settings/budget'
 
-// "Load sample plan" exists only in development and end-to-end builds. The condition is written out
-// here (not read through a helper) so the production build drops the import and the fixture data with it.
-const loadSample = import.meta.env.DEV || import.meta.env.VITE_E2E === '1' ? () => import('./sample') : undefined
+// "Load sample plan" exists only in development and e2e builds (src/app/devSeed.ts drops the fixtures from production).
 
 /** Weekday minutes (Monday to Friday) and weekend minutes. */
 const PRESETS = [
@@ -177,13 +176,13 @@ function Flow({ onClose }: { onClose: () => void }) {
             <p className="text-sm text-text-muted">Kiln schedules a study plan you bring. Import one from your AI tool or a spreadsheet to fill your To Do list.</p>
             <div className="flex flex-wrap gap-2">
               <Button onPress={() => void done(() => void navigate('/import'))} isDisabled={busy}>Import a plan</Button>
-              {loadSample && (
+              {canSeed && (
                 <Button
                   variant="secondary"
                   isDisabled={busy}
                   onPress={() =>
                     void done(async () => {
-                      await (await loadSample()).loadSamplePlan(start)
+                      await loadSamplePlans()
                       toasts.add({ title: 'Sample plan loaded' }, { timeout: 4000 })
                     })
                   }

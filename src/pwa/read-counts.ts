@@ -11,6 +11,10 @@ interface TaskRow extends Row {
   status: string
   scheduledDate?: string
 }
+interface PracticeRow extends Row {
+  status: string
+  date: string
+}
 interface CardRow extends Row {
   taskId?: string
   due: number
@@ -46,7 +50,11 @@ export async function readBreakdown(idb: IDBFactory, now: Date, name = 'kiln'): 
   const db = await open(idb, name)
   if (!db) return badgeBreakdown([], [], today)
   try {
-    const [tasks, cards] = await Promise.all([all<TaskRow>(db, 'tasks'), all<CardRow>(db, 'reviewCards')])
+    const [tasks, cards, problems] = await Promise.all([
+      all<TaskRow>(db, 'tasks'),
+      all<CardRow>(db, 'reviewCards'),
+      all<PracticeRow>(db, 'practiceItems'), // stored daily problems; absent in a version 2 database
+    ])
     const live = tasks.filter((t) => !t.deleted)
     const alive = new Set(live.map((t) => t.id))
     // One card per task (the smallest id), none for deleted tasks or suspended cards.
@@ -60,7 +68,8 @@ export async function readBreakdown(idb: IDBFactory, now: Date, name = 'kiln'): 
       }
       if (!c.suspended) due.push(c)
     }
-    return badgeBreakdown(live, due, today)
+    const items = [...live, ...problems.filter((p) => !p.deleted).map((p) => ({ status: p.status, scheduledDate: p.date }))]
+    return badgeBreakdown(items, due, today)
   } finally {
     db.close()
   }

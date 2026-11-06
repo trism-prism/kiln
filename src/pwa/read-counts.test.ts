@@ -50,6 +50,16 @@ describe('readBreakdown (what the service worker counts)', () => {
     expect(app).toBeGreaterThan(0)
   })
 
+  it('counts stored daily problems like the app badge does', async () => {
+    const { db } = await seeded()
+    const row = (id: string, date: string, status: 'open' | 'done', deleted = false) =>
+      ({ id, planId: 'p', date, slug: id, title: id, difficulty: 'easy', minutes: 15, status, deleted, updatedAt: 1, deviceId: 'd' }) as const
+    await db.practiceItems.bulkPut([row('a', TODAY, 'open'), row('b', '2026-11-08', 'open'), row('c', TODAY, 'done'), row('d', TODAY, 'open', true), row('e', '2026-11-10', 'open')])
+    const r = await readBreakdown(indexedDB, NOW, db.name)
+    expect(r.today).toBe(4) // 3 tasks + problem a
+    expect(r.overdue).toBe(2) // 1 task + problem b
+  })
+
   it('returns zeros and creates nothing when the app never ran', async () => {
     const name = 'never-opened'
     const r = await readBreakdown(indexedDB, NOW, name)

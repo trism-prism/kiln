@@ -1,10 +1,9 @@
 // Everything that runs in the background of the app: service worker, badge, daily ping, push
 // times, automatic sync, and "open To Do" messages from a tapped notification. Renders nothing.
-import { useEffect, useState } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
+import { useEffect } from 'react'
 import { useNavigate } from 'react-router'
-import { db, dueCards, getSettings, tasksByStatus } from '../data'
-import { badgeCount } from '../domain/badge'
+import { useTodoCount } from '../app/useTodoCount'
+import { db, getSettings } from '../data'
 import { toLocalISODate } from '../lib/date'
 import { applyBadge } from './badge'
 import { API_URL } from './env'
@@ -13,27 +12,13 @@ import { syncPush } from './push-client'
 import { registerServiceWorker } from './register'
 import { scheduleSync } from './sync-runner'
 
-/** The number on the app icon: today's open and overdue tasks plus due reviews. Follows the local day. */
-function useBadgeCount(): number {
-  const [today, setToday] = useState(() => toLocalISODate(new Date()))
-  useEffect(() => {
-    const refresh = () => setToday(toLocalISODate(new Date()))
-    const id = setInterval(refresh, 60_000)
-    document.addEventListener('visibilitychange', refresh)
-    return () => {
-      clearInterval(id)
-      document.removeEventListener('visibilitychange', refresh)
-    }
-  }, [])
-  return useLiveQuery(async () => badgeCount(await tasksByStatus(db, 'open'), await dueCards(db, today), today), [today], 0)
-}
-
 // StrictMode runs effects twice in development; the once-per-open work happens once.
 let opened = false
 
 export function PwaEffects() {
   const navigate = useNavigate()
-  const count = useBadgeCount()
+  // The same live count as the To Do badge in the shell.
+  const count = useTodoCount()
 
   useEffect(() => {
     void applyBadge(navigator, count)
