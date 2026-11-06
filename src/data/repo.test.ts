@@ -1,8 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import type { KilnDB } from './db'
 import { fixtureTexts, validateParts } from './fixtures'
 import {
   DEFAULT_SETTINGS,
   getDeviceId,
+  getPlanByKey,
+  insertRecord,
   getSettings,
   importPlan,
   isPlanComplete,
@@ -23,6 +26,20 @@ const sd = validateParts([fixtureTexts.sd]).plans[0]!
 const opts = { startDate: '2026-11-09' }
 
 describe('importPlan with the real fixtures', () => {
+  it('skips tasks of a module the user deleted, without throwing', async () => {
+    const db = newDb()
+    const { planId } = await importPlan(db, sd, opts)
+    const gone = (await listModules(db, planId))[0]!
+    const inGone = sd.tasks.filter((t) => t.moduleId === gone.key)
+    expect(inGone.length).toBeGreaterThan(0)
+    await softDelete(db, 'modules', gone.id)
+    const changed = structuredClone(sd)
+    changed.tasks.push({ ...structuredClone(inGone[0]!), id: 'new-in-deleted-module' })
+    const r = await importPlan(db, changed, opts)
+    expect(r).toMatchObject({ tasksAdded: 0, modulesAdded: 0 })
+    expect(await db.tasks.filter((t) => t.key === 'new-in-deleted-module').count()).toBe(0)
+  })
+
   it('imports the DSA parts in order, then the system design plan', async () => {
     const db = newDb()
     const results = []
@@ -139,5 +156,63 @@ describe('writes and reads', () => {
   it('keeps the same device id', async () => {
     const db = newDb()
     expect(await getDeviceId(db)).toBe(await getDeviceId(db))
+  })
+
+  it('updateRecord ignores missing and deleted rows and writes nothing', async () => {
+    const db = newDb()
+    const { planId } = await importPlan(db, sd, opts)
+    const t = (await listTasks(db, planId))[0]!
+    await softDelete(db, 'tasks', t.id)
+    const before = await db.tasks.get(t.id)
+    expect(await updateRecord(db, 'tasks', t.id, { status: 'done' })).toBeUndefined()
+    expect(await updateRecord(db, 'tasks', 'nope', { status: 'done' })).toBeUndefined()
+    expect(await db.tasks.get(t.id)).toEqual(before)
+    expect(await db.tasks.get('nope')).toBeUndefined()
+  })
+
+  it('does not cache a failed device id lookup', async () => {
+    const flaky = {
+      transaction: vi.fn().mockRejectedValueOnce(new Error('boom')).mockResolvedValue('device-1'),
+    } as unknown as KilnDB
+    await expect(getDeviceId(flaky)).rejects.toThrow('boom')
+    expect(await getDeviceId(flaky)).toBe('device-1')
+  })
+
+  it('getPlanByKey picks the smallest id when plans share a key', async () => {
+    const db = newDb()
+    const { planId } = await importPlan(db, sd, opts)
+    const plan = (await db.plans.get(planId))!
+    for (const id of ['00000000-0000-7000-8000-000000000000', 'ffffffff-ffff-7fff-8fff-ffffffffffff']) {
+      await db.plans.add({ ...plan, id })
+    }
+    expect((await getPlanByKey(db, sd.id))!.id).toBe('00000000-0000-7000-8000-000000000000')
+  })
+
+  it('getSettings ignores a deleted settings row, and saving revives it', async () => {
+    const db = newDb()
+    await updateSettings(db, { theme: 'dark' })
+    await softDelete(db, 'settings', 'settings')
+    expect(await getSettings(db)).toEqual(DEFAULT_SETTINGS)
+    expect(await updateSettings(db, { nudgeEnabled: true })).toMatchObject({ deleted: false, theme: 'system', nudgeEnabled: true })
+  })
+
+  it('softDeletePlan also tombstones review cards, review logs and practice log rows of the plan', async () => {
+    const db = newDb()
+    const { planId } = await importPlan(db, sd, opts)
+    const { planId: otherId } = await importPlan(db, dsa[0]!, opts)
+    const card = { stability: 1, difficulty: 1, elapsedDays: 0, scheduledDays: 1, reps: 0, lapses: 0, state: 0, due: 1, topics: [] }
+    const mine = await insertRecord(db, 'reviewCards', { ...card, planId })
+    const theirs = await insertRecord(db, 'reviewCards', { ...card, planId: otherId })
+    const log = { rating: 3, state: 0, due: 1, stability: 1, difficulty: 1, elapsedDays: 0, scheduledDays: 1, reviewedAt: 1 }
+    const myLog = await insertRecord(db, 'reviewLogs', { ...log, cardId: mine.id })
+    const theirLog = await insertRecord(db, 'reviewLogs', { ...log, cardId: theirs.id })
+    const pl = { date: '2026-11-09', slug: 'two-sum', title: 'Two Sum', difficulty: 'easy' as const, completedAt: 1 }
+    const myPractice = await insertRecord(db, 'practiceLog', { ...pl, planId })
+    const loosePractice = await insertRecord(db, 'practiceLog', pl)
+
+    await softDeletePlan(db, planId)
+    const gone = async (name: 'reviewCards' | 'reviewLogs' | 'practiceLog', id: string) => (await db.table(name).get(id)).deleted
+    expect([await gone('reviewCards', mine.id), await gone('reviewLogs', myLog.id), await gone('practiceLog', myPractice.id)]).toEqual([true, true, true])
+    expect([await gone('reviewCards', theirs.id), await gone('reviewLogs', theirLog.id), await gone('practiceLog', loosePractice.id)]).toEqual([false, false, false])
   })
 })

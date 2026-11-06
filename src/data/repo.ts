@@ -30,13 +30,18 @@ const deviceIds = new WeakMap<KilnDB, Promise<string>>()
 export function getDeviceId(db: KilnDB): Promise<string> {
   let p = deviceIds.get(db)
   if (!p) {
-    p = db.transaction('rw', db.meta, async () => {
-      const found = await db.meta.get('deviceId')
-      if (found) return found.value
-      const value = uuidv7()
-      await db.meta.put({ key: 'deviceId', value })
-      return value
-    })
+    p = db
+      .transaction('rw', db.meta, async () => {
+        const found = await db.meta.get('deviceId')
+        if (found) return found.value
+        const value = uuidv7()
+        await db.meta.put({ key: 'deviceId', value })
+        return value
+      })
+      .catch((e: unknown) => {
+        deviceIds.delete(db) // do not cache a failure; the next call retries
+        throw e
+      })
     deviceIds.set(db, p)
   }
   return p
@@ -59,7 +64,7 @@ export async function insertRecord<N extends Exclude<TableName, 'settings'>>(
   return rec
 }
 
-/** Changes fields of a record. Returns the new record, or undefined if there is no such record. */
+/** Changes fields of a record. Returns the new record, or undefined (nothing written) if the record is missing or deleted. */
 export async function updateRecord<N extends TableName>(
   db: KilnDB,
   name: N,
@@ -70,7 +75,7 @@ export async function updateRecord<N extends TableName>(
   const t = table(db, name)
   return db.transaction('rw', t, async () => {
     const old = await t.get(id)
-    if (!old) return undefined
+    if (!old || old.deleted) return undefined
     const next = { ...old, ...patch, updatedAt: Date.now(), deviceId }
     await t.put(next)
     return next
@@ -82,19 +87,21 @@ export async function softDelete(db: KilnDB, name: TableName, id: string): Promi
   await updateRecord(db, name, id, { deleted: true } as Partial<Records[typeof name]>)
 }
 
-/** Tombstones a plan with its modules, tasks and review cards. */
+/** Tombstones a plan with its modules, tasks, review cards and logs, and its practice log rows. */
 export async function softDeletePlan(db: KilnDB, planId: string): Promise<void> {
   const deviceId = await getDeviceId(db)
   const now = Date.now()
-  const names = ['plans', 'modules', 'tasks', 'reviewCards'] as const
-  await db.transaction('rw', names.map((n) => db.table(n)), async () => {
+  const tomb = <T extends Base>(rows: T[]) => rows.filter((r) => !r.deleted).map((r) => ({ ...r, deleted: true, updatedAt: now, deviceId }))
+  await db.transaction('rw', [db.plans, db.modules, db.tasks, db.reviewCards, db.reviewLogs, db.practiceLog], async () => {
     const plan = await db.plans.get(planId)
     if (plan) await db.plans.put({ ...plan, deleted: true, updatedAt: now, deviceId })
-    for (const name of ['modules', 'tasks', 'reviewCards'] as const) {
-      const t = table(db, name)
-      const rows = await t.where('planId').equals(planId).toArray()
-      await t.bulkPut(rows.filter((r) => !r.deleted).map((r) => ({ ...r, deleted: true, updatedAt: now, deviceId })) as never[])
-    }
+    await db.modules.bulkPut(tomb(await db.modules.where('planId').equals(planId).toArray()))
+    await db.tasks.bulkPut(tomb(await db.tasks.where('planId').equals(planId).toArray()))
+    const cards = await db.reviewCards.where('planId').equals(planId).toArray()
+    await db.reviewCards.bulkPut(tomb(cards))
+    await db.reviewLogs.bulkPut(tomb(await db.reviewLogs.where('cardId').anyOf(cards.map((c) => c.id)).toArray()))
+    // ponytail: practiceLog has no planId index; a scan is fine at one row per study day.
+    await db.practiceLog.bulkPut(tomb(await db.practiceLog.filter((r) => r.planId === planId).toArray()))
   })
 }
 
@@ -110,7 +117,9 @@ export async function getPlan(db: KilnDB, id: string): Promise<PlanRecord | unde
 }
 
 export async function getPlanByKey(db: KilnDB, key: string): Promise<PlanRecord | undefined> {
-  return live(await db.plans.where('key').equals(key).toArray())[0]
+  // Two devices can each create a plan with the same key before they sync. Pick the smallest id so
+  // every device picks the same one. Merging the duplicates is a later sync decision.
+  return live(await db.plans.where('key').equals(key).toArray()).sort((a, b) => (a.id < b.id ? -1 : 1))[0]
 }
 
 export async function listModules(db: KilnDB, planId: string): Promise<ModuleRecord[]> {
@@ -142,15 +151,20 @@ export function isPlanComplete(plan: Pick<PlanRecord, 'partTotal' | 'partsIn'>):
 
 // ---- settings ----
 
-/** The saved settings, or the defaults when nothing was saved yet. */
+const liveSettings = async (db: KilnDB) => {
+  const s = await db.settings.get(SETTINGS_ID)
+  return s && !s.deleted ? s : undefined
+}
+
+/** The saved settings, or the defaults when nothing was saved yet (or the saved row is deleted). */
 export async function getSettings(db: KilnDB): Promise<SettingsRecord> {
-  return (await db.settings.get(SETTINGS_ID)) ?? DEFAULT_SETTINGS
+  return (await liveSettings(db)) ?? DEFAULT_SETTINGS
 }
 
 export async function updateSettings(db: KilnDB, patch: Partial<Omit<SettingsRecord, keyof Base>>): Promise<SettingsRecord> {
   const deviceId = await getDeviceId(db)
   return db.transaction('rw', db.settings, async () => {
-    const next = { ...((await db.settings.get(SETTINGS_ID)) ?? DEFAULT_SETTINGS), ...patch, updatedAt: Date.now(), deviceId }
+    const next = { ...((await liveSettings(db)) ?? DEFAULT_SETTINGS), ...patch, updatedAt: Date.now(), deviceId }
     await db.settings.put(next)
     return next
   })
@@ -237,7 +251,8 @@ export async function importPlan(db: KilnDB, plan: Plan, opts: ImportOptions): P
 
     // Modules
     const oldModules = new Map((await db.modules.where('planId').equals(planId).toArray()).map((m) => [m.key, m]))
-    const moduleIds = new Map([...oldModules].map(([k, m]) => [k, m.id]))
+    // Only live modules: tasks of a module the user deleted are skipped below.
+    const moduleIds = new Map([...oldModules].filter(([, m]) => !m.deleted).map(([k, m]) => [k, m.id]))
     let modulesAdded = 0
     for (const m of plan.modules) {
       const old = oldModules.get(m.id)
@@ -259,6 +274,7 @@ export async function importPlan(db: KilnDB, plan: Plan, opts: ImportOptions): P
     let tasksUpdated = 0
     for (const t of plan.tasks) {
       const moduleId = moduleIds.get(t.moduleId)
+      if (!moduleId && oldModules.get(t.moduleId)?.deleted) continue
       if (!moduleId) throw new Error(`Task "${t.id}" is in module "${t.moduleId}", which is not in the plan`)
       const old = oldTasks.get(t.id)
       // Optional fields the file leaves out are cleared, not kept.
