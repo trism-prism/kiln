@@ -4,6 +4,7 @@ import type {
   MetaRecord,
   ModuleRecord,
   PlanRecord,
+  PracticeItemRecord,
   PracticeLogRecord,
   ReviewCardRecord,
   ReviewLogRecord,
@@ -18,6 +19,7 @@ export class KilnDB extends Dexie {
   reviewCards!: EntityTable<ReviewCardRecord, 'id'>
   reviewLogs!: EntityTable<ReviewLogRecord, 'id'>
   practiceLog!: EntityTable<PracticeLogRecord, 'id'>
+  practiceItems!: EntityTable<PracticeItemRecord, 'id'>
   settings!: EntityTable<SettingsRecord, 'id'>
   meta!: EntityTable<MetaRecord, 'key'>
 
@@ -59,6 +61,12 @@ export class KilnDB extends Dexie {
           l.learningSteps ??= 0
         })
       })
+
+    // 3: generated daily problems are stored (practiceItems) so they are stable and can be checked off.
+    // A new table: nothing to migrate.
+    this.version(3).stores({
+      practiceItems: 'id, [planId+date+slug], date, planId, updatedAt',
+    })
   }
 }
 
