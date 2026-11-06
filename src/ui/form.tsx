@@ -26,7 +26,7 @@ const field = 'grid gap-1.5 text-sm'
 const help = 'text-sm text-text-muted'
 const error = 'text-sm text-danger'
 const control =
-  'h-10 rounded-md border border-border-strong bg-surface-raised px-3 text-sm text-text transition-colors data-focused:border-focus data-hovered:bg-surface data-invalid:border-danger'
+  'h-10 rounded-md border border-border-strong bg-surface-raised px-3 text-sm text-text transition-colors data-focused:border-focus data-hovered:bg-surface data-invalid:border-danger data-disabled:cursor-not-allowed data-disabled:opacity-50'
 
 /** Task completion. The box fills with the accent when done. */
 export function Checkbox({ children, className = '', ...props }: Omit<CheckboxProps, 'className' | 'children'> & { children: ReactNode; className?: string }) {

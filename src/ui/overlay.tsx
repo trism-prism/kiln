@@ -35,7 +35,7 @@ export function Sheet({ title, children, isDismissable = true, ...props }: Sheet
     <ModalOverlay
       {...props}
       isDismissable={isDismissable}
-      className="fixed inset-0 z-50 flex items-end justify-center bg-[rgb(20_16_12/0.45)] data-entering:animate-fade md:items-center md:p-6"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-(--kiln-scrim) data-entering:animate-fade md:items-center md:p-6"
     >
       <Modal className="max-h-[90dvh] w-full overflow-y-auto rounded-t-xl border border-border bg-surface-raised text-text shadow-lg data-entering:animate-sheet md:max-w-md md:rounded-xl">
         <Dialog className="p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] outline-none">

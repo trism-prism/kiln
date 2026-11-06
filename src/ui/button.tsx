@@ -51,6 +51,6 @@ type LinkProps = Omit<AriaLinkProps, 'className'> & {
 export function Link({ variant, className = '', ...props }: LinkProps) {
   const look = variant
     ? `${base} px-4 ${variants[variant]}`
-    : 'rounded-sm text-accent underline decoration-1 underline-offset-2 data-hovered:decoration-2'
+    : 'rounded-sm text-accent underline decoration-1 underline-offset-2 data-hovered:decoration-2 data-disabled:cursor-not-allowed data-disabled:text-text-muted data-disabled:no-underline'
   return <AriaLink {...props} className={`${look} ${className}`} />
 }

@@ -30,6 +30,7 @@
   --kiln-success: light-dark(#3d6b2c, #8cc276);
   --kiln-warning: light-dark(#85570a, #e2b45a);
   --kiln-focus: light-dark(#a8481c, #e58a5c);
+  --kiln-scrim: light-dark(rgb(20 16 12 / 0.45), rgb(0 0 0 / 0.6));
   --kiln-shadow-color: light-dark(rgb(31 27 22 / 0.08), rgb(0 0 0 / 0.4));
 }
 
