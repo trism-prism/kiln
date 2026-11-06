@@ -9,8 +9,8 @@ Plan: docs/plan.md.
 |---|---|---|
 | 1 | Repo + setup | done (bb8ed9e) |
 | 2 | Plan format + prompts | done (09cc8d0) |
-| 3 | Data layer | done (PR pending) |
-| 4 | Scheduler + LC ramp | pending |
+| 3 | Data layer | done (merged) |
+| 4 | Scheduler + LC ramp | done (PR pending) |
 | 5 | Mastery | pending |
 | 6 | Design system + shell | pending |
 | 7 | Core screens | pending |
@@ -22,10 +22,10 @@ Plan: docs/plan.md.
 | 13 | Production | pending |
 
 ## Current branch
-`feat/data-layer` (stage 3, PR pending). Stage 2 merged from `feat/plan-format` (PR 2, 09cc8d0).
+`feat/scheduler` (stage 4, PR pending). Stage 3 merged; stage 2 merged from `feat/plan-format` (PR 2, 09cc8d0).
 
 ## Next exact step
-Stage 4: scheduler + LC ramp (`feat/scheduler`).
+Stage 5: mastery (`feat/mastery`): ts-fsrs wrapper, rating to review tasks, mastery % per topic, brush-up query. It supplies `reviewsDue` to `scheduleAll` and should persist generated daily problems if the UI needs them stable.
 
 ## Open questions
 - Domain name (user buys, ~$10-12/yr).

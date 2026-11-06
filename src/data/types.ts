@@ -61,6 +61,8 @@ export interface TaskRecord extends Base, Omit<Task, 'id' | 'moduleId'> {
   scheduledDate?: string
   /** User-pinned day; the scheduler must keep it. Set from `fixedDate` on import. */
   pinnedDate?: string
+  /** Set by the scheduler when it defers the task to the optional backlog (no `scheduledDate` then). */
+  backlog?: boolean
   status: TaskStatus
   completedAt?: number
 }
