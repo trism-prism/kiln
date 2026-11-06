@@ -38,4 +38,4 @@ Stage 4: scheduler + LC ramp (`feat/scheduler`).
 - iPhone install test: push and badge while the device is asleep (stage 13 checkpoint).
 
 ## Authorizations
-- 2026-11-05: "Private, you may merge when CI is green" (trism-dev/kiln, merge stage PRs once CI passes; no force-push, no deploys).
+- 2026-11-05: "Private, you may merge when CI is green" (trism-prism/kiln, merge stage PRs once CI passes; no force-push, no deploys).
