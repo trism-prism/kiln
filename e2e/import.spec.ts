@@ -178,14 +178,17 @@ test('the builder reports a missing duration', async ({ page }) => {
 
 test('a changed study budget persists and offers a reschedule', async ({ page }) => {
   await page.goto('/settings')
+  await expect(page.getByRole('row', { name: /Monday/ })).toContainText('120 min')
+  await page.getByRole('row', { name: /Monday/ }).getByRole('button').click()
   const monday = page.getByRole('textbox', { name: 'Monday' })
   await expect(monday).toHaveValue('120')
   await monday.fill('45')
+  await monday.press('Enter')
   await expect(page.getByTestId('week-total')).toContainText('885 min')
   await page.getByRole('button', { name: 'Save study time' }).click()
   await expect(page.getByRole('button', { name: 'Reschedule now' })).toBeVisible()
   await page.reload()
-  await expect(page.getByRole('textbox', { name: 'Monday' })).toHaveValue('45')
+  await expect(page.getByRole('row', { name: /Monday/ })).toContainText('45 min')
   await expect(page.getByTestId('week-total')).toContainText('885 min')
 })
 
@@ -202,7 +205,9 @@ test('backup export, reset and import round trip', async ({ page }, info) => {
   await paste(page, fixture('system-design'))
   await importIt(page)
   await page.goto('/settings')
+  await page.getByRole('row', { name: /Tuesday/ }).getByRole('button').click()
   await page.getByRole('textbox', { name: 'Tuesday' }).fill('77')
+  await page.keyboard.press('Enter')
   await page.getByRole('button', { name: 'Save study time' }).click()
   await expect(page.getByText('Study time saved')).toBeVisible()
 
@@ -221,17 +226,17 @@ test('backup export, reset and import round trip', async ({ page }, info) => {
   await page.getByLabel('Confirmation').fill('reset')
   await erase.click()
   await expect(page.getByText('Local data erased')).toBeVisible()
-  await expect(page.getByRole('textbox', { name: 'Tuesday' })).toHaveValue('120')
+  await expect(page.getByRole('row', { name: /Tuesday/ })).toContainText('120 min')
 
   await page.locator('input[type=file]').first().setInputFiles(file)
   // Checked first: counts and a confirm step, nothing written yet.
   await expect(page.getByText('backup.json is a valid backup')).toBeVisible()
   await expect(page.getByText(/plans: 1 added, 0 replaced, 0 stale/)).toBeVisible()
-  await expect(page.getByRole('textbox', { name: 'Tuesday' })).toHaveValue('120')
+  await expect(page.getByRole('row', { name: /Tuesday/ })).toContainText('120 min')
   await page.getByRole('button', { name: 'Import this backup' }).click()
   await expect(page.getByText('Backup imported')).toBeVisible()
   await expect(page.getByText(/plans: 1 added/)).toBeVisible()
-  await expect(page.getByRole('textbox', { name: 'Tuesday' })).toHaveValue('77')
+  await expect(page.getByRole('row', { name: /Tuesday/ })).toContainText('77 min')
 })
 
 test('a bad backup file is rejected without writing', async ({ page }, info) => {
@@ -280,7 +285,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
     test('/settings', async ({ page }) => {
       await page.goto('/settings')
       await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible()
-      await expect(page.getByRole('textbox', { name: 'Monday' })).toBeVisible()
+      await expect(page.getByRole('row', { name: /Monday/ })).toBeVisible()
       await check(page)
     })
   })

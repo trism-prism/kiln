@@ -3,7 +3,8 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db, updateSettings, type SettingsRecord } from '../../data'
 import { availability, disablePush, enablePush, isPushOn, readPushEnv, syncPush, type PushAvailability } from '../../pwa/push-client'
 import { Button, Link } from '../../ui/button'
-import { Switch, TextField } from '../../ui/form'
+import { Switch } from '../../ui/form'
+import { TimeInput } from '../../ui/time'
 import { toasts } from '../../ui/overlay'
 import { Card } from '../../ui/surface'
 import { failed } from './BudgetSection'
@@ -91,11 +92,11 @@ export function ReminderSection({ settings }: { settings: SettingsRecord }) {
             <Link href="/privacy">Privacy</Link>
           </p>
         </div>
-        <TextField label="Daily reminder" type="time" value={time} onChange={setTime} isInvalid={!TIME.test(time)} errorMessage="Enter a time" className="max-w-48" />
+        <TimeInput label="Daily reminder" value={time} onChange={setTime} isInvalid={!TIME.test(time)} />
         <Switch isSelected={nudge} onChange={setNudge}>
           Evening nudge if tasks remain
         </Switch>
-        {nudge && <TextField label="Nudge time" type="time" value={nudgeTime} onChange={setNudgeTime} isInvalid={!TIME.test(nudgeTime)} errorMessage="Enter a time" className="max-w-48" />}
+        {nudge && <TimeInput label="Nudge time" value={nudgeTime} onChange={setNudgeTime} isInvalid={!TIME.test(nudgeTime)} />}
         <div>
           <Button variant={on ? 'primary' : 'secondary'} onPress={save} isDisabled={!valid}>Save reminders</Button>
         </div>
