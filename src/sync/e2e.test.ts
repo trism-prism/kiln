@@ -2,13 +2,13 @@
 // code, in process. D1 is stood in for by SQLite (node:sqlite) running the real migrations; the
 // route tests in worker/test run the same server code on real D1 inside the Workers runtime.
 import { DatabaseSync } from 'node:sqlite'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { KilnDB } from '../data/db'
 import { getSettings, insertRecord, softDelete, updateRecord, updateSettings } from '../data/repo'
 import { newDb } from '../data/test-db'
 import type { PracticeLogRecord } from '../data/types'
-import { deriveKeys, encryptRow, mnemonicToKey } from './crypto'
-import { disableSync, enableSync, getSyncSecret, getSyncStatus, syncNow, type SyncSummary } from './index'
+import { deriveKeys, encryptRow, generateSyncKey, keyToMnemonic, mnemonicToKey } from './crypto'
+import { disableSync, enableSync, enableSyncFromQr, getSyncSecret, getSyncStatus, syncNow, type SyncSummary } from './index'
 
 const migrations = import.meta.glob('../../worker/migrations/*.sql', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 
@@ -167,6 +167,165 @@ describe('two devices', () => {
     expect(await d1.prepare('SELECT record_count FROM sync_spaces').first('record_count')).toBe(1)
   })
 
+  it('push marks: a row pulled from a fast clock does not hide this device\'s own later edits', async () => {
+    const { a, b } = await twoDevices()
+    const x = await add(a, 'x')
+    ok(await sync(a))
+    ok(await sync(b))
+    await editAt(a, x.id, { title: 'fast clock' }, Date.now() + 600_000) // A's clock is 10 minutes ahead
+    ok(await sync(a))
+    ok(await sync(b)) // B receives X; it is not pushed back
+    const y = await add(b, 'y') // B's clock is right
+    ok(await sync(b))
+    ok(await sync(a))
+    expect(await a.practiceLog.get(y.id)).toEqual(y)
+  })
+
+  it('a key change waits for a running sync: the new space starts with a clean cursor and marks', async () => {
+    const { a } = await twoDevices()
+    await add(a, 'one')
+    const other = keyToMnemonic(generateSyncKey())
+    let release!: () => void
+    const gate = new Promise<void>((r) => (release = r))
+    const slow: typeof fetch = async (input, init) => {
+      await gate
+      return worldFetch()(input, init)
+    }
+    const run = syncNow(a, slow, BASE)
+    const join = enableSync(a, other) // queued behind the run
+    await new Promise((r) => setTimeout(r, 20))
+    expect((await getSyncSecret(a))?.mnemonic).not.toBe(other) // not switched yet
+    release()
+    expect((await run).error).toBeUndefined() // the run finished against the old key
+    expect((await join).mnemonic).toBe(other)
+    expect(await a.meta.get('syncCursor')).toBeUndefined()
+    expect(await a.meta.get('syncPushed')).toBeUndefined()
+    expect(ok(await sync(a))).toMatchObject({ pushed: 1 }) // everything goes to the new space
+  })
+
+  it('a run that finds the key changed underneath it writes nothing', async () => {
+    const { a, b } = await twoDevices()
+    await add(b, 'from-b')
+    ok(await sync(b))
+    const swap: typeof fetch = async (input, init) => {
+      const res = await worldFetch()(input, init)
+      // Another tab changes the key while the response is on its way.
+      await a.meta.put({ key: 'syncKey', value: 'other' })
+      return res
+    }
+    const s = await syncNow(a, swap, BASE)
+    expect(s.error?.kind).toBe('not-enabled')
+    expect(await a.practiceLog.count()).toBe(0)
+    expect(await a.meta.get('syncCursor')).toBeUndefined()
+  })
+
+  it('uses the Web Lock "kiln-sync" when the browser has one', async () => {
+    const { a } = await twoDevices()
+    const request = vi.fn((_name: string, cb: () => Promise<unknown>) => cb())
+    vi.stubGlobal('navigator', { locks: { request } })
+    try {
+      ok(await sync(a))
+      expect(request).toHaveBeenCalledWith('kiln-sync', expect.any(Function))
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('a rejected new key leaves the old one in place; an accepted one replaces it', async () => {
+    const { a } = await twoDevices()
+    const before = (await getSyncSecret(a))!.mnemonic
+    const next = generateSyncKey()
+    const refuse: typeof fetch = async () => new Response('{}', { status: 403 })
+    const refused = await enableSync(a, keyToMnemonic(next), { fetch: refuse, baseUrl: BASE })
+    expect(refused).toMatchObject({ ok: false, error: { kind: 'wrong-key' } })
+    const offline: typeof fetch = () => Promise.reject(new TypeError('offline'))
+    expect(await enableSyncFromQr(a, 'kiln-sync:' + Buffer.from(next).toString('base64url'), { fetch: offline, baseUrl: BASE })).toMatchObject({
+      ok: false,
+      error: { kind: 'network' },
+    })
+    expect((await getSyncSecret(a))?.mnemonic).toBe(before)
+    const accepted = await enableSync(a, keyToMnemonic(next), { fetch: worldFetch(), baseUrl: BASE })
+    expect(accepted).toMatchObject({ ok: true, mnemonic: keyToMnemonic(next) })
+    expect((await getSyncSecret(a))?.mnemonic).toBe(keyToMnemonic(next))
+  })
+
+  it('rows written in a newer format wait, sync reports update-required, and a newer valid version clears them', async () => {
+    const { b, mnemonic } = await twoDevices()
+    const keys = await deriveKeys(mnemonicToKey(mnemonic))
+    const base = { deleted: false, deviceId: 'x', date: '2026-11-09', slug: 'future', title: 'future', difficulty: 'easy', completedAt: 1 }
+    const put = async (row: Row & { id: string; updatedAt: number }, v: number) => {
+      const w = await encryptRow(keys, 'practiceLog', row, v)
+      const res = await worldFetch()(BASE + '/sync/push', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ spaceId: keys.spaceId, token: keys.token, rows: [w] }),
+      })
+      expect(res.status).toBe(200)
+    }
+    await put({ id: 'fut-1', updatedAt: Date.now(), ...base }, 99)
+    const s = await sync(b)
+    expect(s.error?.kind).toBe('update-required')
+    expect(s).toMatchObject({ pulled: 1, applied: 0, invalid: 0, retrying: 1 })
+    expect(await b.practiceLog.count()).toBe(0)
+    expect((await getSyncStatus(b)).lastSyncedAt).toBeUndefined()
+    // Still waiting on the next run, no new pull needed.
+    expect((await sync(b)).error?.kind).toBe('update-required')
+    // A device that can write the new format replaces it with a version this app understands.
+    await put({ id: 'fut-1', updatedAt: Date.now() + 5, ...base }, 1)
+    expect(ok(await sync(b))).toMatchObject({ applied: 1, retrying: 0 })
+    expect(await slugs(b)).toEqual(['future'])
+  })
+
+  it('a row that fails validation today is applied when a later run can accept it', async () => {
+    const { b, mnemonic } = await twoDevices()
+    const keys = await deriveKeys(mnemonicToKey(mnemonic))
+    const t0 = Date.now()
+    // Dated 2 days ahead inside the ciphertext: rejected as a clock error now, fine in 2 days.
+    const row = { id: 'later-1', updatedAt: t0 + 2 * 86_400_000, deleted: false, deviceId: 'x', date: '2026-11-09', slug: 'later', title: 'later', difficulty: 'easy', completedAt: 1 }
+    const w = await encryptRow(keys, 'practiceLog', row)
+    await worldFetch()(BASE + '/sync/push', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ spaceId: keys.spaceId, token: keys.token, rows: [{ ...w, updatedAt: t0 }] }),
+    })
+    expect(ok(await sync(b))).toMatchObject({ applied: 0, retrying: 1 })
+    vi.useFakeTimers({ toFake: ['Date'], now: t0 + 3 * 86_400_000 })
+    try {
+      expect(ok(await sync(b))).toMatchObject({ applied: 1, retrying: 0 })
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(await slugs(b)).toEqual(['later'])
+  })
+
+  it('a server that says "more" without moving the cursor is an error and nothing is written', async () => {
+    const { a, b } = await twoDevices()
+    await add(a, 'one')
+    ok(await sync(a))
+    const stuck: typeof fetch = async (input, init) => {
+      const res = await worldFetch()(input, init)
+      const body = (await res.json()) as { rows: unknown[] }
+      return Response.json({ ...body, more: true, cursor: 0 })
+    }
+    const s = await syncNow(b, stuck, BASE)
+    expect(s.error?.kind).toBe('server')
+    expect(await b.practiceLog.count()).toBe(0)
+    expect(await b.meta.get('syncCursor')).toBeUndefined()
+  })
+
+  it('reports records too large to upload, keeps pushing the rest, and keeps reporting until fixed', async () => {
+    const { a, b } = await twoDevices()
+    const small = (id: string, updatedAt: number) => ({ id, ...problem(id), updatedAt, deleted: false, deviceId: 'a' })
+    await a.practiceLog.bulkPut([small('s1', NOW), { ...small('big', NOW + 10), title: 'x'.repeat(60_000) }, small('s3', NOW + 20)])
+    const first = ok(await sync(a))
+    expect(first).toMatchObject({ pushed: 2, tooLarge: [{ table: 'practiceLog', id: 'big' }] })
+    // The mark stays below the big record, so it is reported again (the row above it is seen as already on the server).
+    expect(ok(await sync(a))).toMatchObject({ pushed: 0, tooLarge: [{ table: 'practiceLog', id: 'big' }] })
+    await a.practiceLog.put({ ...small('big', NOW + 30), title: 'small now' })
+    expect(ok(await sync(a))).toMatchObject({ pushed: 1, tooLarge: [] })
+    expect(ok(await sync(b))).toMatchObject({ applied: 3 })
+  })
+
   it('a delete on B reaches A as a tombstone', async () => {
     const { a, b } = await twoDevices()
     const r = await add(a, 'gone')
@@ -241,7 +400,7 @@ describe('two devices', () => {
     expect(await slugs(b)).toEqual(['three', 'two'])
   })
 
-  it('drops rows that decrypt but fail validation or name an unknown table, and applies the rest', async () => {
+  it('keeps rows that decrypt but fail validation for later, and applies the rest', async () => {
     const { a, b, mnemonic } = await twoDevices()
     await add(a, 'fine')
     ok(await sync(a))
@@ -260,8 +419,10 @@ describe('two devices', () => {
       body: JSON.stringify({ spaceId: keys.spaceId, token: keys.token, rows: wire.map((w) => ({ ...w, updatedAt: Date.now() })) }),
     })
     expect(r.status).toBe(200)
-    expect(ok(await sync(b))).toMatchObject({ pulled: 4, applied: 1, invalid: 3 })
+    expect(ok(await sync(b))).toMatchObject({ pulled: 4, applied: 1, invalid: 0, retrying: 3 })
     expect(await slugs(b)).toEqual(['fine'])
+    // They stay waiting (and are not counted as pulled again).
+    expect(ok(await sync(b))).toMatchObject({ pulled: 0, applied: 0, retrying: 3 })
   })
 
   it('a failure part way through a push keeps what was sent and resumes with the rest', async () => {

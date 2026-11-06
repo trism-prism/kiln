@@ -4,6 +4,8 @@ import { wordlist } from '@scure/bip39/wordlists/english.js'
 import type { TableName } from '../data'
 
 export const KEY_BYTES = 32
+/** Version of the encrypted payload format (`v` inside the ciphertext). Raise it when old clients must not read new rows. */
+export const SYNC_VERSION = 1
 export const QR_PREFIX = 'kiln-sync:'
 
 const enc = new TextEncoder()
@@ -107,13 +109,18 @@ export interface WireRow {
 }
 
 /** Encrypts one row on its own. The AAD (space id plus record key) ties the blob to its slot. */
-export async function encryptRow(keys: SyncKeys, table: TableName, row: { id: string; updatedAt: number }): Promise<WireRow> {
+export async function encryptRow(
+  keys: SyncKeys,
+  table: TableName,
+  row: { id: string; updatedAt: number },
+  version = SYNC_VERSION,
+): Promise<WireRow> {
   const key = await recordKey(keys, table, row.id)
   const iv = crypto.getRandomValues(new Uint8Array(12))
   const data = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv, additionalData: enc.encode(keys.spaceId + key) },
     keys.encKey,
-    enc.encode(JSON.stringify({ table, row })),
+    enc.encode(JSON.stringify({ v: version, table, row })),
   )
   return { recordKey: key, updatedAt: row.updatedAt, iv: b64uEncode(iv), ciphertext: b64uEncode(new Uint8Array(data)) }
 }
@@ -123,7 +130,7 @@ export async function encryptRow(keys: SyncKeys, table: TableName, row: { id: st
  * Throws if the blob was changed, belongs to another key or another slot, or its contents do not
  * hash to the record key it was stored under.
  */
-export async function decryptRow(keys: SyncKeys, w: WireRow): Promise<{ table: TableName; row: { id: string; updatedAt: number } & Record<string, unknown> }> {
+export async function decryptRow(keys: SyncKeys, w: WireRow): Promise<{ v: number; table: TableName; row: { id: string; updatedAt: number } & Record<string, unknown> }> {
   const iv = b64uDecode(w.iv)
   const data = b64uDecode(w.ciphertext)
   if (!iv || iv.length !== 12 || !data) throw new Error('bad encoding')
@@ -133,8 +140,10 @@ export async function decryptRow(keys: SyncKeys, w: WireRow): Promise<{ table: T
     data,
   )
   const parsed: unknown = JSON.parse(dec.decode(plain))
-  const p = parsed as { table?: unknown; row?: { id?: unknown; updatedAt?: unknown } }
+  const p = parsed as { v?: unknown; table?: unknown; row?: { id?: unknown; updatedAt?: unknown } }
   if (typeof p?.table !== 'string' || typeof p.row?.id !== 'string' || typeof p.row.updatedAt !== 'number') throw new Error('bad payload')
   if ((await recordKey(keys, p.table as TableName, p.row.id)) !== w.recordKey) throw new Error('record key mismatch')
-  return p as { table: TableName; row: { id: string; updatedAt: number } & Record<string, unknown> }
+  const v = p.v === undefined ? 1 : p.v
+  if (typeof v !== 'number' || !Number.isInteger(v) || v < 1) throw new Error('bad version')
+  return { v, table: p.table as TableName, row: p.row as { id: string; updatedAt: number } & Record<string, unknown> }
 }

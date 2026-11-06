@@ -10,6 +10,7 @@ import {
   mnemonicToKey,
   qrPayloadToKey,
   recordKey,
+  SYNC_VERSION,
 } from './crypto'
 
 const row = (id: string, extra: Record<string, unknown> = {}) => ({ id, updatedAt: 1000, deleted: false, deviceId: 'd', ...extra })
@@ -91,7 +92,13 @@ describe('record encryption', () => {
     expect(w.updatedAt).toBe(1000)
     expect(JSON.stringify(w)).not.toContain('Secret')
     expect(JSON.stringify(w)).not.toContain('id-1')
-    expect(await decryptRow(k, w)).toEqual({ table: 'plans', row: r })
+    expect(await decryptRow(k, w)).toEqual({ v: SYNC_VERSION, table: 'plans', row: r })
+  })
+
+  it('puts a protocol version inside the encrypted payload', async () => {
+    const k = await deriveKeys(generateSyncKey())
+    expect((await decryptRow(k, await encryptRow(k, 'plans', row('a')))).v).toBe(SYNC_VERSION)
+    expect((await decryptRow(k, await encryptRow(k, 'plans', row('a'), 7))).v).toBe(7)
   })
 
   it('uses a fresh IV every time', async () => {
