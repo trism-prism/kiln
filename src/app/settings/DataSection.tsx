@@ -18,7 +18,8 @@ import { TextField } from '../../ui/form'
 import { Sheet, toasts } from '../../ui/overlay'
 import { Card } from '../../ui/surface'
 import { Dot } from '../import/Dot'
-import { erase, SYNC_URL, type EraseMode } from './erase'
+import { API_URL } from '../../pwa/env'
+import { erase, type EraseMode } from './erase'
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
@@ -149,8 +150,8 @@ export function DangerSection() {
     try {
       const m: EraseMode = sync ? mode : 'device'
       await erase(db, m, async () => {
-        if (SYNC_URL === '') throw new Error('this build has no sync server address')
-        return syncNow(db, fetch, SYNC_URL)
+        if (API_URL === '') throw new Error('this build has no sync server address')
+        return syncNow(db, fetch, API_URL)
       })
       toasts.add({ title: m === 'everywhere' ? 'Erased on all your devices' : 'Local data erased' }, { timeout: 5000 })
       close()

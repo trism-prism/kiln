@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>Kiln</title>
+  <rect width="512" height="512" fill="#a8481c"/>
+  <path transform="translate(116 123) scale(14)" fill="#fffaf5" fill-rule="evenodd" d="M2 18V9a8 8 0 0 1 16 0v9zm5 0v-5a3 3 0 0 1 6 0v5z"/>
+</svg>

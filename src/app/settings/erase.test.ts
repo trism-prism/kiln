@@ -27,6 +27,17 @@ describe('erase', () => {
     expect(await getDeviceId(db)).toBe(id)
   })
 
+  it('turns reminders off too, so the server stops sending to an empty app', async () => {
+    const db = await seeded()
+    await db.meta.bulkPut([
+      { key: 'pushOn', value: '1' },
+      { key: 'pushSent', value: '{}' },
+    ])
+    await erase(db, 'device', vi.fn())
+    expect(await db.meta.get('pushOn')).toBeUndefined()
+    expect(await db.meta.get('pushSent')).toBeUndefined()
+  })
+
   it('everywhere: marks every row deleted before syncing, then clears', async () => {
     const db = await seeded()
     const tasks = await db.tasks.count()

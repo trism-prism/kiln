@@ -59,7 +59,7 @@ Work done before an error is kept (each pulled page commits atomically with its 
 - On state: show the 24 words and a QR of `getSyncSecret().qr` behind a "Show key" button with a warning that it unlocks all data; a QR scanner (camera) that feeds `enableSyncFromQr`; a 24-word entry that accepts pasted text and feeds `enableSync(db, words)`; "Sync now" (disable while running, show a spinner); "Last synced" from `getSyncStatus`; "Turn off sync on this device" with a confirmation that data stays on the device and on the server.
 - Automatic sync: call `syncNow` on app open, after a data change (debounced), on the `online` event, and when the tab becomes visible. `network` and `server` errors need no alarm; `wrong-key` and `quota` need a visible message.
 - Error states as in the table above, plus the `invalid` count if non-zero ("N items could not be read").
-- Pass `fetch` and the Worker base URL (a `VITE_*` variable with `https://`, no secrets).
+- Pass `fetch` and the Worker base URL (`VITE_API_URL` (read through `src/pwa/env.ts`; the old `VITE_SYNC_URL` still works for one release), with `https://`, no secrets).
 
 ## Tests
 

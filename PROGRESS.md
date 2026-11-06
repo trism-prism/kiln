@@ -16,16 +16,16 @@ Plan: docs/plan.md.
 | 7 | Core screens | done (PR pending) |
 | 8 | Calendar + streaks | done (PR pending, branch `feat/calendar`) |
 | 9 | Import + create | done (merged, fd495ec) |
-| 10 | PWA | pending |
-| 11 | Worker: push + analytics | server half merged (b651130) (SW push handler and UI pending in the PWA stage) |
-| 12 | Sync | non-UI done (merged, ef075a5); Settings > Sync UI pending |
+| 10 | PWA | done (PR pending, branch `feat/pwa`): manifest, icons, service worker (offline, update prompt, push handler), badge, reminders, sync UI, ping, privacy page, install prompt, onboarding |
+| 11 | Worker: push + analytics | server merged (b651130); SW push handler and client done in stage 10 |
+| 12 | Sync | non-UI done (merged, ef075a5); Settings > Sync UI and automatic sync done in stage 10 |
 | 13 | Production | pending |
 
 ## Current branch
 `feat/calendar` (stage 8, PR pending), off main 227da20. Earlier: `feat/core-screens` (stage 7, PR pending), built on stage 6 (`feat/design-shell`, PR pending). Stages 3, 4 and 5 merged (fe3b485, b2d0f47, 61e3051).
 
 ## Next exact step
-Stage 10 (PWA) is in parallel on its own branch. After it: Settings > Sync UI, then production (stage 13).
+Stage 10 (PWA, `feat/pwa`) includes Settings > Sync UI. After it merges: production (stage 13).
 
 Stage 8 notes: `/calendar` (month and week, Monday start from settings, drag to reschedule, day panel with "Move to..."), streaks in `src/domain/streaks`, month and week math in `src/domain/calendar`, streak chip on the dashboard. Moving a daily problem changes its date only; a later Reschedule may regenerate it (it is not pinned).
 
