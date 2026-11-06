@@ -111,8 +111,10 @@ export function ToastRegion() {
           </ToastContent>
           {toast.content.action && (
             <AriaButton
-              slot="close"
-              onPress={toast.content.action.onPress}
+              onPress={() => {
+                toast.content.action?.onPress()
+                toasts.close(toast.key)
+              }}
               className="h-8 shrink-0 self-center rounded-md px-3 text-sm font-medium underline transition-colors data-hovered:bg-[color-mix(in_oklab,var(--kiln-surface)_16%,transparent)]"
             >
               {toast.content.action.label}
