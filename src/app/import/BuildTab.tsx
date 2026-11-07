@@ -8,7 +8,7 @@ import { Button } from '../../ui/button'
 import { TextField } from '../../ui/form'
 import type { Draft, DraftTask } from './builder'
 import type { Input as ReviewInput } from './logic'
-import { MAX_REPEAT, parseQuickAdd } from './quick-add'
+import { dropPastDue, MAX_REPEAT, parseQuickAdd } from './quick-add'
 import { Review } from './Review'
 
 const cell = 'h-9 w-full rounded-md border border-border-strong bg-surface-raised px-2 text-sm text-text'
@@ -25,10 +25,24 @@ export function BuildTab() {
   const [reviewed, setReviewed] = useState<{ input: ReviewInput; n: number }>()
 
   const times = Math.min(Math.max(Number.parseInt(repeat, 10) || 1, 1), MAX_REPEAT)
-  const modules = useMemo(
-    () => parseQuickAdd(text, today, times).map((m) => ({ ...m, tasks: m.tasks.map((t) => ({ ...t, ...edits[t.uid] })) })),
-    [text, today, times, edits],
+  const [droppedEdits, setDroppedEdits] = useState(0)
+  const parsed = useMemo(() => parseQuickAdd(text, today, times), [text, today, times])
+  // Past dates are cleared after the table edits apply, so a date typed in the table is checked too.
+  const { modules, dropped: pastDates } = useMemo(
+    () => dropPastDue(parsed.map((m) => ({ ...m, tasks: m.tasks.map((t) => ({ ...t, ...edits[t.uid] })) })), today),
+    [parsed, today, edits],
   )
+  const taskCount = modules.reduce((n, m) => n + m.tasks.length, 0)
+  // Edits belong to a line's text. When the text changes, edits whose line is gone are dropped, so
+  // an old fix does not come back when the line is typed again.
+  function change(nextText: string, nextTimes: number) {
+    const live = new Set(parseQuickAdd(nextText, today, nextTimes).flatMap((m) => m.tasks.map((t) => t.uid)))
+    const gone = Object.keys(edits).filter((uid) => !live.has(uid))
+    if (gone.length > 0) {
+      setEdits((e) => Object.fromEntries(Object.entries(e).filter(([uid]) => live.has(uid))))
+      setDroppedEdits(gone.length)
+    } else setDroppedEdits(0)
+  }
   const draft: Draft = { title, modules }
   const edit = (uid: string, patch: Partial<DraftTask>) => setEdits((e) => ({ ...e, [uid]: { ...e[uid], ...patch } }))
   let row = 0
@@ -45,7 +59,10 @@ export function BuildTab() {
           id="quick-add"
           aria-describedby="quick-add-help"
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            change(e.target.value, times)
+            setText(e.target.value)
+          }}
           rows={10}
           spellCheck={false}
           placeholder={EXAMPLE}
@@ -60,10 +77,27 @@ export function BuildTab() {
         label="Repeat ×N"
         inputMode="numeric"
         value={repeat}
-        onChange={setRepeat}
+        onChange={(v) => {
+          change(text, Math.min(Math.max(Number.parseInt(v, 10) || 1, 1), MAX_REPEAT))
+          setRepeat(v)
+        }}
         className="max-w-48"
         description="1 to 52. Copies the list N times; {n} becomes 1, 2, 3..."
       />
+
+      <p role="status" className="text-sm text-text-muted">
+        {taskCount === 0 ? '' : `${taskCount} ${taskCount === 1 ? 'task' : 'tasks'} in ${modules.length} ${modules.length === 1 ? 'module' : 'modules'}`}
+      </p>
+      {droppedEdits > 0 && (
+        <p className="text-sm text-warning">
+          {droppedEdits} table {droppedEdits === 1 ? 'edit was' : 'edits were'} dropped because {droppedEdits === 1 ? 'its line' : 'their lines'} changed.
+        </p>
+      )}
+      {pastDates > 0 && (
+        <p className="text-sm text-warning">
+          {pastDates} due {pastDates === 1 ? 'date is' : 'dates are'} in the past and {pastDates === 1 ? 'was' : 'were'} cleared. Pick a date from today on to keep one.
+        </p>
+      )}
 
       {modules.length > 0 && (
         <div className="grid gap-2">
@@ -72,12 +106,12 @@ export function BuildTab() {
               <caption className="pb-2 text-left font-medium">Preview: fix anything here</caption>
               <thead className="text-left text-text-muted">
                 <tr>
-                  <th className="p-1 font-medium">Title</th>
-                  <th className="w-32 p-1 font-medium">Type</th>
-                  <th className="w-20 p-1 font-medium">Minutes</th>
-                  <th className="w-40 p-1 font-medium">Due</th>
-                  <th className="w-36 p-1 font-medium">Priority</th>
-                  <th className="p-1 font-medium">Links</th>
+                  <th scope="col" className="p-1 font-medium">Title</th>
+                  <th scope="col" className="w-32 p-1 font-medium">Type</th>
+                  <th scope="col" className="w-20 p-1 font-medium">Minutes</th>
+                  <th scope="col" className="w-40 p-1 font-medium">Due</th>
+                  <th scope="col" className="w-36 p-1 font-medium">Priority</th>
+                  <th scope="col" className="p-1 font-medium">Links</th>
                 </tr>
               </thead>
               {modules.map((m) => (
@@ -139,9 +173,14 @@ export function BuildTab() {
       )}
 
       <div>
-        <Button isDisabled={modules.length === 0} onPress={() => setReviewed((r) => ({ input: { kind: 'build', draft: structuredClone(draft) }, n: (r?.n ?? 0) + 1 }))}>
+        <Button isDisabled={modules.length === 0} aria-describedby={modules.length === 0 ? 'review-reason' : undefined} onPress={() => setReviewed((r) => ({ input: { kind: 'build', draft: structuredClone(draft) }, n: (r?.n ?? 0) + 1 }))}>
           Review plan
         </Button>
+        {modules.length === 0 && (
+          <p id="review-reason" className="mt-2 text-sm text-text-muted">
+            Type at least one task above to review the plan.
+          </p>
+        )}
       </div>
 
       {reviewed && <Review key={reviewed.n} input={reviewed.input} />}

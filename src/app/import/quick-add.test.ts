@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { formatIssue, validatePlan } from '../../domain/plan-format'
 import { buildPlan } from './builder'
-import { expandRepeat, kindFromUrl, parseLine, parseQuickAdd, type ParsedLine } from './quick-add'
+import { dropPastDue, expandRepeat, kindFromUrl, parseLine, parseQuickAdd, type ParsedLine } from './quick-add'
 
 // Friday.
 const today = '2026-11-06'
@@ -11,6 +11,18 @@ describe('parseLine', () => {
     ['Read chapter 3', { title: 'Read chapter 3', minutes: undefined, due: undefined, priority: undefined, links: [] }],
     ['Read chapter 3 45m', { title: 'Read chapter 3', minutes: '45' }],
     ['Lab 1h30m', { title: 'Lab', minutes: '90' }],
+    ['Lab 1h 30m', { title: 'Lab', minutes: '90' }],
+    ['Lab 1 hour 30 minutes', { title: 'Lab', minutes: '90' }],
+    ['Lab 1.5h', { title: 'Lab', minutes: '90' }],
+    ['Lab 2 hrs', { title: 'Lab', minutes: '120' }],
+    ['Lab 45 mins', { title: 'Lab', minutes: '45' }],
+    ['Quiz on friday,', { title: 'Quiz on', due: '2026-11-13' }],
+    ['Exam nov 20.', { title: 'Exam', due: '2026-11-20' }],
+    ['Exam (due fri)', { title: 'Exam (due', due: '2026-11-13' }],
+    ['Read https://x.org/Cell,', { title: 'Read', links: ['https://x.org/Cell'] }],
+    ['Read (see https://x.org/a)', { title: 'Read (see', links: ['https://x.org/a'] }],
+    ['Exam 2026-12-01.', { due: '2026-12-01' }],
+    ['#1 Sum', { title: '#1 Sum' }],
     ['Lab 2h', { title: 'Lab', minutes: '120' }],
     ['Lab 20min', { title: 'Lab', minutes: '20' }],
     ['Essay today', { title: 'Essay', due: '2026-11-06' }],
@@ -57,12 +69,27 @@ describe('kindFromUrl', () => {
     ['https://leetcode.com/problems/two-sum/', 'problem'],
     ['https://docs.python.org/3/', 'docs'],
     ['https://en.wikipedia.org/wiki/Cell', 'article'],
+    ['https://docs.google.com/document/d/1', 'docs'],
     ['https://example.com/', 'other'],
     ['not a url', 'other'],
   ])('%s is %s', (url, kind) => expect(kindFromUrl(url)).toBe(kind))
 })
 
+describe('dropPastDue', () => {
+  it('clears a past due date and counts it, keeps today and later', () => {
+    const m = parseQuickAdd(['Exam 2026-01-05', 'Quiz today', 'Final 2026-12-01'].join('\n'), today)
+    const got = dropPastDue(m, today)
+    expect(got.dropped).toBe(1)
+    expect(got.modules[0]!.tasks.map((t) => t.due)).toEqual(['', today, '2026-12-01'])
+  })
+})
+
 describe('parseQuickAdd', () => {
+  it('a heading needs a space after the #; "#1 Sum" stays a task', () => {
+    const m = parseQuickAdd(['#1 Sum', '#  Real', 'Task'].join('\n'), today)
+    expect(m.map((x) => x.title)).toEqual(['Tasks', 'Real'])
+    expect(m[0]!.tasks[0]!.title).toBe('#1 Sum')
+  })
   it('starts modules at # and ##, defaults to 30 min and Essential, and puts loose tasks in "Tasks"', () => {
     const m = parseQuickAdd('Warm up\n# Cells\nRead 45m\n\n## Genetics\nQuiz ?', today)
     expect(m.map((x) => x.title)).toEqual(['Tasks', 'Cells', 'Genetics'])
