@@ -130,16 +130,18 @@ export function useCalendarData(today: string): CalendarData | undefined {
 export interface StudySummary {
   days: Map<string, DayStudy>
   stats: StreakStats
+  /** Read for the streak; the heatmap needs the week start and the day budgets too. */
+  settings: SettingsRecord
 }
 
 /** Streak numbers and the per-day completions behind the heatmap. Blackout dates and weekdays with no minutes do not break a streak. */
 export function useStudy(today: string): StudySummary | undefined {
   return useLiveQuery(async () => {
     const days = buildStudyDays(await studyEvents(db))
-    const { blackoutDates, minutesPerWeekday } = await getSettings(db)
-    const blackout = new Set(blackoutDates)
-    const stats = streakStats(days, today, (d) => blackout.has(d) || (minutesPerWeekday[weekdayIndex(d)] ?? 0) === 0)
-    return { days, stats }
+    const settings = await getSettings(db)
+    const blackout = new Set(settings.blackoutDates)
+    const stats = streakStats(days, today, (d) => blackout.has(d) || (settings.minutesPerWeekday[weekdayIndex(d)] ?? 0) === 0)
+    return { days, stats, settings }
   }, [today])
 }
 

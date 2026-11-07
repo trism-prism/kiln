@@ -114,21 +114,21 @@ export function DateField({
   const outOfRange = (iso: string) => {
     const today = toLocalISODate(new Date())
     if (min && iso < min) return min === today ? 'Pick today or later' : `Pick ${formatDay(min, true)} or later`
-    if (max && iso > max) return `Pick a date by ${formatDay(max, true)}`
+    if (max && iso > max) return max === today ? 'Pick today or earlier' : `Pick a date by ${formatDay(max, true)}`
     return ''
   }
 
-  // With a minimum, "nov 7" two days ago is read as that day (and refused), not as next year's.
+  // With a minimum, "nov 7" two days ago is read as that day (and refused), not as next year's; with a maximum, as that day (and kept).
   const type = (t: string) => {
     setText(t)
     setProblem('')
-    const iso = parseDateText(t, toLocalISODate(new Date()), locale, { recent: !!min })
+    const iso = parseDateText(t, toLocalISODate(new Date()), locale, { recent: !!(min || max) })
     if (iso && !outOfRange(iso)) send(iso)
   }
   /** Reads the text; false when it can't be used. */
   const commit = (): boolean => {
     const t = text.trim()
-    const iso = t === '' ? '' : parseDateText(t, toLocalISODate(new Date()), locale, { recent: !!min })
+    const iso = t === '' ? '' : parseDateText(t, toLocalISODate(new Date()), locale, { recent: !!(min || max) })
     const p = iso === undefined ? 'Try a date like Nov 20' : iso === '' ? '' : outOfRange(iso)
     setProblem(p)
     if (p) send(before)

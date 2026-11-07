@@ -1,13 +1,9 @@
-// Streak numbers, the one-year heatmap and the small streak chip for the dashboard.
+// Streak numbers and the one-year heatmap, for the Streak & progress page.
 import { useEffect, useMemo, useRef } from 'react'
-import { Flame } from 'lucide-react'
 import type { WeekStart } from '../../domain/calendar'
 import { heatmapColumns, monthLabels, rowLabels, type DayStudy, type HeatLevel, type StreakStats } from '../../domain/streaks'
 import { formatDay, weekdayIndex } from '../../lib/date'
-import { Link } from '../../ui/button'
-import { Card } from '../../ui/surface'
 import { minutesText } from '../parts'
-import type { StudySummary } from '../queries'
 
 // One hue in four steps of lightness (accent mixed into the muted surface): readable without telling colors apart.
 const LEVEL_PERCENT: Record<HeatLevel, number> = { 0: 0, 1: 30, 2: 55, 3: 78, 4: 100 }
@@ -15,12 +11,11 @@ const levelColor = (l: HeatLevel) => (l === 0 ? 'var(--kiln-surface-muted)' : `c
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <dt className="text-sm text-text-muted">{label}</dt>
       <dd className="text-2xl font-medium tabular-nums">{value}</dd>
-      {sub && <dd className="text-xs text-text-muted">{sub}</dd>}
     </div>
   )
 }
@@ -45,6 +40,8 @@ export function Heatmap({ days, today, settings }: { days: ReadonlyMap<string, D
     [days, today, weekStartsOn, minutesPerWeekday, blackoutDates],
   )
   const months = monthLabels(cols)
+  const cells = cols.flat()
+  const total = cells.reduce((n, c) => n + c.minutes, 0)
   const scroller = useRef<HTMLDivElement>(null)
   // Show the latest week first: on a phone the 53 weeks are wider than the screen. Once, so later data changes keep where you scrolled.
   useEffect(() => {
@@ -53,7 +50,7 @@ export function Heatmap({ days, today, settings }: { days: ReadonlyMap<string, D
   }, [])
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
-      <h3 className="text-sm font-medium">{plural(cols.flat().reduce((n, c) => n + c.count, 0), 'task')} in the last year</h3>
+      <h2 className="text-sm font-medium">{cells.some((c) => c.count > 0) ? `${minutesText(total)} in the last year` : 'Nothing logged in the last year'}</h2>
       <div className="flex gap-2">
         <div aria-hidden="true" className="mt-5 grid shrink-0 grid-rows-[repeat(7,12px)] gap-[3px] text-xs leading-3 text-text-muted">
           {rowLabels(weekStartsOn).map((n, i) => (
@@ -99,39 +96,14 @@ export function Heatmap({ days, today, settings }: { days: ReadonlyMap<string, D
   )
 }
 
-function StreakNumbers({ stats }: { stats: StreakStats }) {
+/** The four streak numbers. Time studied is every minute counted, all time. */
+export function StreakNumbers({ stats }: { stats: StreakStats }) {
   return (
     <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
       <Stat label="Current streak" value={plural(stats.current, 'day')} />
       <Stat label="Longest streak" value={plural(stats.longest, 'day')} />
       <Stat label="Study days" value={String(stats.studyDays)} />
-      <Stat label="Completed" value={String(stats.completions)} sub={minutesText(stats.minutes)} />
+      <Stat label="Time studied" value={minutesText(stats.minutes)} />
     </dl>
-  )
-}
-
-/** The Streak section of the calendar page. */
-export function StreakSection({ study, today, settings }: { study: StudySummary; today: string; settings: HeatmapSettings }) {
-  return (
-    <section aria-labelledby="streak" className="grid grid-cols-[minmax(0,1fr)] gap-4">
-      <h2 id="streak" className="text-lg font-medium">
-        Streak
-      </h2>
-      <Card className="grid grid-cols-[minmax(0,1fr)] gap-6">
-        <StreakNumbers stats={study.stats} />
-        <Heatmap days={study.days} today={today} settings={settings} />
-        <p className="text-xs text-text-muted">A day counts when you finish a task, a daily problem or a review. Days off and days with no study time set do not break a streak.</p>
-      </Card>
-    </section>
-  )
-}
-
-/** Small streak count that links to the calendar. */
-export function StreakChip({ stats }: { stats: StreakStats }) {
-  return (
-    <Link href="/calendar" className="inline-flex h-8 items-center gap-1.5 rounded-md bg-surface-muted px-3 text-sm text-text no-underline data-hovered:underline">
-      <Flame aria-hidden="true" size={16} className="text-accent" />
-      {stats.current > 0 ? `${plural(stats.current, 'day')} streak` : 'No streak yet'}
-    </Link>
   )
 }

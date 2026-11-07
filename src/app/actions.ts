@@ -4,6 +4,7 @@ import { BACKLOG } from '../domain/scheduler'
 import { formatDay, toLocalISODate } from '../lib/date'
 import { toasts } from '../ui/overlay'
 import { describeMoves } from './moveSummary'
+import { minutesText } from './parts'
 
 const today = () => toLocalISODate(new Date())
 
@@ -135,6 +136,35 @@ export async function savePersonalTodo(fields: TodoFields, id?: string): Promise
       if (!saved) throw new Error('That to-do no longer exists.')
     } else await insertRecord(db, 'personalTodos', { ...fields, done: false })
     await scheduleAll(db, today())
+    return true
+  } catch (e) {
+    fail(e)
+    return false
+  }
+}
+
+/**
+ * Records study done outside any plan as a personal to-do that is already done, completed at noon of
+ * `date` so it counts for that day. Reports it with Undo. Returns false when it failed (already reported).
+ */
+export async function logStudyTime(title: string, minutes: number, date: string): Promise<boolean> {
+  try {
+    const [y, m, d] = date.split('-').map(Number)
+    const rec = await insertRecord(db, 'personalTodos', { title, date, minutes, done: true, completedAt: new Date(y!, m! - 1, d!, 12).getTime() })
+    await scheduleAll(db, today())
+    toasts.add(
+      {
+        title: `Logged ${minutesText(minutes)} of ${title}`,
+        action: {
+          label: 'Undo',
+          onPress: () =>
+            void revertWrite(db, { remove: [['personalTodos', rec.id]] })
+              .then(() => scheduleAll(db, today()))
+              .catch(fail),
+        },
+      },
+      { timeout: 8000 },
+    )
     return true
   } catch (e) {
     fail(e)
