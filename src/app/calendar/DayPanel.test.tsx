@@ -53,6 +53,14 @@ it('"Move to" flags the day field on Move, like the to-do form, and moves once i
   expect(screen.getByText('Try a date like Nov 20')).toBeTruthy()
   expect(onMove).not.toHaveBeenCalled()
 
+  // Cleared: says a day is needed.
+  await user.clear(field)
+  await user.tab()
+  await user.click(move)
+  expect(field.getAttribute('aria-invalid')).toBe('true')
+  expect(screen.getByText('Pick a day')).toBeTruthy()
+  expect(onMove).not.toHaveBeenCalled()
+
   await user.clear(field)
   await user.type(field, '2026-11-13')
   expect(field.getAttribute('aria-invalid')).toBeNull()

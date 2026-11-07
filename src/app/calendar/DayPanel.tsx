@@ -20,11 +20,11 @@ function MoveField({ item, date, today, onMove, onDone }: { item: TodoItem; date
   const [bad, setBad] = useState(false)
   // Like the to-do form: Move stays enabled, and pressing it flags what is wrong.
   const [shown, setShown] = useState(false)
-  const sameDay = to === date
+  const missing = to === '' ? 'Pick a day' : to === date ? 'Pick a different day' : ''
   const submit = (e: FormEvent) => {
     e.preventDefault()
     setShown(true)
-    if (bad || sameDay || to < today) return
+    if (bad || missing || to < today) return
     onMove({ kind: item.kind as 'task' | 'practice', id: item.id, title: item.title, from: date }, to)
     onDone()
     // The row leaves the list, so its focus would fall to the page: keep it in the panel.
@@ -38,8 +38,8 @@ function MoveField({ item, date, today, onMove, onDone }: { item: TodoItem; date
         value={to}
         onChange={setTo}
         onInvalidChange={setBad}
-        isInvalid={shown && sameDay}
-        errorMessage="Pick a different day"
+        isInvalid={shown && !!missing}
+        errorMessage={missing}
         className="w-full sm:w-56"
       />
       <Button type="submit" variant="secondary">
