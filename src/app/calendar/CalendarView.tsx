@@ -209,7 +209,7 @@ export function CalendarView({ items, today, view, onViewChange, weekStartsOn, m
     if (!refocus.current) return
     refocus.current = false
     grid.current?.querySelector<HTMLElement>(`[data-day="${focus}"]`)?.focus()
-  }, [focus])
+  }, [focus, anchor]) // anchor: Today can change only the anchor (focus already on today)
 
   const focusDay = (date: string) => grid.current?.querySelector<HTMLElement>(`[data-day="${date}"]`)?.focus()
   const goTo = (date: string) => {
@@ -277,32 +277,40 @@ export function CalendarView({ items, today, view, onViewChange, weekStartsOn, m
         onViewChange(k as View)
       }}
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <IconButton variant="secondary" aria-label={`Previous ${view}`} onPress={() => step(-1)}>
+      {/* The arrows sit together as one pager, so "Today" can't read as previous day / next day.
+          Phones: arrows, period and Today on one row, the view tabs full width below. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div role="group" aria-label={`Change ${view}`} className="flex">
+          <IconButton variant="secondary" aria-label={`Previous ${view}`} onPress={() => step(-1)} className="relative rounded-r-none data-focus-visible:z-10">
             <ChevronLeft />
           </IconButton>
-          <Button
-            variant="secondary"
-            onPress={() => {
-              refocus.current = false
-              setAnchor(today)
-              setFocus(today)
-            }}
-          >
-            Today
-          </Button>
-          <IconButton variant="secondary" aria-label={`Next ${view}`} onPress={() => step(1)}>
+          <IconButton variant="secondary" aria-label={`Next ${view}`} onPress={() => step(1)} className="relative -ml-px rounded-l-none data-focus-visible:z-10">
             <ChevronRight />
           </IconButton>
-          <h2 aria-live="polite" className="ml-1 text-lg font-medium">
-            {label}
-          </h2>
         </div>
-        <TabList aria-label="Calendar view">
-          <Tab id="month">Month</Tab>
-          <Tab id="week">Week</Tab>
-        </TabList>
+        <h2 aria-live="polite" className="text-lg font-medium whitespace-nowrap">
+          {label}
+        </h2>
+        {/* Disabled, not hidden, while today is on show, so nothing shifts. */}
+        <Button
+          variant="quiet"
+          className="ml-auto"
+          isDisabled={view === 'month' ? sameMonth(anchor, today) : weeks.flat().includes(today)}
+          onPress={() => {
+            // The button disables itself, so its focus would drop to the page; land on today instead.
+            refocus.current = true
+            setAnchor(today)
+            setFocus(today)
+          }}
+        >
+          Today
+        </Button>
+        <div className="w-full md:w-auto max-md:[&_[role=tablist]]:w-full max-md:[&_[role=tab]]:flex-1 max-md:[&_[role=tab]]:justify-center">
+          <TabList aria-label="Calendar view">
+            <Tab id="month">Month</Tab>
+            <Tab id="week">Week</Tab>
+          </TabList>
+        </div>
       </div>
       <TabPanel id="month">{gridEl}</TabPanel>
       <TabPanel id="week">{gridEl}</TabPanel>

@@ -96,17 +96,24 @@ describe('month view', () => {
     expect(screen.getByRole('grid', { name: 'November 2026' })).toBeTruthy()
   })
 
-  it('has previous, next and today buttons', async () => {
+  it('has the previous and next arrows together, and a Today button that is off while today is on show', async () => {
     const user = userEvent.setup()
     render(<Harness items={[]} />)
+    const pager = screen.getByRole('group', { name: 'Change month' })
+    expect([...pager.querySelectorAll('button')].map((b) => b.getAttribute('aria-label'))).toEqual(['Previous month', 'Next month'])
+    const today = screen.getByRole('button', { name: 'Today' })
+    expect(today.hasAttribute('disabled')).toBe(true)
     await user.click(screen.getByRole('button', { name: 'Next month' }))
     expect(screen.getByRole('grid', { name: 'December 2026' })).toBeTruthy()
+    expect(today.hasAttribute('disabled')).toBe(false)
     await user.click(screen.getByRole('button', { name: 'Previous month' }))
     await user.click(screen.getByRole('button', { name: 'Previous month' }))
     expect(screen.getByRole('grid', { name: 'October 2026' })).toBeTruthy()
-    await user.click(screen.getByRole('button', { name: 'Today' }))
+    await user.click(today)
     expect(screen.getByRole('grid', { name: 'November 2026' })).toBeTruthy()
-    expect(dayButton(TODAY).tabIndex).toBe(0)
+    expect(today.hasAttribute('disabled')).toBe(true)
+    // The button turned itself off, so the focus moves to today rather than dropping to the page
+    expect(document.activeElement).toBe(dayButton(TODAY))
   })
 
   it('shows three items, "+N more", the day count, overdue and over-budget in the cell and its label', () => {
@@ -165,6 +172,7 @@ describe('week view', () => {
     render(<Harness items={[]} start="week" />)
     dayButton(TODAY).focus() // Wednesday
     await user.keyboard('{ArrowRight}') // Thursday 12th
+    expect(within(screen.getByRole('group', { name: 'Change week' })).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Previous week', 'Next week'])
     await user.click(screen.getByRole('button', { name: 'Next week' }))
     expect(screen.getByRole('grid', { name: 'Nov 16 to Nov 22, 2026' })).toBeTruthy()
     expect(dayButton('2026-11-19').tabIndex).toBe(0) // the Thursday, not the Monday
