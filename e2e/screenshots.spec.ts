@@ -30,7 +30,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
         await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
         if (name === 'todo') await expect(page.getByRole('region', { name: /^Overdue/ })).toBeVisible()
         if (name === 'calendar') await expect(page.getByRole('grid')).toBeVisible()
-        if (name === 'dashboard') await expect(page.getByText(/Projected finish/).first()).toBeVisible()
+        if (name === 'dashboard') await expect(page.getByText(/Expected finish/).first()).toBeVisible()
         await page.evaluate(() => document.fonts.ready)
         await page.screenshot({ path: `docs/design/${name}-${size}-${colorScheme}.png`, fullPage: name === 'design' || name === 'calendar' })
       })

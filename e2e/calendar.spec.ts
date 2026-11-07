@@ -138,7 +138,7 @@ test('the streak is 1 after completing an item, on the calendar and the dashboar
   const streak = page.getByRole('region', { name: 'Streak' })
   await expect(streak.getByText('Current streak').locator('xpath=following-sibling::dd[1]')).toHaveText('1 day')
   await expect(streak.getByText('Longest streak').locator('xpath=following-sibling::dd[1]')).toHaveText('1 day')
-  await expect(streak.locator('[data-date="2026-11-09"][data-level]')).toHaveAttribute('aria-label', /Nov 9, 2026: 1 completed/)
+  await expect(streak.locator('[data-date="2026-11-09"][data-level]')).toHaveAttribute('aria-label', /\d+ (min|h)( [0-9]+ min)? studied, 1 task done on Mon, Nov 9/)
   await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Dashboard' }).click()
   await expect(page.getByRole('link', { name: '1 day streak' })).toBeVisible()
 })

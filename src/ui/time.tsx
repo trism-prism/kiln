@@ -22,6 +22,12 @@ export function uses12Hours(locale: string): boolean {
   return /^h(11|12)$/.test(new Intl.DateTimeFormat(locale, { hour: 'numeric' }).resolvedOptions().hourCycle ?? '')
 }
 
+/** The same clock time in the other half of the day: "00:05" with pm is "12:05", "23:59" with am is "11:59". */
+export function withPeriod(value: string, pm: boolean): string {
+  const m = TIME.exec(value)
+  return m ? `${pad((Number(m[1]) % 12) + (pm ? 12 : 0))}:${m[2]}` : value
+}
+
 /**
  * Time of day typed into hour and minute segments. `value` and `onChange` use "HH:MM" (24-hour), or "" while
  * a segment is empty. 12-hour locales get an AM/PM select with a chevron; 24-hour locales do not.
@@ -76,7 +82,7 @@ export function TimeInput({
           aria-label={`${label}: AM or PM`}
           selectedKey={pm ? 'pm' : 'am'}
           isDisabled={!time}
-          onSelectionChange={(k) => time && onChange(`${pad((time.hour % 12) + (k === 'pm' ? 12 : 0))}:${pad(time.minute)}`)}
+          onSelectionChange={(k) => onChange(withPeriod(value, k === 'pm'))}
           className="mt-[calc(1.25rem+0.375rem)]"
         >
           <AriaButton className={`${controlClass} flex cursor-default items-center gap-2`}>

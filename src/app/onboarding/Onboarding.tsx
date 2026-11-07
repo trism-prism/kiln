@@ -25,6 +25,7 @@ const PRESETS = [
   { name: 'Focused', weekday: 90, weekend: 120 },
   { name: 'Intense', weekday: 120, weekend: 180 },
 ]
+const byName = (name: string) => PRESETS.find((p) => p.name === name) ?? (PRESETS[0] as (typeof PRESETS)[number])
 const presetValues = (p: (typeof PRESETS)[number]) => [...Array<string>(5).fill(String(p.weekday)), String(p.weekend), String(p.weekend)]
 const TIME = /^([01][0-9]|2[0-3]):[0-5][0-9]$/
 const STEPS = ['Study time', 'Start date', 'Reminder', 'Your plan'] as const
@@ -51,7 +52,7 @@ function Flow({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     void markOnboardingStarted(db)
   }, [])
-  const [values, setValues] = useState(() => presetValues(PRESETS[1] as (typeof PRESETS)[number]))
+  const [values, setValues] = useState(() => presetValues(byName('Steady')))
   const [start, setStart] = useState(today)
   const [time, setTime] = useState('08:00')
   const [pushOn, setPushOn] = useState(false)
@@ -130,7 +131,7 @@ function Flow({ onClose }: { onClose: () => void }) {
             <RadioGroup
               aria-label="Study time presets"
               value={PRESETS.find((p) => presetValues(p).join() === values.join())?.name ?? ''}
-              onChange={(name) => setValues(presetValues(PRESETS.find((p) => p.name === name) as (typeof PRESETS)[number]))}
+              onChange={(name) => setValues(presetValues(byName(name)))}
               className="grid grid-cols-2 gap-3 sm:grid-cols-4"
             >
               {PRESETS.map((p) => (

@@ -35,6 +35,9 @@ test.describe('onboarding', () => {
     await expect(page.getByRole('row', { name: /Sunday/ })).toContainText('60 min')
     // Editing one day in the table leaves no preset selected and updates the week total.
     await page.getByRole('row', { name: /Wednesday/ }).getByRole('button').click()
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('row', { name: /Wednesday/ }).getByRole('button')).toBeFocused()
+    await page.getByRole('row', { name: /Wednesday/ }).getByRole('button').click()
     await page.getByRole('button', { name: 'More time on Wednesday' }).click()
     await expect(page.getByRole('textbox', { name: 'Wednesday' })).toHaveValue('45')
     await expect(page.getByTestId('week-total')).toContainText('285 min')
@@ -46,6 +49,8 @@ test.describe('onboarding', () => {
     await expect(page.getByText('Step 3 of 4: Reminder')).toBeVisible()
     await page.getByRole('spinbutton', { name: /^hour/ }).first().click()
     await page.keyboard.type('0715')
+    await page.getByRole('button', { name: /AM or PM/ }).click()
+    await page.getByRole('option', { name: 'PM' }).click()
     await page.getByRole('button', { name: 'Next' }).click()
     await page.getByRole('button', { name: 'Load sample plan', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Set up Kiln' })).toBeHidden()
@@ -56,6 +61,7 @@ test.describe('onboarding', () => {
     await expect(page.getByRole('row', { name: /Monday/ })).toContainText('30 min')
     await expect(page.getByRole('spinbutton', { name: /^hour/ }).first()).toHaveText('7')
     await expect(page.getByRole('spinbutton', { name: /^minute/ }).first()).toHaveText('15')
+    await expect(page.getByRole('button', { name: /AM or PM/ }).first()).toContainText('PM') // stored as 19:15
   })
 
   test('is not shown to someone who already saved settings', async ({ page }) => {

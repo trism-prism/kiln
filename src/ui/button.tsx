@@ -53,7 +53,7 @@ export function Link({ variant, className = '', ...props }: LinkProps) {
     ? `${base} px-4 ${variants[variant]}`
     : 'rounded-sm text-accent underline decoration-1 underline-offset-2 data-hovered:decoration-2 data-disabled:cursor-not-allowed data-disabled:text-text-muted data-disabled:no-underline'
   // An absolute URL must not go through the router (it would be read as a path inside the app).
-  if (typeof props.href === 'string' && /^https?:\/\//i.test(props.href)) {
+  if (typeof props.href === 'string' && /^(https?:\/\/|mailto:)/i.test(props.href)) {
     const { href, target, rel, children, 'aria-label': label } = props
     return (
       <a href={href} target={target} rel={rel} aria-label={label} className={`${look} ${className} hover:decoration-2`}>

@@ -1,11 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Minus, Plus } from 'lucide-react'
-import { Button as AriaButton, Group, Input, NumberField } from 'react-aria-components'
+import { Group, Input, NumberField } from 'react-aria-components'
 import { Button } from '../../ui/button'
 import { formatHours, MAX_DAY_MINUTES, parseMinutes, WEEKDAYS, weekTotal } from './budget'
 
 const STEP = 15
-const step = 'flex size-9 items-center justify-center rounded-md border border-border-strong bg-surface-raised text-text data-pressed:bg-surface-muted data-disabled:opacity-50'
+const inputOf = (e: { currentTarget: HTMLElement }) => e.currentTarget.parentElement?.querySelector('input')?.value
+const step = 'flex size-9 items-center justify-center rounded-md border border-border-strong bg-surface-raised text-text outline-none focus-visible:outline-2 focus-visible:outline-focus active:bg-surface-muted'
 
 /**
  * Minutes for each weekday as a table with a bar per day and the week total. Press a row to edit its minutes
@@ -14,14 +15,23 @@ const step = 'flex size-9 items-center justify-center rounded-md border border-b
  */
 export function WeekdayMinutes({ values, onChange }: { values: string[]; onChange: (values: string[]) => void }) {
   const [editing, setEditing] = useState<number>()
+  const root = useRef<HTMLDivElement>(null)
+  const refocus = useRef<number | undefined>(undefined)
+  // Enter and Escape close the editor; put focus back on that day's button, which is mounted again by then.
+  useEffect(() => {
+    if (editing === undefined && refocus.current !== undefined) root.current?.querySelector<HTMLElement>(`[data-day="${refocus.current}"]`)?.focus()
+    refocus.current = undefined
+  }, [editing])
   const scale = Math.max(180, ...values.map((v) => parseMinutes(v) ?? 0))
   const total = weekTotal(values)
   // Typed minutes are kept as typed; only the buttons move in 15-minute steps (NumberField's own `step` would round 50 to 45).
-  const nudge = (i: number, by: number) =>
-    onChange(values.map((x, j) => (j === i ? String(Math.min(MAX_DAY_MINUTES, Math.max(0, (parseMinutes(x) ?? 0) + by))) : x)))
-
+  // The step starts from what is in the box, which may not be committed yet (the buttons do not take focus).
+  const nudge = (i: number, by: number, typed?: string) => {
+    const base = parseMinutes((typed ?? '').replace(/[,\s]/g, '')) ?? parseMinutes(values[i] ?? '') ?? 0
+    onChange(values.map((x, j) => (j === i ? String(Math.min(MAX_DAY_MINUTES, Math.max(0, base + by))) : x)))
+  }
   return (
-    <div className="grid gap-2">
+    <div ref={root} className="grid gap-2">
       <table className="w-full text-sm">
         <caption className="sr-only">Study minutes per weekday. Press a day to change its minutes.</caption>
         <tbody>
@@ -29,12 +39,12 @@ export function WeekdayMinutes({ values, onChange }: { values: string[]; onChang
             const n = parseMinutes(values[i] ?? '')
             const open = editing === i
             return (
-              <tr key={day} className="border-b border-border last:border-0" onClick={() => setEditing(i)}>
+              <tr key={day} className="border-b border-border last:border-0">
                 <th scope="row" className="w-28 py-1 pr-2 text-left font-normal">
                   {open ? (
                     day
                   ) : (
-                    <Button variant="quiet" className="-ml-3 justify-start" onPress={() => setEditing(i)}>
+                    <Button variant="quiet" data-day={i} className="-ml-3 justify-start" onPress={() => setEditing(i)}>
                       {day}
                     </Button>
                   )}
@@ -50,16 +60,20 @@ export function WeekdayMinutes({ values, onChange }: { values: string[]; onChang
                         minValue={0}
                         maxValue={MAX_DAY_MINUTES}
                         isInvalid={n === undefined}
-                        onKeyDown={(e) => (e.key === 'Enter' || e.key === 'Escape') && setEditing(undefined)}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter' && e.key !== 'Escape') return
+                          refocus.current = i
+                          setEditing(undefined)
+                        }}
                       >
                         <Group className="flex items-center gap-1">
-                          <AriaButton slot={null} className={step} aria-label={`Less time on ${day}`} onPress={() => nudge(i, -STEP)}>
+                          <button type="button" className={step} aria-label={`Less time on ${day}`} onMouseDown={(e) => e.preventDefault()} onClick={(e) => nudge(i, -STEP, inputOf(e))}>
                             <Minus size={16} />
-                          </AriaButton>
+                          </button>
                           <Input inputMode="numeric" className="h-9 w-16 rounded-md border border-border-strong bg-surface-raised px-2 text-center tabular-nums data-focused:border-focus data-invalid:border-danger" />
-                          <AriaButton slot={null} className={step} aria-label={`More time on ${day}`} onPress={() => nudge(i, STEP)}>
+                          <button type="button" className={step} aria-label={`More time on ${day}`} onMouseDown={(e) => e.preventDefault()} onClick={(e) => nudge(i, STEP, inputOf(e))}>
                             <Plus size={16} />
-                          </AriaButton>
+                          </button>
                           <span className="text-text-muted">min</span>
                         </Group>
                       </NumberField>
