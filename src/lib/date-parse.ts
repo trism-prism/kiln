@@ -45,7 +45,8 @@ const DAY = /^([0-9]{1,2})(?:st|nd|rd|th)?$/
  * A weekday in front ("Fri, Nov 20, 2026", how the field shows a date) is ignored.
  */
 export function parseDateText(text: string, today: string, locale: string): string | undefined {
-  const t = text.trim().toLowerCase().replace(/,/g, ' ').replace(/\s+/g, ' ').replace(/[.]$/, '')
+  // Trim after commas become spaces, so a trailing comma ("Nov 20,") reads the same as none.
+  const t = text.toLowerCase().replace(/,/g, ' ').replace(/\s+/g, ' ').trim().replace(/[.]$/, '')
   if (t === 'today') return today
   if (t === 'tomorrow') return addDaysISO(today, 1)
   if (isRealISODate(t)) return t
