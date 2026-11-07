@@ -108,7 +108,7 @@ export default function TaskPage() {
               {lc && <DifficultyBadge difficulty={lc.difficulty} />}
             </div>
             <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <Fact label="Due">{task.scheduledDate ? formatDay(task.scheduledDate, true) : 'Not scheduled'}</Fact>
+              {!done && <Fact label="Due">{task.scheduledDate ? formatDay(task.scheduledDate, true) : 'Not scheduled'}</Fact>}
               <Fact label="Time">{minutesText(task.estimatedMinutes)}</Fact>
               <Fact label="Priority">{PRIORITY_LABEL[task.priority]}</Fact>
               <Fact label="Type">{cap(task.type)}</Fact>
