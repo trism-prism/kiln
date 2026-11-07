@@ -51,7 +51,15 @@ export function WeekdayMinutes({ values, onChange }: { values: string[]; onChang
                 </th>
                 <td className="w-44 py-1 pr-3">
                   {open ? (
-                    <div onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setEditing(undefined)}>
+                    <div
+                      // On key up, not down: NumberField commits the typed text on Enter's key down, and closing on key down would
+                      // move focus to the day button in time for the key up to press it and open the editor again.
+                      onKeyUpCapture={(e) => {
+                        if ((e.key !== 'Enter' && e.key !== 'Escape') || !(e.target instanceof HTMLInputElement)) return
+                        refocus.current = i
+                        setEditing(undefined)
+                      }}
+                      onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setEditing(undefined)}>
                       <NumberField
                         aria-label={day}
                         autoFocus
@@ -60,11 +68,6 @@ export function WeekdayMinutes({ values, onChange }: { values: string[]; onChang
                         minValue={0}
                         maxValue={MAX_DAY_MINUTES}
                         isInvalid={n === undefined}
-                        onKeyDown={(e) => {
-                          if (e.key !== 'Enter' && e.key !== 'Escape') return
-                          refocus.current = i
-                          setEditing(undefined)
-                        }}
                       >
                         <Group className="flex items-center gap-1">
                           <button type="button" className={step} aria-label={`Less time on ${day}`} onMouseDown={(e) => e.preventDefault()} onClick={(e) => nudge(i, -STEP, inputOf(e))}>
