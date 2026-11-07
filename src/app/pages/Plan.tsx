@@ -1,5 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useEffect, useRef, useState } from 'react'
+import { Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import {
   db,
@@ -180,16 +181,45 @@ function DeleteDialog({ detail, isOpen, onOpenChange }: { detail: PlanDetail; is
   )
 }
 
+type PlanActionsProps = {
+  className: string
+  editRef: RefObject<HTMLButtonElement | null>
+  editing: boolean
+  onEdit: () => void
+  onDelete: () => void
+}
+
+/** Rendered twice: in the top bar from md up, and as a row above the content on phones. */
+function PlanActions({ className, editRef, editing, onEdit, onDelete }: PlanActionsProps) {
+  return (
+    <div className={`${className} shrink-0 items-center gap-2`}>
+      {!editing && (
+        <Button variant="secondary" ref={editRef} onPress={onEdit}>
+          Edit plan
+        </Button>
+      )}
+      <Button variant="secondary" onPress={() => void rescheduleOverdue()}>
+        Reschedule
+      </Button>
+      <Button variant="danger-outline" onPress={onDelete}>
+        <Trash2 size={16} aria-hidden="true" /> Delete plan
+      </Button>
+    </div>
+  )
+}
+
 export default function PlanPage() {
   const { planId } = useParams()
   const detail = usePlanDetail(planId)
   const today = useToday()
   const [confirming, setConfirming] = useState(false)
   const [editing, setEditing] = useState(false)
-  // Closing the editor returns focus to the button that opened it.
+  const barEdit = useRef<HTMLButtonElement>(null)
+  const rowEdit = useRef<HTMLButtonElement>(null)
+  // Closing the editor returns focus to the button that opened it (the copy that is on screen).
   const wasEditing = useRef(false)
   useEffect(() => {
-    if (wasEditing.current && !editing) document.getElementById('edit-plan')?.focus()
+    if (wasEditing.current && !editing) [barEdit, rowEdit].find((r) => r.current?.offsetParent)?.current?.focus()
     wasEditing.current = editing
   }, [editing, detail])
 
@@ -212,26 +242,20 @@ export default function PlanPage() {
 
   const all = detail.modules.flatMap((m) => m.tasks).filter((t) => t.status !== 'skipped')
   const done = all.filter((t) => t.status === 'done').length
+  const actions = { editing, onEdit: () => setEditing(true), onDelete: () => setConfirming(true) }
   return (
     <Page
       title={detail.plan.title}
       actions={
-        <div className="flex flex-wrap gap-2">
+        // flex-1 with basis 0: the h1 truncates first, the star stays next to it, the buttons go right.
+        <div className="flex flex-1 items-center gap-2">
           <FavoriteButton plan={detail.plan} />
-          {!editing && (
-            <Button variant="secondary" id="edit-plan" onPress={() => setEditing(true)}>
-              Edit plan
-            </Button>
-          )}
-          <Button variant="secondary" onPress={() => void rescheduleOverdue()}>
-            Reschedule
-          </Button>
-          <Button variant="quiet" onPress={() => setConfirming(true)}>
-            Delete plan
-          </Button>
+          <PlanActions className="ml-auto hidden md:flex" editRef={barEdit} {...actions} />
         </div>
       }
     >
+      {/* Never wraps; scrolls sideways if a narrow phone can't fit it. p-1 keeps focus rings unclipped. */}
+      <PlanActions className="-m-1 mb-5 flex overflow-x-auto p-1 md:hidden" editRef={rowEdit} {...actions} />
       <div className="grid gap-8 lg:grid-cols-[1fr_20rem]">
         {editing ? (
           <div className="min-w-0">
