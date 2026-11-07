@@ -68,7 +68,7 @@ export async function readBreakdown(idb: IDBFactory, now: Date, name = 'kiln'): 
     ])
     // Daily problems and their review cards count only for plans whose daily practice setting is on (as in the app).
     const practicePlans = new Set(plans.filter((p) => !p.deleted && practiceOn(p)).map((p) => p.id))
-    // Cards of plans with reviews off are kept but ignored (as in the app).
+    // Cards of plans with reviews off are kept but hidden (as in the app).
     const reviewPlans = new Set(plans.filter((p) => !p.deleted && reviewsOn(p)).map((p) => p.id))
     const live = tasks.filter((t) => !t.deleted)
     const alive = new Set(live.map((t) => t.id))

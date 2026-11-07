@@ -141,7 +141,7 @@ async function setSkipped(db: KilnDB, taskId: string, skipped: boolean): Promise
   })
 }
 
-// ---- queries (tombstones and suspended cards excluded; cards of deleted tasks are ignored) ----
+// ---- queries (tombstones, suspended cards and cards of plans with reviews off excluded; cards of deleted tasks are ignored) ----
 
 async function liveTasks(db: KilnDB): Promise<Map<string, TaskRecord>> {
   return new Map((await db.tasks.toArray()).filter((t) => !t.deleted).map((t) => [t.id, t]))
@@ -156,7 +156,7 @@ async function liveCards(db: KilnDB, tasks: Map<string, TaskRecord>): Promise<Re
   // Cards for generated daily problems (a slug, no task) belong to a plan's daily practice: none while it is off.
   const plans = (await db.plans.toArray()).filter((p) => !p.deleted)
   const practicePlans = new Set(plans.filter(practiceOn).map((p) => p.id))
-  // Cards of plans with reviews off are kept in the database but ignored everywhere; switching reviews on resumes them.
+  // Cards of plans with reviews off are kept in the database but hidden from these queries (streaks still count their past review logs); switching reviews on resumes them.
   const reviewPlans = new Set(plans.filter(reviewsOn).map((p) => p.id))
   const byTask = new Map<string, ReviewCardRecord>()
   const out: ReviewCardRecord[] = []
