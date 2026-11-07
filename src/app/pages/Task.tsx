@@ -1,11 +1,12 @@
 import { useState, type ReactNode } from 'react'
-import { ExternalLink } from 'lucide-react'
+import { BookOpen, Boxes, ExternalLink, FileText, GraduationCap, Library, Link as LinkIcon, PlayCircle, Puzzle, Wrench, type LucideIcon } from 'lucide-react'
 import { useParams } from 'react-router'
 import { Button, Link } from '../../ui/button'
 import { Badge, EmptyState, Skeleton } from '../../ui/surface'
 import { TextField } from '../../ui/form'
 import { formatDay, isRealISODate } from '../../lib/date'
 import { cardMinutes, localDate } from '../../domain/mastery'
+import { practiceLanguage } from '../../data'
 import { pinTask, rescheduleOverdue, toggleSkip } from '../actions'
 import { Page } from '../Page'
 import { DifficultyBadge, LeetCodeLink, minutesText } from '../parts'
@@ -38,6 +39,8 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
     </div>
   )
 }
+
+const KIND_ICON: Record<string, LucideIcon> = { video: PlayCircle, article: FileText, book: BookOpen, course: GraduationCap, docs: Library, tool: Wrench, visualizer: Boxes, problem: Puzzle }
 
 const cap = (s: string) => s[0]!.toUpperCase() + s.slice(1)
 
@@ -121,7 +124,7 @@ export default function TaskPage() {
             <Section title="Practice">
               <div className="flex flex-wrap items-center gap-3 text-sm">
                 <span>{task.practice?.title}</span>
-                <LeetCodeLink slug={lc.slug!} title={task.practice?.title ?? task.title} />
+                <LeetCodeLink slug={lc.slug!} title={task.practice?.title ?? task.title} language={plan ? practiceLanguage(plan) : undefined} />
               </div>
             </Section>
           )}
@@ -152,22 +155,28 @@ export default function TaskPage() {
           )}
           {task.resources.length > 0 && (
             <Section title="Resources">
-              <ul className="divide-y divide-border rounded-lg border border-border bg-surface-raised px-4 text-sm">
-                {task.resources.map((r, i) => (
-                  <li key={i} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-3">
-                    {r.url ? (
-                      <Link href={r.url} target="_blank" rel="noopener noreferrer" aria-label={`${r.title} (opens in a new tab)`} className="inline-flex items-center gap-1">
-                        {r.title}
-                        <ExternalLink size={14} aria-hidden="true" />
-                      </Link>
-                    ) : (
-                      <span>{r.title}</span>
-                    )}
-                    <span className="text-xs text-text-muted">
-                      {[cap(r.kind), r.section, r.minutes ? minutesText(r.minutes) : undefined, r.required ? undefined : 'Optional'].filter(Boolean).join(' · ')}
-                    </span>
-                  </li>
-                ))}
+              <ul className="grid gap-2 text-sm">
+                {task.resources.map((r, i) => {
+                  const Icon = KIND_ICON[r.kind] ?? LinkIcon
+                  const detail = [cap(r.kind), r.section, r.minutes ? minutesText(r.minutes) : undefined, r.required ? undefined : 'Optional'].filter(Boolean).join(' · ')
+                  return (
+                    <li key={i} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      {r.url ? (
+                        <Link href={r.url} target="_blank" rel="noopener noreferrer" aria-label={`${r.title} (${cap(r.kind)}, opens in a new tab)`} variant="secondary">
+                          <Icon size={16} aria-hidden="true" />
+                          {r.title}
+                          <ExternalLink size={14} aria-hidden="true" />
+                        </Link>
+                      ) : (
+                        <span className="inline-flex items-center gap-2 px-3 py-2">
+                          <Icon size={16} aria-hidden="true" className="text-text-muted" />
+                          {r.title}
+                        </span>
+                      )}
+                      <span className="text-xs text-text-muted">{detail}</span>
+                    </li>
+                  )
+                })}
               </ul>
             </Section>
           )}

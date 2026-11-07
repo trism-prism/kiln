@@ -13,10 +13,10 @@ export function DifficultyBadge({ difficulty }: { difficulty: 'easy' | 'medium' 
 }
 
 /** Opens the problem on LeetCode in a new tab. */
-export function LeetCodeLink({ slug, title }: { slug: string; title: string }) {
+export function LeetCodeLink({ slug, title, language = 'Python' }: { slug: string; title: string; language?: string }) {
   return (
-    <Link href={leetcodeUrl(slug)} target="_blank" rel="noopener noreferrer" aria-label={`Solve in Python: ${title} (opens LeetCode in a new tab)`} className="inline-flex items-center gap-1 text-sm">
-      Solve in Python
+    <Link href={leetcodeUrl(slug)} target="_blank" rel="noopener noreferrer" aria-label={`Solve in ${language}: ${title} (opens LeetCode in a new tab)`} className="inline-flex items-center gap-1 text-sm">
+      Solve in {language}
       <ExternalLink size={14} aria-hidden="true" />
     </Link>
   )

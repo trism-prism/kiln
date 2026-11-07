@@ -69,7 +69,7 @@ function Row({ item, date, today, onMove }: { item: TodoItem; date: string; toda
           </div>
           <p className="mt-0.5 text-xs text-text-muted">{[item.planTitle, item.typeLabel, minutesText(item.minutes)].filter(Boolean).join(' · ')}</p>
         </div>
-        {item.leetcode && !item.done && <LeetCodeLink slug={item.leetcode.slug} title={item.title} />}
+        {item.leetcode && !item.done && <LeetCodeLink slug={item.leetcode.slug} title={item.title} language={item.leetcode.language} />}
       </div>
       {movable &&
         (moving ? (

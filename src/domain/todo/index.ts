@@ -59,12 +59,14 @@ export interface TodoItem {
   done: boolean
   /** Open and dated before today. */
   overdue: boolean
-  leetcode?: { slug: string; difficulty: 'easy' | 'medium' | 'hard' }
+  leetcode?: { slug: string; difficulty: 'easy' | 'medium' | 'hard'; language: string }
   /** In-app page of the item, when it has one. */
   href?: string
   /** Completing it asks for a rating (it gets or has a review card). */
   rates: boolean
 }
+
+const DEFAULT_LANGUAGE = 'Python'
 
 const KIND_RANK = { review: 0, task: 1, practice: 2 }
 
@@ -74,6 +76,12 @@ export interface TodoSource {
   /** Live review cards (not suspended). */
   cards: TodoCard[]
   planTitles: ReadonlyMap<string, string>
+  /**
+   * Plans whose daily practice setting is on, with the language for "Solve in <language>". Generated daily
+   * problems of any other plan are left out (switching the setting off hides them); LeetCode tasks written
+   * into a plan always show.
+   */
+  practiceLanguages: ReadonlyMap<string, string>
   /** Title shown after "Review:" for a card. */
   cardTitle: (c: TodoCard) => string
 }
@@ -88,7 +96,7 @@ export function buildTodoItems(src: TodoSource, today: string): TodoItem[] {
   const items: (TodoItem & { sort: number })[] = []
   for (const t of src.tasks) {
     if (t.status === 'skipped' || !t.scheduledDate) continue
-    const lc = t.practice?.provider === 'leetcode' && t.practice.slug ? { slug: t.practice.slug, difficulty: t.practice.difficulty } : undefined
+    const lc = t.practice?.provider === 'leetcode' && t.practice.slug ? { slug: t.practice.slug, difficulty: t.practice.difficulty, language: src.practiceLanguages.get(t.planId) ?? DEFAULT_LANGUAGE } : undefined
     items.push({
       key: `task:${t.id}`,
       kind: 'task',
@@ -108,6 +116,8 @@ export function buildTodoItems(src: TodoSource, today: string): TodoItem[] {
     })
   }
   for (const p of src.problems) {
+    const language = src.practiceLanguages.get(p.planId)
+    if (language === undefined) continue
     items.push({
       key: `practice:${p.id}`,
       kind: 'practice',
@@ -120,7 +130,7 @@ export function buildTodoItems(src: TodoSource, today: string): TodoItem[] {
       minutes: p.minutes,
       done: p.status === 'done',
       overdue: p.status === 'open' && p.date < today,
-      leetcode: { slug: p.slug, difficulty: p.difficulty },
+      leetcode: { slug: p.slug, difficulty: p.difficulty, language },
       rates: true,
       sort: 0,
     })

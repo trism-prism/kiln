@@ -25,5 +25,14 @@ export function practiceConfig(p: Pick<PlanRecord, 'dailyPractice' | 'dailyPract
   return p.dailyPractice ?? (p.dailyPracticeOn ? DEFAULT_DAILY_PRACTICE : undefined)
 }
 
+const LANGUAGE_NAMES: Record<string, string> = { javascript: 'JavaScript', typescript: 'TypeScript', 'c++': 'C++', 'c#': 'C#', cpp: 'C++', csharp: 'C#', golang: 'Go', php: 'PHP', sql: 'SQL' }
+
+/** The language shown in "Solve in <language>": the plan's `dailyPractice.language` (Python when the file names none). */
+export function practiceLanguage(p: Pick<PlanRecord, 'dailyPractice'>): string {
+  const raw = p.dailyPractice?.language?.trim()
+  if (!raw) return 'Python'
+  return LANGUAGE_NAMES[raw.toLowerCase()] ?? raw[0]!.toUpperCase() + raw.slice(1)
+}
+
 /** Whether daily practice is on for the plan (the toggle's state). */
 export const practiceOn = (p: Pick<PlanRecord, 'dailyPractice' | 'dailyPracticeOn'>): boolean => practiceConfig(p) !== undefined
