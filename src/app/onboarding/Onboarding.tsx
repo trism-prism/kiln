@@ -67,7 +67,9 @@ function Flow({ onClose }: { onClose: () => void }) {
 
   const parsed = values.map(parseMinutes)
   const budgetOk = parsed.every((v) => v !== undefined)
-  const startOk = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(start)
+  // The field shows its own error for text it can't read; Next waits until it is fixed.
+  const [startBad, setStartBad] = useState(false)
+  const startOk = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(start) && !startBad
   const timeOk = TIME.test(time)
   const push = availability(readPushEnv())
 
@@ -152,7 +154,7 @@ function Flow({ onClose }: { onClose: () => void }) {
 
         {step === 1 && (
           <div className="grid gap-3">
-            <TextField label="Start date" type="date" value={start} onChange={setStart} isInvalid={!startOk} errorMessage="Choose a date" className="max-w-48" />
+            <TextField label="Start date" type="date" value={start} onChange={setStart} onInvalidChange={setStartBad} isInvalid={!startOk} errorMessage="Choose a date" className="max-w-48" />
             <Button variant="quiet" className="justify-self-start" onPress={() => setStart(addDaysISO(today, 1))}>Use tomorrow</Button>
           </div>
         )}

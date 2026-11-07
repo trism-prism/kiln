@@ -22,12 +22,13 @@ import {
   type SwitchProps,
   type TextFieldProps,
 } from 'react-aria-components'
+import { controlClass as control, popoverClass as popover } from './classes'
+import { DateField, type DateFieldProps } from './date'
 
-const field = 'grid gap-1.5 text-sm'
+// content-start: in a grid row next to a taller field (one showing an error), the rows stay at the top.
+const field = 'grid content-start gap-1.5 text-sm'
 const help = 'text-sm text-text-muted'
 const error = 'text-sm text-danger'
-const control =
-  'h-10 rounded-md border border-border-strong bg-surface-raised px-3 text-sm text-text transition-colors data-focused:border-focus data-hovered:bg-surface data-invalid:border-danger data-disabled:cursor-not-allowed data-disabled:opacity-50'
 
 /** Task completion. The box fills with the accent when done. */
 export function Checkbox({ children, className = '', ...props }: Omit<CheckboxProps, 'className' | 'children'> & { children: ReactNode; className?: string }) {
@@ -46,8 +47,36 @@ export function TextField({
   description,
   errorMessage,
   className = '',
+  onInvalidChange,
+  min,
   ...props
-}: Omit<TextFieldProps, 'className'> & { label: string; description?: string; errorMessage?: string; className?: string }) {
+}: Omit<TextFieldProps, 'className'> & {
+  label: string
+  description?: string
+  errorMessage?: string
+  className?: string
+  /** Date fields only: told whether the typed text can't be used, so the form can hold off saving. */
+  onInvalidChange?: (invalid: boolean) => void
+  /** Date fields only: the earliest yyyy-mm-dd allowed. */
+  min?: string
+}) {
+  if (props.type === 'date') {
+    return (
+      <DateField
+        label={label}
+        value={props.value ?? ''}
+        onChange={props.onChange ?? (() => {})}
+        // A date field calls it after each commit, without an event; no date caller reads the event.
+        onBlur={props.onBlur as DateFieldProps['onBlur']}
+        onInvalidChange={onInvalidChange}
+        min={min}
+        isInvalid={props.isInvalid}
+        errorMessage={errorMessage}
+        description={description}
+        className={className}
+      />
+    )
+  }
   return (
     <AriaTextField {...props} className={`${field} ${className}`}>
       <Label className="font-medium">{label}</Label>
@@ -75,9 +104,6 @@ export function TextAreaField({
   )
 }
 
-const popover =
-  'min-w-(--trigger-width) rounded-lg border border-border bg-surface-raised p-1 text-text shadow-lg outline-none data-entering:animate-rise'
-
 export function ListBox<T extends object>({ className = '', ...props }: Omit<ListBoxProps<T>, 'className'> & { className?: string }) {
   return <AriaListBox {...props} className={`outline-none ${className}`} />
 }
@@ -95,6 +121,18 @@ export function ListBoxItem({ children, ...props }: Omit<ListBoxItemProps, 'clas
   )
 }
 
+/**
+ * What a select's button shows: the chosen item's text only. By default `SelectValue` renders the item's whole
+ * children, including its (block, invisible) check icon, which made the box 36px tall and pushed the text up.
+ */
+export function SelectedText({ className = '' }: { className?: string }) {
+  return (
+    <SelectValue className={`truncate ${className}`}>
+      {({ isPlaceholder, selectedText, defaultChildren }) => (isPlaceholder ? defaultChildren : selectedText)}
+    </SelectValue>
+  )
+}
+
 export function Select<T extends object>({
   label,
   description,
@@ -106,7 +144,7 @@ export function Select<T extends object>({
     <AriaSelect {...props} className={`${field} ${className}`}>
       <Label className="font-medium">{label}</Label>
       <AriaButton className={`${control} flex cursor-default items-center justify-between gap-2 text-left`}>
-        <SelectValue className="truncate" />
+        <SelectedText />
         <ChevronDown className="text-text-muted" />
       </AriaButton>
       {description && <Text slot="description" className={help}>{description}</Text>}
@@ -129,4 +167,4 @@ export function Switch({ children, className = '', ...props }: Omit<SwitchProps,
   )
 }
 
-export { popover as popoverClass, control as controlClass }
+export { controlClass, popoverClass } from './classes'

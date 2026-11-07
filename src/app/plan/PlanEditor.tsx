@@ -201,6 +201,9 @@ export function PlanEditor({ detail, onClose }: { detail: PlanDetail; onClose: (
     modules.map((m) => ({ ...m, tasks: m.tasks.filter((t) => !gone.has(t.id)).map((t) => ({ ...t, dependsOn: t.dependsOn.filter((d) => !gone.has(d)) })) }))
 
   const save = async () => {
+    // A date field with text it can't read shows its own error and still holds the old date: fix it first.
+    const unread = form.current?.querySelector<HTMLElement>('input[aria-invalid="true"]')
+    if (unread) return unread.focus()
     const plan = toPlan(base, draft)
     // Only the file shape is checked. The authoring rules (validatePlan) are not: plans joined from parts
     // or reordered here can break them (module notBeforeDay order), and the scheduler copes with the rest.

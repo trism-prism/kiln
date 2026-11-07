@@ -151,7 +151,7 @@ test('the day panel adds a to-do on that day', async ({ page }) => {
   const panel = page.getByRole('dialog', { name: 'Thu, Nov 12, 2026' })
   await panel.getByRole('button', { name: 'Add to-do' }).click()
   const form = page.getByRole('dialog', { name: 'Add to-do' })
-  await expect(form.getByLabel('Day (optional)')).toHaveValue('2026-11-12')
+  await expect(form.getByLabel('Day (optional)')).toHaveValue('Thu, Nov 12, 2026')
   await form.getByLabel('Title').fill('Read chapter 3')
   await form.getByRole('button', { name: 'Add to-do' }).click()
   await expect(panel.getByRole('listitem').filter({ hasText: 'Read chapter 3' })).toBeVisible()

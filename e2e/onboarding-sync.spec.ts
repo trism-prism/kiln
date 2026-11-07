@@ -47,8 +47,7 @@ test.describe('onboarding', () => {
     await expect(page.getByText('Step 2 of 4: Start date')).toBeVisible()
     await page.getByRole('button', { name: 'Next' }).click()
     await expect(page.getByText('Step 3 of 4: Reminder')).toBeVisible()
-    await page.getByRole('spinbutton', { name: /^hour/ }).first().click()
-    await page.keyboard.type('0715')
+    await page.getByRole('textbox', { name: 'Reminder time' }).fill('0715')
     await page.getByRole('button', { name: /AM or PM/ }).click()
     await page.getByRole('option', { name: 'PM' }).click()
     await page.getByRole('button', { name: 'Next' }).click()
@@ -59,8 +58,7 @@ test.describe('onboarding', () => {
     await expect(page.getByRole('heading', { name: 'Set up Kiln' })).toBeHidden()
     await page.goto('/settings')
     await expect(page.getByRole('row', { name: /Monday/ })).toContainText('30 min')
-    await expect(page.getByRole('spinbutton', { name: /^hour/ }).first()).toHaveText('7')
-    await expect(page.getByRole('spinbutton', { name: /^minute/ }).first()).toHaveText('15')
+    await expect(page.getByRole('textbox', { name: 'Daily reminder' })).toHaveValue('7:15')
     await expect(page.getByRole('button', { name: /AM or PM/ }).first()).toContainText('PM') // stored as 19:15
   })
 

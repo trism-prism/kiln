@@ -69,6 +69,9 @@ export function Review({ input }: { input: Input }) {
   const [goal, setGoal] = useState('')
   const [userStart, setUserStart] = useState<string | null>(null)
   const [deadline, setDeadline] = useState<string | null>(null)
+  // The date fields show their own error for text they can't read; Import waits until it is fixed.
+  const [startBad, setStartBad] = useState(false)
+  const [deadlineBad, setDeadlineBad] = useState(false)
   const [chosen, setChosen] = useState<Choice | null>(null)
   const [copyId, setCopyId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -107,7 +110,7 @@ export function Review({ input }: { input: Input }) {
       ? 'The deadline is before the start date.'
       : undefined
   const titleProblem = a?.detected === 'sheet' && input.kind !== 'build' && title.trim() === '' ? 'Enter a title for the plan.' : undefined
-  const ready = !!finalPlan && !!match && match.kind !== 'blocked' && !copyProblem && !dateProblem && !titleProblem
+  const ready = !!finalPlan && !!match && match.kind !== 'blocked' && !copyProblem && !dateProblem && !titleProblem && !startBad && !deadlineBad
 
   const preview = useAsync<ImportPreview>(
     [finalPlan, ready, startDate, deadlineValue],
@@ -176,6 +179,7 @@ export function Review({ input }: { input: Input }) {
               type="date"
               value={startDate}
               onChange={setUserStart}
+              onInvalidChange={setStartBad}
               description={match?.kind === 'update' || match?.kind === 'part' ? 'Not used: this plan already has a start date.' : undefined}
             />
             <TextField
@@ -183,6 +187,7 @@ export function Review({ input }: { input: Input }) {
               type="date"
               value={deadlineValue}
               onChange={setDeadline}
+              onInvalidChange={setDeadlineBad}
               description={plan?.deadline ? 'Empty uses the deadline in the plan file.' : undefined}
             />
           </div>
