@@ -96,6 +96,11 @@ test('to-do list preferences: choose the days, kept after a reload', async ({ pa
   const dialog = page.getByRole('dialog', { name: 'To-do list preferences' })
   await expect(dialog.getByRole('checkbox', { name: 'Show personal to-dos' })).toBeChecked()
   await dialog.getByRole('radiogroup', { name: 'Show tasks until' }).locator('label', { hasText: 'Next week' }).click()
+  await dialog.getByLabel('Until day').fill('31')
+  await expect(dialog.getByText('Pick a month and a day')).toBeVisible()
+  await expect(dialog.getByLabel('Until day')).toHaveAccessibleDescription('Pick a month and a day')
+  await dialog.getByLabel('Until day').fill('')
+  await expect(dialog.getByText('Pick a month and a day')).toBeHidden()
   await dialog.getByRole('button', { name: 'Done' }).click()
   await expect(page.getByRole('heading', { level: 2, name: 'Tomorrow' })).toBeVisible()
   await page.reload()
@@ -109,12 +114,20 @@ test('personal to-dos: add with minutes, mark done, edit, delete', async ({ page
   await form.getByRole('button', { name: 'Add to-do' }).click()
   await expect(form.getByText('Enter a title.')).toBeVisible()
   await form.getByLabel('Title').fill('Buy lab notebook')
+  for (const bad of ['0x1A', '1e2']) {
+    await form.getByLabel('Minutes (optional)').fill(bad)
+    await form.getByRole('button', { name: 'Add to-do' }).click()
+    await expect(form.getByText('Enter whole minutes from 0 to 1440, or leave it empty.')).toBeVisible()
+  }
+  await expect(form.getByLabel('Day (optional)')).toHaveValue('') // not prefilled: the hint says no day means today
   await form.getByLabel('Minutes (optional)').fill('20')
   await form.getByRole('button', { name: 'Add to-do' }).click()
-  await expect(form).toBeHidden() // the closing dialog's overlay swallows clicks on the page behind it
+  // The row appears (live query) while the form is still saving; the dialog's scrim covers the page until it closes.
+  await expect(form).toBeHidden()
   const row = page.getByRole('region', { name: 'Today' }).getByRole('listitem').filter({ hasText: 'Buy lab notebook' })
   await expect(row).toContainText('To-do · 20 min')
-  await row.getByRole('checkbox').click({ force: true })
+  await row.locator('label').click()
+  await expect(row.getByRole('checkbox')).toBeChecked()
   await expect(row.getByText('Done', { exact: true })).toBeVisible()
   await row.getByRole('button', { name: 'Edit Buy lab notebook' }).click()
   await page.getByLabel('Title').fill('Buy two lab notebooks')

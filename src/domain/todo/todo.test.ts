@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_TODO_PREFS, buildTodoItems, dayLabel, filterTodoItems, isRealMonthDay, nearestMonthDay, parseTodoPrefs, rangeBounds, todoView, type TodoCard, type TodoPrefs, type TodoProblem, type TodoSource, type TodoTask } from './index'
+import { DEFAULT_TODO_PREFS, buildTodoItems, dayLabel, filterTodoItems, firstMonthDayOnOrAfter, isRealMonthDay, lastMonthDayOnOrBefore, parseTodoPrefs, rangeBounds, todoView, type TodoCard, type TodoPrefs, type TodoProblem, type TodoSource, type TodoTask } from './index'
 
 const TODAY = '2026-11-11' // a Wednesday
 const at = (day: number, h = 12) => new Date(2026, 10, day, h).getTime()
@@ -89,18 +89,35 @@ describe('rangeBounds', () => {
     expect(rangeBounds(prefs({ customFrom: { month: 11, day: 1 } }), TODAY)).toEqual({ from: '2026-11-01', to: TODAY })
   })
 
-  it('picks the occurrence nearest today for both ends', () => {
-    // From Dec 1 on Jan 5 is last December; Until Dec 20 is this coming one.
-    expect(rangeBounds(prefs({ customFrom: { month: 12, day: 1 }, customUntil: { month: 1, day: 20 } }), '2027-01-05')).toEqual({ from: '2026-12-01', to: '2027-01-20' })
-    expect(nearestMonthDay({ month: 1, day: 3 }, '2026-12-28')).toBe('2027-01-03')
-    expect(nearestMonthDay({ month: 2, day: 29 }, '2026-11-11')).toBeUndefined() // no leap year within a year of today
+  it('a custom From is the latest occurrence on or before today, an Until the first on or after the From', () => {
+    const range = (customFrom: TodoPrefs['customFrom'], customUntil: TodoPrefs['customUntil'], today = TODAY) => rangeBounds(prefs({ customFrom, customUntil }), today)
+    // The whole calendar year, and a school year that crosses New Year: never inverted.
+    expect(range({ month: 1, day: 1 }, { month: 12, day: 31 })).toEqual({ from: '2026-01-01', to: '2026-12-31' })
+    expect(range({ month: 9, day: 1 }, { month: 8, day: 31 })).toEqual({ from: '2026-09-01', to: '2027-08-31' })
+    // From Dec 1 on Jan 5 is last December.
+    expect(range({ month: 12, day: 1 }, { month: 1, day: 20 }, '2027-01-05')).toEqual({ from: '2026-12-01', to: '2027-01-20' })
+    // A From later in the year than today is last year's; an Until alone follows the preset From (today).
+    expect(range({ month: 12, day: 1 }, undefined).from).toBe('2025-12-01')
+    expect(range(undefined, { month: 11, day: 1 })).toEqual({ from: TODAY, to: '2027-11-01' })
+    expect(range(undefined, { month: 11, day: 11 })).toEqual({ from: TODAY, to: TODAY })
+    // After a preset From of 4 weeks ago.
+    expect(rangeBounds(prefs({ from: 'weeks4', customUntil: { month: 10, day: 1 } }), TODAY)).toEqual({ from: '2026-10-12', to: '2027-10-01' })
   })
 
-  it('an Until before the From gives an empty range, not a year-long one', () => {
-    const r = rangeBounds(prefs({ customUntil: { month: 11, day: 1 } }), TODAY)
-    expect(r).toEqual({ from: TODAY, to: '2026-11-01' })
-    expect(todoView([], r, TODAY)).toEqual({ overdue: [], days: [] })
-    expect(r.from > r.to).toBe(true)
+  it('never returns an inverted range', () => {
+    for (let m = 1; m <= 12; m++)
+      for (const d of [1, 15, 28]) for (let m2 = 1; m2 <= 12; m2++) {
+        const r = rangeBounds(prefs({ customFrom: { month: m, day: d }, customUntil: { month: m2, day: d } }), TODAY)
+        expect(r.from <= r.to).toBe(true)
+      }
+  })
+
+  it('29 Feb resolves to the nearest leap-year occurrence in its direction', () => {
+    const feb29 = { month: 2, day: 29 }
+    expect(lastMonthDayOnOrBefore(feb29, '2026-11-11')).toBe('2024-02-29')
+    expect(lastMonthDayOnOrBefore(feb29, '2028-02-29')).toBe('2028-02-29')
+    expect(firstMonthDayOnOrAfter(feb29, '2026-11-11')).toBe('2028-02-29')
+    expect(rangeBounds(prefs({ customFrom: { month: 11, day: 1 }, customUntil: feb29 }), TODAY)).toEqual({ from: '2026-11-01', to: '2028-02-29' })
   })
 
   it('ignores a date that does not exist', () => {

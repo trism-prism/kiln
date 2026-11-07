@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { openSeeded } from './seed'
+import { animationsDone, openSeeded } from './seed'
 
 // The seeded clock is Monday 9 Nov 2026, so the month grid for November has 9 Nov as "today".
 const cell = (page: Page, date: string) => page.locator(`[data-date="${date}"]`)
@@ -169,7 +169,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.keyboard.press('Enter')
       const panel = page.getByRole('dialog', { name: 'Mon, Nov 9, 2026' })
       await panel.getByRole('button', { name: /^Move to…/ }).first().click()
-      await page.waitForTimeout(800) // the dialog's entrance animation
+      await animationsDone(page)
       expect(await seriousViolations(page)).toEqual([])
     })
 

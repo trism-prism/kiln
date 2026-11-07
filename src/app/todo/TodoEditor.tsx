@@ -1,6 +1,6 @@
 // The form for a personal to-do: a title, an optional day and optional minutes. Used from the To Do
 // page and the calendar day panel, for adding and editing.
-import { useState, type FormEvent } from 'react'
+import { useId, useState, type FormEvent } from 'react'
 import { isRealISODate } from '../../lib/date'
 import { Button } from '../../ui/button'
 import { TextField } from '../../ui/form'
@@ -22,9 +22,10 @@ function Form({ edit, defaultDate, onClose }: { edit?: TodoEdit; defaultDate?: s
   const name = title.trim()
   const mins = minutes.trim() === '' ? undefined : Number(minutes)
   const titleError = name.length === 0 ? 'Enter a title.' : name.length > 300 ? 'Use 300 characters or fewer.' : ''
-  const minutesError = mins !== undefined && !(Number.isInteger(mins) && mins >= 0 && mins <= 1440) ? 'Enter whole minutes from 0 to 1440, or leave it empty.' : ''
+  const minutesError = mins !== undefined && !(/^\d+$/.test(minutes.trim()) && mins >= 0 && mins <= 1440) ? 'Enter whole minutes from 0 to 1440, or leave it empty.' : ''
   const dateError = date && !isRealISODate(date) ? 'Pick a real date, or leave it empty.' : ''
   const [shown, setShown] = useState(false)
+  const dateNote = useId()
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -48,9 +49,16 @@ function Form({ edit, defaultDate, onClose }: { edit?: TodoEdit; defaultDate?: s
           value={date}
           onChange={(e) => setDate(e.target.value)}
           aria-invalid={shown && !!dateError}
+          aria-describedby={dateNote}
           className="h-10 rounded-md border border-border-strong bg-surface-raised px-3 text-sm text-text"
         />
-        {shown && dateError ? <p className="text-sm text-danger">{dateError}</p> : <p className="text-sm text-text-muted">With no day, the to-do is listed under today and never overdue.</p>}
+        {shown && dateError ? (
+          <p id={dateNote} className="text-sm text-danger">
+            {dateError}
+          </p>
+        ) : (
+          <p id={dateNote} className="text-sm text-text-muted">With no day, the to-do is listed under today and never overdue.</p>
+        )}
       </div>
       <TextField
         label="Minutes (optional)"

@@ -8,7 +8,7 @@ import { Page } from '../Page'
 import { DifficultyBadge, LeetCodeLink, TitleLink, itemMeta } from '../parts'
 import { useToday, useTodoItems, useTodoPrefs } from '../queries'
 import { useCompleter, type Completable } from '../rating'
-import { setTodoDone } from '../actions'
+import { safely, setTodoDone } from '../actions'
 import { PersonalActions } from '../todo/PersonalActions'
 import { Preferences } from '../todo/Preferences'
 import { TodoEditor } from '../todo/TodoEditor'
@@ -124,8 +124,8 @@ export default function TodoPage() {
               ))}
             </div>
           )}
-          <Preferences prefs={prefs} onChange={(p) => void savePrefs(p)} isOpen={prefsOpen} onClose={() => setPrefsOpen(false)} />
-          <TodoEditor isOpen={adding} onClose={() => setAdding(false)} defaultDate={today} />
+          <Preferences prefs={prefs} onChange={(p) => void safely(() => savePrefs(p))} isOpen={prefsOpen} onClose={() => setPrefsOpen(false)} />
+          <TodoEditor isOpen={adding} onClose={() => setAdding(false)} />
         </div>
       )}
       {sheet}

@@ -130,8 +130,10 @@ export interface TodoFields {
 /** Adds a personal to-do, or changes the one with `id`. */
 export async function savePersonalTodo(fields: TodoFields, id?: string): Promise<boolean> {
   try {
-    if (id) await updateRecord(db, 'personalTodos', id, { title: fields.title, date: fields.date, minutes: fields.minutes })
-    else await insertRecord(db, 'personalTodos', { ...fields, done: false })
+    if (id) {
+      const saved = await updateRecord(db, 'personalTodos', id, { title: fields.title, date: fields.date, minutes: fields.minutes })
+      if (!saved) throw new Error('That to-do no longer exists.')
+    } else await insertRecord(db, 'personalTodos', { ...fields, done: false })
     await scheduleAll(db, today())
     return true
   } catch (e) {
@@ -164,7 +166,10 @@ export async function deletePersonalTodo(id: string, title: string): Promise<voi
           label: 'Undo',
           onPress: () =>
             void revertWrite(db, { restore: [['personalTodos', before, after.updatedAt]] })
-              .then(() => scheduleAll(db, today()))
+              .then(async (ok) => {
+                if (!ok) toasts.add({ title: 'Could not undo', description: 'It was changed after it was deleted.' }, { timeout: 6000 })
+                else await scheduleAll(db, today())
+              })
               .catch(fail),
         },
       },

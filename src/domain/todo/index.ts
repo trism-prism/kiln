@@ -75,31 +75,44 @@ const monthDayISO = (year: number, md: MonthDay) => {
   return isRealISODate(s) ? s : undefined
 }
 
-const dayNumber = (iso: string) => Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10))) / 86_400_000
-
-/** The occurrence of a month and day (last, this or next year) nearest `today`; undefined when the date does not exist in any of them (30 Feb). */
-export function nearestMonthDay(md: MonthDay, today: string): string | undefined {
-  const year = Number(today.slice(0, 4))
-  const days = [year - 1, year, year + 1].map((y) => monthDayISO(y, md)).filter((d): d is string => !!d)
-  return days.sort((a, b) => Math.abs(dayNumber(a) - dayNumber(today)) - Math.abs(dayNumber(b) - dayNumber(today)))[0]
+/** The latest occurrence of a month and day on or before `day`; undefined when it never exists (30 Feb). A 29 Feb looks back to the last leap year. */
+export function lastMonthDayOnOrBefore(md: MonthDay, day: string): string | undefined {
+  const year = Number(day.slice(0, 4))
+  for (let y = year; y >= year - 8; y--) {
+    const d = monthDayISO(y, md)
+    if (d && d <= day) return d
+  }
+  return undefined
 }
 
-/** True when a custom date is a real day of the calendar (31 Apr and 30 Feb are not). */
-export const isRealMonthDay = (md: MonthDay) => nearestMonthDay(md, '2024-06-15') !== undefined
+/** The first occurrence of a month and day on or after `day`; undefined when it never exists. A 29 Feb looks ahead to the next leap year. */
+export function firstMonthDayOnOrAfter(md: MonthDay, day: string): string | undefined {
+  const year = Number(day.slice(0, 4))
+  for (let y = year; y <= year + 8; y++) {
+    const d = monthDayISO(y, md)
+    if (d && d >= day) return d
+  }
+  return undefined
+}
+
+/** True when a custom date is a real day of the calendar (31 Apr and 30 Feb are not; 29 Feb is). */
+export const isRealMonthDay = (md: MonthDay) => firstMonthDayOnOrAfter(md, '2024-01-01') !== undefined
 
 /**
  * First and last day (inclusive) the list shows. Week anchors count from the first day of the week
  * (per the week-start setting): "4 weeks ago" is the first day of the week 4 weeks back, "Next week"
- * the last day of next week. A custom month and day means its occurrence nearest today (From Dec 1 on
- * Jan 5 is last December); a date that does not exist (30 Feb) is ignored. When Until falls before
- * From the range is empty (from > to): the page says so.
+ * the last day of next week. A custom From is its most recent occurrence on or before today. A custom
+ * Until is its first occurrence on or after the From (the custom one, or the preset's first day), so
+ * the range never inverts: Jan 1 to Dec 31 is this year, Sep 1 to Aug 31 runs into next year, and
+ * Dec 1 to Jan 20 seen in early January is last December to this January. A date that does not exist
+ * (30 Feb) is ignored.
  */
 export function rangeBounds(prefs: TodoPrefs, today: string, weekStartsOn: WeekStart = 'monday'): { from: string; to: string } {
   const ws = weekStartOf(today, weekStartsOn)
   const f = FROM_WEEKS[prefs.from]
   const u = UNTIL_WEEKS[prefs.until]
-  const from = (prefs.customFrom && nearestMonthDay(prefs.customFrom, today)) || (f === 'today' ? today : addDaysISO(ws, -7 * f))
-  const to = (prefs.customUntil && nearestMonthDay(prefs.customUntil, today)) || (u === 'today' ? today : addDaysISO(ws, 7 * u + 6))
+  const from = (prefs.customFrom && lastMonthDayOnOrBefore(prefs.customFrom, today)) || (f === 'today' ? today : addDaysISO(ws, -7 * f))
+  const to = (prefs.customUntil && firstMonthDayOnOrAfter(prefs.customUntil, from)) || (u === 'today' ? today : addDaysISO(ws, 7 * u + 6))
   return { from, to }
 }
 
