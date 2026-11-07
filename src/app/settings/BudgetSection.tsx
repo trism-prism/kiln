@@ -79,10 +79,12 @@ export function BlackoutSection({ settings, onChanged }: { settings: SettingsRec
           <h2 id="blackout-heading" className="text-base font-medium">Days off</h2>
           <p className="text-sm text-text-muted">Kiln schedules nothing on these dates.</p>
         </div>
-        <div className="flex items-end gap-3">
+        {/* Top-aligned so an error under the field doesn't push the button down; mt-6.5 is the label line plus the field gap. */}
+        <div className="flex items-start gap-3">
           <TextField label="Date" type="date" min={toLocalISODate(new Date())} value={date} onChange={setDate} onInvalidChange={setDateBad} />
           <Button
             variant="secondary"
+            className="mt-6.5"
             isDisabled={date === '' || dateBad || days.includes(date)}
             onPress={async () => {
               if (await set([...days, date])) setDate('')

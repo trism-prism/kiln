@@ -79,3 +79,15 @@ test('a date field reads typed dates, keeps a typo, and has a calendar', async (
   await expect(page.getByRole('list', { name: 'Days off' })).toContainText('2026-11-20')
   await expect(date).toHaveValue('')
 })
+
+test('the Add day off button lines up with the date box, with and without an error', async ({ page }) => {
+  await openSeeded(page, '/settings')
+  const date = page.getByRole('textbox', { name: 'Date', exact: true })
+  const add = page.getByRole('button', { name: 'Add day off' })
+  const offset = async () => (await add.boundingBox())!.y - (await date.boundingBox())!.y
+  expect(Math.abs(await offset())).toBeLessThanOrEqual(1)
+  await date.fill('soon')
+  await date.press('Tab')
+  await expect(page.getByText('Try a date like Nov 20')).toBeVisible()
+  expect(Math.abs(await offset())).toBeLessThanOrEqual(1)
+})
