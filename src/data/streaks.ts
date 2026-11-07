@@ -12,6 +12,7 @@ export async function studyEvents(db: KilnDB): Promise<StudyEvent[]> {
   for (const t of await db.tasks.toArray()) {
     if (!t.deleted && t.status === 'done' && t.completedAt) out.push({ at: t.completedAt, minutes: t.estimatedMinutes })
   }
+  // Finished daily problems count even if the plan's daily practice is later switched off: completed work stays history.
   for (const p of await db.practiceItems.toArray()) {
     if (!p.deleted && p.status === 'done' && p.completedAt) out.push({ at: p.completedAt, minutes: p.minutes })
   }

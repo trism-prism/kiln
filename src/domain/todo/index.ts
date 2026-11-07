@@ -1,16 +1,132 @@
-// The To Do list: turns tasks, generated daily problems and due reviews into dated items, then
-// cuts them into a range and groups them by day. Pure; the data layer feeds it.
-import { addDaysISO } from '../../lib/date'
+// The To Do list: turns tasks, generated daily problems, due reviews, personal to-dos and events into
+// dated items, then filters them by the list preferences, cuts them into a range and groups them by
+// day. Pure; the data layer feeds it.
+import { addDaysISO, isRealISODate } from '../../lib/date'
+import { weekStartOf, type WeekStart } from '../calendar'
 import { cardMinutes, localDate, type ReviewableTask } from '../mastery'
+import { DEFAULT_PRACTICE_LANGUAGE } from '../plan-format'
 
-export type TodoRange = 'today' | 'next7' | 'next28' | 'past7' | 'past28'
-export const TODO_RANGES: { id: TodoRange; label: string; empty: string }[] = [
-  { id: 'today', label: 'Today', empty: 'Nothing due today' },
-  { id: 'next7', label: 'Next 7', empty: 'Nothing due in the next 7 days' },
-  { id: 'next28', label: 'Next 28', empty: 'Nothing due in the next 28 days' },
-  { id: 'past7', label: 'Past 7', empty: 'Nothing was due in the past 7 days' },
-  { id: 'past28', label: 'Past 28', empty: 'Nothing was due in the past 28 days' },
+export type FromAnchor = 'weeks4' | 'weeks3' | 'weeks2' | 'lastWeek' | 'thisWeek' | 'today'
+export type UntilAnchor = 'today' | 'thisWeek' | 'nextWeek' | 'weeks2' | 'weeks3' | 'weeks4'
+export interface MonthDay {
+  month: number
+  day: number
+}
+/** Per-device choices for the To Do list (kept in meta). */
+export interface TodoPrefs {
+  personal: boolean
+  events: boolean
+  completed: boolean
+  favoriteOnly: boolean
+  from: FromAnchor
+  until: UntilAnchor
+  /** When set, replaces the radio choice. */
+  customFrom?: MonthDay
+  customUntil?: MonthDay
+}
+export const DEFAULT_TODO_PREFS: TodoPrefs = { personal: true, events: true, completed: true, favoriteOnly: false, from: 'today', until: 'today' }
+export const FROM_OPTIONS: { id: FromAnchor; label: string }[] = [
+  { id: 'weeks4', label: '4 weeks ago' },
+  { id: 'weeks3', label: '3 weeks ago' },
+  { id: 'weeks2', label: '2 weeks ago' },
+  { id: 'lastWeek', label: 'Last week' },
+  { id: 'thisWeek', label: 'This week' },
+  { id: 'today', label: 'Today' },
 ]
+export const UNTIL_OPTIONS: { id: UntilAnchor; label: string }[] = [
+  { id: 'today', label: 'Today' },
+  { id: 'thisWeek', label: 'This week' },
+  { id: 'nextWeek', label: 'Next week' },
+  { id: 'weeks2', label: 'In 2 weeks' },
+  { id: 'weeks3', label: 'In 3 weeks' },
+  { id: 'weeks4', label: 'In 4 weeks' },
+]
+const FROM_WEEKS: Record<FromAnchor, number | 'today'> = { weeks4: 4, weeks3: 3, weeks2: 2, lastWeek: 1, thisWeek: 0, today: 'today' }
+const UNTIL_WEEKS: Record<UntilAnchor, number | 'today'> = { today: 'today', thisWeek: 0, nextWeek: 1, weeks2: 2, weeks3: 3, weeks4: 4 }
+
+/** Reads stored preferences, falling back to the default for anything missing or malformed. */
+export function parseTodoPrefs(raw: string | undefined): TodoPrefs {
+  let o: Record<string, unknown> = {}
+  try {
+    const v: unknown = raw ? JSON.parse(raw) : {}
+    if (v && typeof v === 'object') o = v as Record<string, unknown>
+  } catch {
+    // damaged value: use the defaults
+  }
+  const d = DEFAULT_TODO_PREFS
+  const bool = (k: 'personal' | 'events' | 'completed' | 'favoriteOnly') => (typeof o[k] === 'boolean' ? (o[k] as boolean) : d[k])
+  const md = (v: unknown): MonthDay | undefined => {
+    const m = v as MonthDay | null | undefined
+    return m && Number.isInteger(m.month) && Number.isInteger(m.day) && m.month >= 1 && m.month <= 12 && m.day >= 1 && m.day <= 31 ? { month: m.month, day: m.day } : undefined
+  }
+  return {
+    personal: bool('personal'),
+    events: bool('events'),
+    completed: bool('completed'),
+    favoriteOnly: bool('favoriteOnly'),
+    from: FROM_OPTIONS.some((x) => x.id === o.from) ? (o.from as FromAnchor) : d.from,
+    until: UNTIL_OPTIONS.some((x) => x.id === o.until) ? (o.until as UntilAnchor) : d.until,
+    customFrom: md(o.customFrom),
+    customUntil: md(o.customUntil),
+  }
+}
+
+const monthDayISO = (year: number, md: MonthDay) => {
+  const s = `${year}-${String(md.month).padStart(2, '0')}-${String(md.day).padStart(2, '0')}`
+  return isRealISODate(s) ? s : undefined
+}
+
+/** The latest occurrence of a month and day on or before `day`; undefined when it never exists (30 Feb). A 29 Feb looks back to the last leap year. */
+export function lastMonthDayOnOrBefore(md: MonthDay, day: string): string | undefined {
+  const year = Number(day.slice(0, 4))
+  for (let y = year; y >= year - 8; y--) {
+    const d = monthDayISO(y, md)
+    if (d && d <= day) return d
+  }
+  return undefined
+}
+
+/** The first occurrence of a month and day on or after `day`; undefined when it never exists. A 29 Feb looks ahead to the next leap year. */
+export function firstMonthDayOnOrAfter(md: MonthDay, day: string): string | undefined {
+  const year = Number(day.slice(0, 4))
+  for (let y = year; y <= year + 8; y++) {
+    const d = monthDayISO(y, md)
+    if (d && d >= day) return d
+  }
+  return undefined
+}
+
+/** True when a custom date is a real day of the calendar (31 Apr and 30 Feb are not; 29 Feb is). */
+export const isRealMonthDay = (md: MonthDay) => firstMonthDayOnOrAfter(md, '2024-01-01') !== undefined
+
+/**
+ * First and last day (inclusive) the list shows. Week anchors count from the first day of the week
+ * (per the week-start setting): "4 weeks ago" is the first day of the week 4 weeks back, "Next week"
+ * the last day of next week. A custom From is its most recent occurrence on or before today. A custom
+ * Until is its first occurrence on or after the From (the custom one, or the preset's first day), so
+ * the range never inverts: Jan 1 to Dec 31 is this year, Sep 1 to Aug 31 runs into next year, and
+ * Dec 1 to Jan 20 seen in early January is last December to this January. A date that does not exist
+ * (30 Feb) is ignored.
+ */
+export function rangeBounds(prefs: TodoPrefs, today: string, weekStartsOn: WeekStart = 'monday'): { from: string; to: string } {
+  const ws = weekStartOf(today, weekStartsOn)
+  const f = FROM_WEEKS[prefs.from]
+  const u = UNTIL_WEEKS[prefs.until]
+  const from = (prefs.customFrom && lastMonthDayOnOrBefore(prefs.customFrom, today)) || (f === 'today' ? today : addDaysISO(ws, -7 * f))
+  const to = (prefs.customUntil && firstMonthDayOnOrAfter(prefs.customUntil, from)) || (u === 'today' ? today : addDaysISO(ws, 7 * u + 6))
+  return { from, to }
+}
+
+/** Drops what the visible-items choices hide. With "Favorite plans only", items of a plan that is not a favorite go (personal to-dos and events stay). */
+export function filterTodoItems(items: TodoItem[], prefs: TodoPrefs, favoritePlans: ReadonlySet<string>): TodoItem[] {
+  return items.filter(
+    (i) =>
+      (prefs.personal || i.kind !== 'personal') &&
+      (prefs.events || i.kind !== 'event') &&
+      (prefs.completed || !i.done) &&
+      (!prefs.favoriteOnly || !i.planId || favoritePlans.has(i.planId)),
+  )
+}
 
 export interface TodoTask extends ReviewableTask {
   id: string
@@ -45,50 +161,65 @@ export interface TodoCard {
 export interface TodoItem {
   /** Unique in the list. */
   key: string
-  kind: 'task' | 'practice' | 'review'
-  /** Id of the task, generated problem or review card. */
+  kind: 'task' | 'practice' | 'review' | 'personal' | 'event'
+  /** Id of the task, generated problem, review card, personal to-do or event. */
   id: string
   title: string
+  /** Empty for personal to-dos and events. */
   planId: string
+  /** The course, for an event. */
   planTitle: string
   /** Day the item is listed under. */
   date: string
-  /** Lesson, practice, review, project, assessment, milestone, or "daily problem". */
+  /** Lesson, practice, review, project, assessment, milestone, "daily problem", "To-do" or "Event". */
   typeLabel: string
   minutes: number
   done: boolean
   /** Open and dated before today. */
   overdue: boolean
-  leetcode?: { slug: string; difficulty: 'easy' | 'medium' | 'hard' }
+  leetcode?: { slug: string; difficulty: 'easy' | 'medium' | 'hard'; language: string }
   /** In-app page of the item, when it has one. */
   href?: string
   /** Completing it asks for a rating (it gets or has a review card). */
   rates: boolean
+  /** Personal to-dos only: the stored date and minutes (both optional), for the edit form. */
+  todo?: { date?: string; minutes?: number }
 }
 
-const KIND_RANK = { review: 0, task: 1, practice: 2 }
+const KIND_RANK = { event: 0, review: 1, task: 2, personal: 3, practice: 4 }
 
 export interface TodoSource {
   tasks: (TodoTask & { practice?: { provider: string; slug?: string; difficulty: 'easy' | 'medium' | 'hard' } })[]
   problems: TodoProblem[]
   /** Live review cards (not suspended). */
   cards: TodoCard[]
+  personalTodos?: { id: string; title: string; date?: string; minutes?: number; done: boolean; completedAt?: number }[]
+  events?: { id: string; title: string; date: string; course?: string; allDay: boolean; start?: number }[]
   planTitles: ReadonlyMap<string, string>
+  /**
+   * Plans whose daily practice setting is on, with the language for "Solve in <language>". Generated daily
+   * problems of any other plan are left out (switching the setting off hides them); LeetCode tasks written
+   * into a plan always show, in `planLanguages`' language.
+   */
+  practiceLanguages: ReadonlyMap<string, string>
+  /** The language of every plan, on or off, for the Solve link of a LeetCode task written into the plan. */
+  planLanguages: ReadonlyMap<string, string>
   /** Title shown after "Review:" for a card. */
   cardTitle: (c: TodoCard) => string
 }
 
 /**
- * Every item that has a day: scheduled tasks (open or done, not skipped), generated problems, and
- * reviews. A review due today or earlier is listed today (like the badge counts it); a later one on
- * its due day. Reviews are never overdue.
+ * Every item that has a day: scheduled tasks (open or done, not skipped), generated problems,
+ * reviews, personal to-dos and events. A review due today or earlier is listed today (like the badge
+ * counts it); a later one on its due day. Reviews are never overdue. An undated to-do is listed today
+ * (never overdue), and once done on the day it was finished. Events are listed on their first day.
  */
 export function buildTodoItems(src: TodoSource, today: string): TodoItem[] {
   const planTitle = (id: string) => src.planTitles.get(id) ?? ''
   const items: (TodoItem & { sort: number })[] = []
   for (const t of src.tasks) {
     if (t.status === 'skipped' || !t.scheduledDate) continue
-    const lc = t.practice?.provider === 'leetcode' && t.practice.slug ? { slug: t.practice.slug, difficulty: t.practice.difficulty } : undefined
+    const lc = t.practice?.provider === 'leetcode' && t.practice.slug ? { slug: t.practice.slug, difficulty: t.practice.difficulty, language: src.planLanguages.get(t.planId) ?? DEFAULT_PRACTICE_LANGUAGE } : undefined
     items.push({
       key: `task:${t.id}`,
       kind: 'task',
@@ -108,6 +239,8 @@ export function buildTodoItems(src: TodoSource, today: string): TodoItem[] {
     })
   }
   for (const p of src.problems) {
+    const language = src.practiceLanguages.get(p.planId)
+    if (language === undefined) continue
     items.push({
       key: `practice:${p.id}`,
       kind: 'practice',
@@ -120,7 +253,7 @@ export function buildTodoItems(src: TodoSource, today: string): TodoItem[] {
       minutes: p.minutes,
       done: p.status === 'done',
       overdue: p.status === 'open' && p.date < today,
-      leetcode: { slug: p.slug, difficulty: p.difficulty },
+      leetcode: { slug: p.slug, difficulty: p.difficulty, language },
       rates: true,
       sort: 0,
     })
@@ -144,28 +277,48 @@ export function buildTodoItems(src: TodoSource, today: string): TodoItem[] {
       sort: c.due,
     })
   }
+  for (const t of src.personalTodos ?? []) {
+    items.push({
+      key: `personal:${t.id}`,
+      kind: 'personal',
+      id: t.id,
+      title: t.title,
+      planId: '',
+      planTitle: '',
+      date: t.date ?? (t.done && t.completedAt ? localDate(t.completedAt) : today),
+      typeLabel: 'To-do',
+      minutes: t.minutes ?? 0,
+      done: t.done,
+      overdue: !t.done && !!t.date && t.date < today,
+      rates: false,
+      todo: { date: t.date, minutes: t.minutes },
+      sort: 0,
+    })
+  }
+  for (const e of src.events ?? []) {
+    const time = !e.allDay && e.start ? new Date(e.start).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''
+    items.push({
+      key: `event:${e.id}`,
+      kind: 'event',
+      id: e.id,
+      title: e.title,
+      planId: '',
+      planTitle: e.course ?? '',
+      date: e.date,
+      typeLabel: time ? `Event, ${time}` : 'Event',
+      minutes: 0,
+      done: false,
+      overdue: false,
+      rates: false,
+      sort: e.start ?? 0,
+    })
+  }
   return items
     .sort((a, b) => KIND_RANK[a.kind] - KIND_RANK[b.kind] || a.planTitle.localeCompare(b.planTitle) || a.sort - b.sort || a.title.localeCompare(b.title))
     .map(({ sort: _sort, ...item }) => {
       void _sort
       return item
     })
-}
-
-/** First and last day (inclusive) a range lists. */
-export function rangeBounds(range: TodoRange, today: string): { from: string; to: string } {
-  switch (range) {
-    case 'today':
-      return { from: today, to: today }
-    case 'next7':
-      return { from: today, to: addDaysISO(today, 6) }
-    case 'next28':
-      return { from: today, to: addDaysISO(today, 27) }
-    case 'past7':
-      return { from: addDaysISO(today, -7), to: addDaysISO(today, -1) }
-    case 'past28':
-      return { from: addDaysISO(today, -28), to: addDaysISO(today, -1) }
-  }
 }
 
 export interface TodoDay {
@@ -178,9 +331,9 @@ export interface TodoDay {
 }
 
 export interface TodoView {
-  /** Open items dated before today, oldest first. Only for the forward ranges. */
+  /** Open items dated before today, oldest first. Only when the range includes today. */
   overdue: TodoItem[]
-  /** Days with something on them: ascending for forward ranges, newest first for past ones. */
+  /** Days with something on them, oldest first. */
   days: TodoDay[]
 }
 
@@ -199,14 +352,12 @@ export function dayLabel(date: string, today: string): { label: string; dateText
 }
 
 /**
- * The list for a range. Forward ranges pin every open overdue item (any age) in `overdue` and list
- * the rest from today; past ranges list what was dated in the window (done and still open), newest
- * day first, with no pinned section.
+ * The list for a range of days. When the range includes today, every open overdue item (any age) is
+ * pinned in `overdue` and the rest are listed by day; otherwise there is no pinned section.
  */
-export function todoView(items: TodoItem[], range: TodoRange, today: string): TodoView {
-  const { from, to } = rangeBounds(range, today)
-  const past = range === 'past7' || range === 'past28'
-  const overdue = past ? [] : items.filter((i) => i.overdue).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+export function todoView(items: TodoItem[], bounds: { from: string; to: string }, today: string): TodoView {
+  const { from, to } = bounds
+  const overdue = from <= today && today <= to ? items.filter((i) => i.overdue).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)) : []
   const pinned = new Set(overdue.map((i) => i.key))
   const byDay = new Map<string, TodoItem[]>()
   for (const i of items) {
@@ -214,6 +365,5 @@ export function todoView(items: TodoItem[], range: TodoRange, today: string): To
     byDay.set(i.date, [...(byDay.get(i.date) ?? []), i])
   }
   const dates = [...byDay.keys()].sort()
-  if (past) dates.reverse()
   return { overdue, days: dates.map((date) => ({ date, ...dayLabel(date, today), items: byDay.get(date)! })) }
 }

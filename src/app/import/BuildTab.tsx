@@ -1,128 +1,186 @@
-// Manual builder: a form that produces a plan object, then the same review and import as a pasted plan.
-import { useState } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
-import { CheckboxGroup, Input, Label, Text, TextField as AriaTextField } from 'react-aria-components'
-import { NEETCODE_POOL } from '../../domain/practice'
+// Quick add: type tasks one per line, fix them in the preview table, then the same review and import
+// as a pasted plan.
+import { useMemo, useState } from 'react'
+import { toLocalISODate } from '../../lib/date'
 import { PRIORITY_HINT, PRIORITY_LABEL } from '../priority'
-import { PRIORITY_VALUES, TYPE_VALUES } from './builder-options'
+import { PRIORITY_VALUES, TYPE_OPTIONS } from './builder-options'
 import { Button } from '../../ui/button'
-import { Checkbox, ListBoxItem, Select, TextField } from '../../ui/form'
-import { Card } from '../../ui/surface'
-import { emptyDraft, emptyModule, emptyTask, type Draft, type DraftModule, type DraftTask } from './builder'
+import { TextField } from '../../ui/form'
+import type { Draft, DraftTask } from './builder'
 import type { Input as ReviewInput } from './logic'
+import { dropPastDue, MAX_REPEAT, parseQuickAdd } from './quick-add'
 import { Review } from './Review'
 
-const control =
-  'h-10 rounded-md border border-border-strong bg-surface-raised px-3 text-sm text-text placeholder:text-text-muted data-focused:border-focus'
+const cell = 'h-9 w-full rounded-md border border-border-strong bg-surface-raised px-2 text-sm text-text'
+const EXAMPLE = '# Week {n}\nRead chapter {n} 45m\nWatch the lecture https://youtube.com/...\nPractice set {n} 1h fri\nExtra reading ?'
 
 export function BuildTab() {
-  const [draft, setDraft] = useState<Draft>(emptyDraft)
-  // The snapshot being reviewed: changes to the form do not touch it until "Review plan" is pressed again.
+  const today = toLocalISODate(new Date())
+  const [title, setTitle] = useState('')
+  const [text, setText] = useState('')
+  const [repeat, setRepeat] = useState('1')
+  // Fixes made in the table, by row uid; they stay while the row's line is unchanged.
+  const [edits, setEdits] = useState<Record<string, Partial<DraftTask>>>({})
+  // The snapshot being reviewed: changes do not touch it until "Review plan" is pressed again.
   const [reviewed, setReviewed] = useState<{ input: ReviewInput; n: number }>()
 
-  const setModule = (mi: number, patch: Partial<DraftModule>) =>
-    setDraft((d) => ({ ...d, modules: d.modules.map((m, i) => (i === mi ? { ...m, ...patch } : m)) }))
-  const setTask = (mi: number, ti: number, patch: Partial<DraftTask>) =>
-    setDraft((d) => ({
-      ...d,
-      modules: d.modules.map((m, i) => (i === mi ? { ...m, tasks: m.tasks.map((t, j) => (j === ti ? { ...t, ...patch } : t)) } : m)),
-    }))
-  const all = draft.modules.flatMap((m) => m.tasks)
-  const numbers = new Map(draft.modules.flatMap((m, mi) => m.tasks.map((t, ti) => [t.uid, `${mi + 1}.${ti + 1}`] as const)))
+  const times = Math.min(Math.max(Number.parseInt(repeat, 10) || 1, 1), MAX_REPEAT)
+  const [droppedEdits, setDroppedEdits] = useState(0)
+  const parsed = useMemo(() => parseQuickAdd(text, today, times), [text, today, times])
+  // Past dates are cleared after the table edits apply, so a date typed in the table is checked too.
+  const { modules, dropped: pastDates } = useMemo(
+    () => dropPastDue(parsed.map((m) => ({ ...m, tasks: m.tasks.map((t) => ({ ...t, ...edits[t.uid] })) })), today),
+    [parsed, today, edits],
+  )
+  const taskCount = modules.reduce((n, m) => n + m.tasks.length, 0)
+  // Edits belong to a line's text. When the text changes, edits whose line is gone are dropped, so
+  // an old fix does not come back when the line is typed again.
+  function change(nextText: string, nextTimes: number) {
+    const live = new Set(parseQuickAdd(nextText, today, nextTimes).flatMap((m) => m.tasks.map((t) => t.uid)))
+    const gone = Object.keys(edits).filter((uid) => !live.has(uid))
+    if (gone.length > 0) {
+      setEdits((e) => Object.fromEntries(Object.entries(e).filter(([uid]) => live.has(uid))))
+      setDroppedEdits(gone.length)
+    } else setDroppedEdits(0)
+  }
+  const draft: Draft = { title, modules }
+  const edit = (uid: string, patch: Partial<DraftTask>) => setEdits((e) => ({ ...e, [uid]: { ...e[uid], ...patch } }))
+  let row = 0
 
   return (
-    <div className="grid gap-6">
-      <p className="text-sm text-text-muted">
-        Build a plan without an AI chat: name it, add modules (chapters or weeks), and add tasks. Kiln checks it like any imported plan.
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
+      <p className="text-sm text-text-muted">Make a plan for any subject: type one task per line, check the preview, and import it.</p>
+      <TextField label="Plan title" value={title} onChange={setTitle} className="max-w-xl" />
+      <div className="grid gap-1.5 text-sm">
+        <label htmlFor="quick-add" className="font-medium">
+          Tasks, one per line
+        </label>
+        <textarea
+          id="quick-add"
+          aria-describedby="quick-add-help"
+          value={text}
+          onChange={(e) => {
+            change(e.target.value, times)
+            setText(e.target.value)
+          }}
+          rows={10}
+          spellCheck={false}
+          placeholder={EXAMPLE}
+          className="min-h-40 w-full rounded-md border border-border-strong bg-surface-raised p-3 font-mono text-sm text-text placeholder:text-text-muted"
+        />
+        <p id="quick-add-help" className="text-text-muted">
+          A line starting with # starts a module. On a task line, add a time (45m, 1h30m), a due day (today, tomorrow, fri, nov 20), ! for Essential or ? for
+          Optional, and any links. Defaults: 30 min, Essential.
+        </p>
+      </div>
+      <TextField
+        label="Repeat ×N"
+        inputMode="numeric"
+        value={repeat}
+        onChange={(v) => {
+          change(text, Math.min(Math.max(Number.parseInt(v, 10) || 1, 1), MAX_REPEAT))
+          setRepeat(v)
+        }}
+        className="max-w-48"
+        description="1 to 52. Copies the list N times; {n} becomes 1, 2, 3..."
+      />
+
+      <p role="status" className="text-sm text-text-muted">
+        {taskCount === 0 ? '' : `${taskCount} ${taskCount === 1 ? 'task' : 'tasks'} in ${modules.length} ${modules.length === 1 ? 'module' : 'modules'}`}
       </p>
-      <TextField label="Plan title" value={draft.title} onChange={(title) => setDraft((d) => ({ ...d, title }))} className="max-w-xl" />
+      {droppedEdits > 0 && (
+        <p className="text-sm text-warning">
+          {droppedEdits} table {droppedEdits === 1 ? 'edit was' : 'edits were'} dropped because {droppedEdits === 1 ? 'its line' : 'their lines'} changed.
+        </p>
+      )}
+      {pastDates > 0 && (
+        <p className="text-sm text-warning">
+          {pastDates} due {pastDates === 1 ? 'date is' : 'dates are'} in the past and {pastDates === 1 ? 'was' : 'were'} cleared. Pick a date from today on to keep one.
+        </p>
+      )}
 
-      <datalist id="neetcode-slugs">
-        {NEETCODE_POOL.map((p) => (
-          <option key={p.slug} value={p.slug}>
-            {p.title}
-          </option>
-        ))}
-      </datalist>
+      {modules.length > 0 && (
+        <div className="grid gap-2">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[44rem] border-collapse text-sm">
+              <caption className="pb-2 text-left font-medium">Preview: fix anything here</caption>
+              <thead className="text-left text-text-muted">
+                <tr>
+                  <th scope="col" className="p-1 font-medium">Title</th>
+                  <th scope="col" className="w-32 p-1 font-medium">Type</th>
+                  <th scope="col" className="w-20 p-1 font-medium">Minutes</th>
+                  <th scope="col" className="w-40 p-1 font-medium">Due</th>
+                  <th scope="col" className="w-36 p-1 font-medium">Priority</th>
+                  <th scope="col" className="p-1 font-medium">Links</th>
+                </tr>
+              </thead>
+              {modules.map((m) => (
+                <tbody key={m.uid}>
+                  <tr>
+                    <th colSpan={6} scope="rowgroup" className="p-1 pt-3 text-left font-semibold">
+                      {m.title}
+                    </th>
+                  </tr>
+                  {m.tasks.map((t) => {
+                    const n = ++row
+                    return (
+                      <tr key={t.uid}>
+                        <td className="p-1">
+                          <input aria-label={`Task ${n} title`} value={t.title} onChange={(e) => edit(t.uid, { title: e.target.value })} className={cell} />
+                        </td>
+                        <td className="p-1">
+                          <select aria-label={`Task ${n} type`} value={t.type} onChange={(e) => edit(t.uid, { type: e.target.value as DraftTask['type'] })} className={cell}>
+                            {TYPE_OPTIONS.map(([v, label]) => (
+                              <option key={v} value={v}>
+                                {label}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="p-1">
+                          <input aria-label={`Task ${n} minutes`} inputMode="numeric" value={t.minutes} onChange={(e) => edit(t.uid, { minutes: e.target.value })} className={cell} />
+                        </td>
+                        <td className="p-1">
+                          <input aria-label={`Task ${n} due`} type="date" value={t.due} onChange={(e) => edit(t.uid, { due: e.target.value })} className={cell} />
+                        </td>
+                        <td className="p-1">
+                          <select aria-label={`Task ${n} priority`} value={t.priority} onChange={(e) => edit(t.uid, { priority: e.target.value as DraftTask['priority'] })} className={cell}>
+                            {PRIORITY_VALUES.map((v) => (
+                              <option key={v} value={v}>
+                                {PRIORITY_LABEL[v]}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="p-1">
+                          <input aria-label={`Task ${n} links`} value={t.links} onChange={(e) => edit(t.uid, { links: e.target.value })} spellCheck={false} className={cell} />
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              ))}
+            </table>
+          </div>
+          <ul className="text-sm text-text-muted">
+            {PRIORITY_VALUES.map((v) => (
+              <li key={v}>
+                {PRIORITY_LABEL[v]}: {PRIORITY_HINT[v]}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
-      {draft.modules.map((m, mi) => (
-        <Card key={m.uid} className="grid gap-4">
-          <section aria-label={`Module ${mi + 1}`} className="grid gap-4">
-            <div className="flex items-end gap-3">
-              <TextField label={`Module ${mi + 1} title`} value={m.title} onChange={(title) => setModule(mi, { title })} className="flex-1" />
-              {draft.modules.length > 1 && (
-                <Button variant="secondary" aria-label={`Remove module ${mi + 1}`} onPress={() => setDraft((d) => ({ ...d, modules: d.modules.filter((_, i) => i !== mi) }))}>
-                  <Trash2 /> Remove
-                </Button>
-              )}
-            </div>
-            {m.tasks.map((t, ti) => {
-              const others = all.filter((o) => o.uid !== t.uid)
-              const n = `${mi + 1}.${ti + 1}`
-              return (
-                <fieldset key={t.uid} className="grid gap-4 rounded-md border border-border p-4">
-                  <legend className="px-1 text-sm font-medium">Task {n}</legend>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <TextField label="Title" value={t.title} onChange={(title) => setTask(mi, ti, { title })} className="md:col-span-2" />
-                    <Select label="Type" selectedKey={t.type} onSelectionChange={(k) => setTask(mi, ti, { type: k as DraftTask['type'] })}>
-                      {TYPE_VALUES.map((v) => (
-                        <ListBoxItem key={v} id={v}>
-                          {v}
-                        </ListBoxItem>
-                      ))}
-                    </Select>
-                    <TextField label="Minutes" inputMode="numeric" value={t.minutes} onChange={(minutes) => setTask(mi, ti, { minutes })} description="5 to 90 for most tasks; 0 for a milestone" />
-                    <Select label="Priority" description={PRIORITY_HINT[t.priority]} selectedKey={t.priority} onSelectionChange={(k) => setTask(mi, ti, { priority: k as DraftTask['priority'] })}>
-                      {PRIORITY_VALUES.map((v) => (
-                        <ListBoxItem key={v} id={v}>
-                          {PRIORITY_LABEL[v]}
-                        </ListBoxItem>
-                      ))}
-                    </Select>
-                    <TextField label="Topics" value={t.topics} onChange={(topics) => setTask(mi, ti, { topics })} description="Separated by commas, e.g. arrays, hash maps" />
-                    <AriaTextField value={t.slug} onChange={(slug) => setTask(mi, ti, { slug })} className="grid gap-1.5 text-sm">
-                      <Label className="font-medium">LeetCode problem (optional)</Label>
-                      <Input list="neetcode-slugs" autoComplete="off" spellCheck={false} placeholder="two-sum" className={control} />
-                      <Text slot="description" className="text-sm text-text-muted">Start typing a problem name or its slug</Text>
-                    </AriaTextField>
-                    <TextField label="Pin to a date (optional)" type="date" value={t.pinned} onChange={(pinned) => setTask(mi, ti, { pinned })} description="Kiln keeps the task on this day" />
-                  </div>
-                  {others.length > 0 && (
-                    <details>
-                      <summary className="cursor-default text-sm font-medium">Depends on ({t.dependsOn.length})</summary>
-                      <CheckboxGroup aria-label={`Task ${n} depends on`} value={t.dependsOn} onChange={(dependsOn) => setTask(mi, ti, { dependsOn })} className="mt-3 grid gap-2">
-                        {others.map((o) => (
-                          <Checkbox key={o.uid} value={o.uid}>
-                            {o.title.trim() || `Task ${numbers.get(o.uid)} (untitled)`}
-                          </Checkbox>
-                        ))}
-                      </CheckboxGroup>
-                    </details>
-                  )}
-                  {m.tasks.length > 1 && (
-                    <div>
-                      <Button variant="quiet" aria-label={`Remove task ${n}`} onPress={() => setModule(mi, { tasks: m.tasks.filter((_, j) => j !== ti) })}>
-                        <Trash2 /> Remove task
-                      </Button>
-                    </div>
-                  )}
-                </fieldset>
-              )
-            })}
-            <div>
-              <Button variant="secondary" onPress={() => setModule(mi, { tasks: [...m.tasks, emptyTask()] })}>
-                <Plus /> Add task to module {mi + 1}
-              </Button>
-            </div>
-          </section>
-        </Card>
-      ))}
-
-      <div className="flex flex-wrap gap-3">
-        <Button variant="secondary" onPress={() => setDraft((d) => ({ ...d, modules: [...d.modules, emptyModule()] }))}>
-          <Plus /> Add module
+      <div>
+        <Button isDisabled={modules.length === 0} aria-describedby={modules.length === 0 ? 'review-reason' : undefined} onPress={() => setReviewed((r) => ({ input: { kind: 'build', draft: structuredClone(draft) }, n: (r?.n ?? 0) + 1 }))}>
+          Review plan
         </Button>
-        <Button onPress={() => setReviewed((r) => ({ input: { kind: 'build', draft: structuredClone(draft) }, n: (r?.n ?? 0) + 1 }))}>Review plan</Button>
+        {modules.length === 0 && (
+          <p id="review-reason" className="mt-2 text-sm text-text-muted">
+            Type at least one task above to review the plan.
+          </p>
+        )}
       </div>
 
       {reviewed && <Review key={reviewed.n} input={reviewed.input} />}

@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { exportBackup, importBackup } from './backup'
 import { KilnDB } from './db'
 import { fixtureTexts, validateParts } from './fixtures'
-import { planWeight, practiceConfig } from './plan-settings'
+import { planWeight, practiceConfig, practiceLanguage } from './plan-settings'
 import {
   eventsBetween,
   getPlan,
@@ -26,6 +26,8 @@ import { listPlanVersions, MAX_VERSIONS, planFromRecords, readSnapshot, snapshot
 
 const TODAY = '2026-11-09' // a Monday
 const sd = () => validateParts([fixtureTexts.sd]).plans[0]!
+
+const dp0 = { source: 'plan' as const, perDay: 1, startDifficulty: 'easy' as const, topicFollowsLessons: true }
 
 describe('migration to version 4', () => {
   it('keeps version 3 data and maps plan weight to share (1-2 less, 3 even, 4-5 more)', async () => {
@@ -85,6 +87,12 @@ describe('plan settings', () => {
     expect(practiceConfig({ dailyPractice: dp, dailyPracticeOn: false })).toBeUndefined()
     expect(practiceConfig({})).toBeUndefined()
     expect(practiceConfig({ dailyPracticeOn: true })).toMatchObject({ source: 'neetcode', perDay: 1 })
+  })
+
+  it('practiceLanguage names the language of the plan, Python when none', () => {
+    expect(practiceLanguage({})).toBe('Python')
+    expect(practiceLanguage({ dailyPractice: { ...dp0, language: 'javascript' } })).toBe('JavaScript')
+    expect(practiceLanguage({ dailyPractice: { ...dp0, language: 'rust' } })).toBe('Rust')
   })
 })
 
@@ -199,7 +207,9 @@ describe('backup', () => {
     const result = await importBackup(b, await exportBackup(a))
     for (const t of ['personalTodos', 'events', 'planVersions', 'feeds'] as const) {
       expect(result[t]).toMatchObject({ added: 1 })
-      expect(await b.table(t).toArray()).toEqual(await a.table(t).toArray())
+      const stored = await a.table(t).toArray()
+      // A backup leaves the feed link out; the restored feed asks for it again.
+      expect(await b.table(t).toArray()).toEqual(t === 'feeds' ? stored.map((f) => ({ ...f, url: '', needsLink: true })) : stored)
     }
     expect(await b.plans.get(planId)).toEqual(await a.plans.get(planId))
   })
@@ -207,6 +217,8 @@ describe('backup', () => {
   it('rejects a feed that is not https', async () => {
     const a = newDb()
     await insertRecord(a, 'feeds', { lms: 'other', url: 'http://example.com/cal.ics', planIds: [] })
-    await expect(importBackup(newDb(), await exportBackup(a))).rejects.toThrow(/feeds/)
+    const doc = JSON.parse(await exportBackup(a))
+    doc.tables.feeds[0].url = 'http://example.com/cal.ics' // a hand-edited backup
+    await expect(importBackup(newDb(), JSON.stringify(doc))).rejects.toThrow(/feeds/)
   })
 })

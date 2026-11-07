@@ -3,10 +3,14 @@
 import { useState, type FormEvent } from 'react'
 import { Badge } from '../../ui/surface'
 import { Button } from '../../ui/button'
+import { Checkbox } from '../../ui/form'
 import { Sheet } from '../../ui/overlay'
 import { formatDay } from '../../lib/date'
 import type { TodoItem } from '../../domain/todo'
-import { DifficultyBadge, LeetCodeLink, TitleLink, minutesText } from '../parts'
+import { setTodoDone } from '../actions'
+import { DifficultyBadge, LeetCodeLink, TitleLink, itemMeta, minutesText } from '../parts'
+import { PersonalActions } from '../todo/PersonalActions'
+import { TodoEditor } from '../todo/TodoEditor'
 import type { DragPayload } from './CalendarView'
 
 function MoveField({ item, date, today, onMove, onDone }: { item: TodoItem; date: string; today: string; onMove: (p: DragPayload, to: string) => void; onDone: () => void }) {
@@ -50,10 +54,15 @@ function MoveField({ item, date, today, onMove, onDone }: { item: TodoItem; date
 
 function Row({ item, date, today, onMove }: { item: TodoItem; date: string; today: string; onMove: (p: DragPayload, to: string) => void }) {
   const [moving, setMoving] = useState(false)
-  const movable = !item.done && item.kind !== 'review'
+  const movable = !item.done && (item.kind === 'task' || item.kind === 'practice')
   return (
     <li className="py-3">
       <div className="flex items-start gap-3">
+        {item.kind === 'personal' && (
+          <Checkbox isSelected={item.done} onChange={(v) => void setTodoDone(item.id, v)} className="mt-0.5">
+            <span className="sr-only">{`Mark done: ${item.title}`}</span>
+          </Checkbox>
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             {item.href ? (
@@ -67,9 +76,10 @@ function Row({ item, date, today, onMove }: { item: TodoItem; date: string; toda
             {item.overdue && <Badge tone="danger">Overdue</Badge>}
             {item.leetcode && <DifficultyBadge difficulty={item.leetcode.difficulty} />}
           </div>
-          <p className="mt-0.5 text-xs text-text-muted">{[item.planTitle, item.typeLabel, minutesText(item.minutes)].filter(Boolean).join(' · ')}</p>
+          <p className="mt-0.5 text-xs text-text-muted">{itemMeta(item)}</p>
         </div>
-        {item.leetcode && !item.done && <LeetCodeLink slug={item.leetcode.slug} title={item.title} />}
+        {item.leetcode && !item.done && <LeetCodeLink slug={item.leetcode.slug} title={item.title} language={item.leetcode.language} />}
+        {item.kind === 'personal' && <PersonalActions item={item} />}
       </div>
       {movable &&
         (moving ? (
@@ -101,6 +111,7 @@ export function DayPanel({
   onMove: (p: DragPayload, to: string) => void
 }) {
   const used = items.reduce((n, i) => n + i.minutes, 0)
+  const [adding, setAdding] = useState(false)
   return (
     <Sheet title={date ? formatDay(date, true) : ''} isOpen={date !== null} onOpenChange={(o) => !o && onClose()}>
       {date && (
@@ -121,6 +132,12 @@ export function DayPanel({
               ))}
             </ul>
           )}
+          <div>
+            <Button variant="secondary" onPress={() => setAdding(true)}>
+              Add to-do
+            </Button>
+          </div>
+          <TodoEditor isOpen={adding} onClose={() => setAdding(false)} defaultDate={date} />
         </div>
       )}
     </Sheet>

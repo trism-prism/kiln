@@ -1,6 +1,8 @@
 // Today's counts straight from IndexedDB without Dexie or React, so the service worker stays small.
 // Reads the tables the app's own queries read (src/data/mastery.ts liveCards) and counts with domain/badge.
 import { badgeBreakdown, type BadgeBreakdown } from '../domain/badge'
+import { practiceOn } from '../data/plan-settings'
+import type { PlanRecord } from '../data/types'
 import { toLocalISODate } from '../lib/date'
 
 interface Row {
@@ -11,7 +13,9 @@ interface TaskRow extends Row {
   status: string
   scheduledDate?: string
 }
+interface PlanRow extends Row, Pick<PlanRecord, 'dailyPractice' | 'dailyPracticeOn'> {}
 interface PracticeRow extends Row {
+  planId: string
   status: string
   date: string
 }
@@ -20,6 +24,7 @@ interface TodoRow extends Row {
   date?: string
 }
 interface CardRow extends Row {
+  planId: string
   taskId?: string
   due: number
   suspended?: boolean
@@ -54,12 +59,15 @@ export async function readBreakdown(idb: IDBFactory, now: Date, name = 'kiln'): 
   const db = await open(idb, name)
   if (!db) return badgeBreakdown([], [], today)
   try {
-    const [tasks, cards, problems, todos] = await Promise.all([
+    const [tasks, cards, problems, todos, plans] = await Promise.all([
       all<TaskRow>(db, 'tasks'),
       all<CardRow>(db, 'reviewCards'),
       all<PracticeRow>(db, 'practiceItems'), // stored daily problems; absent in a version 2 database
       all<TodoRow>(db, 'personalTodos'), // absent before version 4
+      all<PlanRow>(db, 'plans'),
     ])
+    // Daily problems and their review cards count only for plans whose daily practice setting is on (as in the app).
+    const practicePlans = new Set(plans.filter((p) => !p.deleted && practiceOn(p)).map((p) => p.id))
     const live = tasks.filter((t) => !t.deleted)
     const alive = new Set(live.map((t) => t.id))
     // One card per task (the smallest id), none for deleted tasks or suspended cards.
@@ -70,10 +78,10 @@ export async function readBreakdown(idb: IDBFactory, now: Date, name = 'kiln'): 
       if (c.taskId) {
         if (!alive.has(c.taskId) || seen.has(c.taskId)) continue
         seen.add(c.taskId)
-      }
+      } else if (!practicePlans.has(c.planId)) continue
       if (!c.suspended) due.push(c)
     }
-    const items = [...live, ...problems.filter((p) => !p.deleted).map((p) => ({ status: p.status, scheduledDate: p.date }))]
+    const items = [...live, ...problems.filter((p) => !p.deleted && practicePlans.has(p.planId)).map((p) => ({ status: p.status, scheduledDate: p.date }))]
     return badgeBreakdown(items, due, today, todos)
   } finally {
     db.close()

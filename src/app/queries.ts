@@ -3,14 +3,20 @@ import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { badgeCount } from '../domain/badge'
 import { buildStudyDays, streakStats, type DayStudy, type StreakStats } from '../domain/streaks'
-import { buildTodoItems, type TodoItem } from '../domain/todo'
+import { buildTodoItems, parseTodoPrefs, type TodoItem, type TodoPrefs } from '../domain/todo'
+import type { WeekStart } from '../domain/calendar'
+import { getMeta, setMeta } from '../pwa/meta'
 import {
   db,
   dueCards,
+  eventsBetween,
   getSettings,
   listModules,
+  listPersonalTodos,
   listPlans,
   masteryByPlan,
+  practiceConfig,
+  practiceLanguage,
   studyEvents,
   tasksScheduledBetween,
   type ModuleRecord,
@@ -54,7 +60,8 @@ export function useBadgeCount(today: string): number {
   return (
     useLiveQuery(async () => {
       const tasks = await tasksScheduledBetween(db, '0000-01-01', today)
-      const problems = alive(await db.practiceItems.where('date').belowOrEqual(today).toArray())
+      const on = new Set((await listPlans(db)).filter((p) => practiceConfig(p)).map((p) => p.id))
+      const problems = alive(await db.practiceItems.where('date').belowOrEqual(today).toArray()).filter((p) => on.has(p.planId))
       const todos = await db.personalTodos.where('date').belowOrEqual(today).toArray()
       return badgeCount([...tasks, ...problems.map((p) => ({ status: p.status, scheduledDate: p.date }))], await dueCards(db, today), today, todos)
     }, [today]) ?? 0
@@ -65,6 +72,8 @@ async function loadTodo(today: string, horizonDays: number) {
   const plans = await listPlans(db)
   const allTasks = alive(await db.tasks.toArray())
   const problems = alive(await db.practiceItems.toArray())
+  const planLanguages = new Map(plans.map((p) => [p.id, practiceLanguage(p)]))
+  const practiceLanguages = new Map(plans.filter((p) => practiceConfig(p)).map((p) => [p.id, practiceLanguage(p)]))
   const cards = await dueCards(db, addDaysISO(today, horizonDays))
   const taskTitle = new Map(allTasks.map((t) => [t.id, t.title]))
   const problemTitle = new Map(problems.map((p) => [p.slug, p.title]))
@@ -73,20 +82,32 @@ async function loadTodo(today: string, horizonDays: number) {
       tasks: allTasks,
       problems,
       cards,
+      personalTodos: await listPersonalTodos(db),
+      events: await eventsBetween(db, addDaysISO(today, -horizonDays), addDaysISO(today, horizonDays)),
       planTitles: new Map(plans.map((p) => [p.id, p.title])),
+      practiceLanguages,
+      planLanguages,
       cardTitle: (c) => (c.taskId && taskTitle.get(c.taskId)) || (c.slug && (problemTitle.get(c.slug) ?? c.slug)) || '',
     },
     today,
   )
-  return { items, hasPlans: plans.length > 0, tasks: allTasks }
+  return { items, hasPlans: plans.length > 0, tasks: allTasks, favorites: plans.filter((p) => p.favorite).map((p) => p.id) }
 }
 
-/** Everything the To Do page lists, from today - 28 days to today + 28 days. undefined while loading. */
-export function useTodoItems(today: string): { items: TodoItem[]; hasPlans: boolean } | undefined {
+/** Everything the To Do page can list (a year either way), the favorite plans' ids and the week start. undefined while loading. */
+export function useTodoItems(today: string): { items: TodoItem[]; hasPlans: boolean; favorites: string[]; weekStartsOn: WeekStart } | undefined {
   return useLiveQuery(async () => {
-    const { items, hasPlans } = await loadTodo(today, 28)
-    return { items, hasPlans }
+    const { items, hasPlans, favorites } = await loadTodo(today, 366)
+    return { items, hasPlans, favorites, weekStartsOn: (await getSettings(db)).weekStartsOn }
   }, [today])
+}
+
+const TODO_PREFS_KEY = 'todoPrefs'
+
+/** The To Do list preferences of this device (meta), and a saver. undefined while loading. */
+export function useTodoPrefs(): [TodoPrefs | undefined, (p: TodoPrefs) => Promise<void>] {
+  const prefs = useLiveQuery(async () => parseTodoPrefs(await getMeta(db, TODO_PREFS_KEY)), [])
+  return [prefs, (p) => setMeta(db, TODO_PREFS_KEY, JSON.stringify(p))]
 }
 
 export interface CalendarData {
@@ -151,7 +172,7 @@ export function usePlanSummaries(today: string): PlanSummary[] | undefined {
       const mine = tasks.filter((t) => t.planId === plan.id && t.status !== 'skipped')
       const open = mine.filter((t) => t.status === 'open')
       const dated = open.filter((t) => t.scheduledDate).sort((a, b) => (a.scheduledDate! < b.scheduledDate! ? -1 : a.scheduledDate! > b.scheduledDate! ? 1 : a.order - b.order))
-      const myProblems = problems.filter((p) => p.planId === plan.id && p.status === 'open')
+      const myProblems = practiceConfig(plan) ? problems.filter((p) => p.planId === plan.id && p.status === 'open') : []
       const core = mine.filter((t) => t.priority === 'core')
       return {
         plan,

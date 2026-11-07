@@ -1,5 +1,6 @@
 import { runCron, seedSentDate } from './cron'
 import { HttpError, json, readJson, safeEqual, sha256Hex } from './http'
+import { FEED_TIMEOUT_MS, fetchFeed } from './feed'
 import { cleanupSyncSpaces, handleSync } from './sync'
 import { isPushEndpoint, isSecretString, parsePing, parseSubscription } from './validate'
 
@@ -15,6 +16,8 @@ export interface Env {
   MAX_SYNC_SPACES?: string
   MAX_SYNC_RECORDS?: string
   MAX_SYNC_BYTES?: string
+  /** Rate limit for /feed/fetch (wrangler.toml [[ratelimits]]); the route is off without it. */
+  FEED_LIMITER?: RateLimit
 }
 
 const DEFAULT_MAX_SUBSCRIPTIONS = 50_000
@@ -106,6 +109,12 @@ async function route(req: Request, env: Env, url: URL): Promise<Response> {
   if (pathname === '/sync/push' || pathname === '/sync/pull') {
     if (m !== 'POST') throw new HttpError(405, 'method not allowed')
     return handleSync(pathname === '/sync/push' ? 'push' : 'pull', await readJson(req, MAX_SYNC_BODY), env)
+  }
+
+  if (pathname === '/feed/fetch') {
+    if (m !== 'POST') throw new HttpError(405, 'method not allowed')
+    const key = req.headers.get('cf-connecting-ip') ?? 'unknown'
+    return fetchFeed(await readJson(req, MAX_BODY), key, { fetch: (...a) => fetch(...a), timeoutMs: FEED_TIMEOUT_MS, limiter: env.FEED_LIMITER })
   }
 
   if (['/health', '/push/subscription', '/ping'].includes(pathname)) throw new HttpError(405, 'method not allowed')

@@ -4,6 +4,7 @@ export { formatIssue, renderIssue, truncateLabel, inputIssue, LABEL_LENGTH } fro
 export type { Issue, RawIssue, Severity } from './issues'
 export { buildPrompt } from './prompts'
 export { schemaReference } from './reference'
+export { DEFAULT_PRACTICE_LANGUAGE } from './language'
 export { planJsonSchema, planSchema } from './schema'
 export type { Plan, PlanInput, PlanModule, Task, Resource, Source, Practice, DailyPractice, Part, Priority, TaskType } from './schema'
 export type { SemanticOptions } from './semantic'

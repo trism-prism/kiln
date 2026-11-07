@@ -16,6 +16,7 @@ import {
   type SchedulerOptions,
 } from '../domain/mastery'
 import type { KilnDB } from './db'
+import { practiceLanguage, practiceOn } from './plan-settings'
 import { getDeviceId, insertRecord, revertWrite, setTaskStatus, updateRecord } from './repo'
 import type { ReviewCardRecord, ReviewLogRecord, TaskRecord } from './types'
 
@@ -147,12 +148,15 @@ async function liveTasks(db: KilnDB): Promise<Map<string, TaskRecord>> {
  * device may lack `minutes` and `learningSteps`; minutes are filled from the task.
  */
 async function liveCards(db: KilnDB, tasks: Map<string, TaskRecord>): Promise<ReviewCardRecord[]> {
+  // Cards for generated daily problems (a slug, no task) belong to a plan's daily practice: none while it is off.
+  const practicePlans = new Set((await db.plans.toArray()).filter((p) => !p.deleted && practiceOn(p)).map((p) => p.id))
   const byTask = new Map<string, ReviewCardRecord>()
   const out: ReviewCardRecord[] = []
   for (const c of (await db.reviewCards.toArray()).sort((a, b) => (a.id < b.id ? -1 : 1))) {
     if (c.deleted) continue
     const task = c.taskId ? tasks.get(c.taskId) : undefined
     if (c.taskId && !task) continue
+    if (!c.taskId && !practicePlans.has(c.planId)) continue
     if (c.taskId) {
       if (byTask.has(c.taskId)) continue
       byTask.set(c.taskId, c)
@@ -193,6 +197,8 @@ export async function masteryByPlan(db: KilnDB, now: number): Promise<Record<str
 export interface BrushUpEntry extends BrushUpItem<ReviewCardRecord> {
   /** Title of the task (or problem) to revisit. */
   title: string
+  /** Language for the "Solve in" link: the card's plan's. */
+  language: string
 }
 
 /** The brush-up list: cards due or with recall under 85%, weakest first. */
@@ -200,8 +206,10 @@ export async function brushUp(db: KilnDB, now: number): Promise<BrushUpEntry[]> 
   const tasks = await liveTasks(db)
   // Cards for generated daily problems have no task: their title comes from the problem record.
   const problems = new Map((await db.practiceItems.toArray()).filter((p) => !p.deleted).map((p) => [p.slug, p.title]))
+  const plans = new Map((await db.plans.toArray()).map((p) => [p.id, p]))
   return brushUpCards(await liveCards(db, tasks), now).map((i) => ({
     ...i,
+    language: practiceLanguage(plans.get(i.card.planId) ?? {}),
     title: (i.card.taskId && tasks.get(i.card.taskId)?.title) || (i.card.slug && (problems.get(i.card.slug) ?? i.card.slug)) || '',
   }))
 }
