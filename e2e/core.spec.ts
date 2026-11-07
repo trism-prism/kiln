@@ -27,7 +27,8 @@ test('seed, To Do matches the badge, complete a lesson, review comes back and sh
   const lesson = today.getByRole('listitem').filter({ hasText: '· Lesson ·' }).first()
   const title = (await lesson.getByRole('link').first().innerText()).trim()
   await lesson.getByRole('checkbox').click({ force: true })
-  await expect(page.getByRole('dialog')).toBeHidden()
+  await expect(page.getByText(`Done: ${title}`)).toBeVisible()
+  await expect(page.getByRole('dialog', { name: 'How did it go?' })).toHaveCount(0)
   await expect(lesson.getByRole('checkbox')).toBeChecked()
   await expect(lesson.getByText('Done', { exact: true })).toBeVisible()
   await expect.poll(() => badgeCount(page)).toBe(before - 1)
@@ -66,6 +67,9 @@ test('reviews are off by default: a finished lesson brings no review, and the pl
   await expect(page.getByRole('listitem').filter({ hasText: `Review: ${title}` })).toBeHidden()
 
   // The switch is in the plan's settings, off; the cap line in Settings is hidden while every plan has reviews off.
+  await page.goto('/brush-up')
+  await expect(page.getByText("Turn on Schedule reviews in a plan's settings.")).toBeVisible()
+  await expect(page.getByRole('heading', { level: 2, name: 'Mastery by topic' })).toBeHidden()
   await page.goto('/settings')
   await expect(page.getByRole('heading', { level: 2, name: 'Study time' })).toBeVisible()
   await expect(page.getByText(/^Spaced reviews take at most/)).toBeHidden()
@@ -75,6 +79,10 @@ test('reviews are off by default: a finished lesson brings no review, and the pl
   await expect(reviews).not.toBeChecked()
   await reviews.click({ force: true })
   await expect(reviews).toBeChecked()
+  // The lesson finished while reviews were off is not lost: it is in Brush up now.
+  await page.goto('/brush-up')
+  await expect(page.getByRole('heading', { level: 2, name: 'Mastery by topic' })).toBeVisible()
+  await expect(page.getByRole('main').getByRole('listitem').filter({ hasText: title })).toBeVisible()
   await page.goto('/settings')
   await expect(page.getByText(/^Spaced reviews take at most/)).toBeVisible()
 })
