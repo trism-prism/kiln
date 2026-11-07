@@ -16,7 +16,7 @@ Dexie (IndexedDB) database `kiln`, a small repository API, and JSON backup. No R
 | `personalTodos` | one-off to-dos outside plans: title, optional date and minutes, done, completedAt, notes (schema 4) | `date` |
 | `events` | dated items that take no study time (LMS classes, exams): date, endDate, allDay, start/end ms, course, url, planId, feedId, uid (schema 4) | `date`, `planId`, `feedId`, `uid` |
 | `planVersions` | a plan's content, saved by `snapshotPlan` (the plan edit path calls it after saving), newest 20 per plan: createdAt, label, summary, snapshot (schema 4) | `planId` |
-| `feeds` | calendar links kept in sync: lms, url, name, planIds, lastFetchedAt, lastResult (schema 4) | |
+| `feeds` | calendar links kept in sync: lms, url, needsLink, noticeFp, name, planIds, lastFetchedAt, lastResult (schema 4). The JSON backup leaves `url` out (it is a login token for the person's calendar) and marks the feed `needsLink`; restoring never blanks a link the device has | |
 | `settings` | singleton, id `settings`: minutes per weekday (Mon first), week start, reminder 08:00, optional 20:00 nudge, theme, review cap 25%, blackout dates | |
 | `meta` | device-local (`deviceId`, sync key and state); never exported or synced | |
 
@@ -40,6 +40,10 @@ Every table except `meta` syncs (`src/sync/README.md`). It reuses `rowSchemas` a
 - Personal to-dos, events and feeds use `insertRecord`, `updateRecord` and `softDelete`; `setPersonalTodoDone`, `listPersonalTodos` and `eventsBetween(db, from, to)` are in `repo.ts`. A dated to-do with minutes is fixed load on its day for the scheduler (done or not); events take no time. The badge counts open to-dos due today or earlier.
 - Versions (`versions.ts`): `snapshotPlan(db, planId, { summary, label? })` stores the plan's content as a plan file (gzip + base64url, built by `planFromRecords`) and tombstones versions beyond the newest 20, emptying their snapshot. `listPlanVersions` lists them newest first; `readSnapshot(v)` returns the plan file, which `importPlan` applies by key keeping progress. A plan of a few hundred tasks fits the 64 KB sync limit (the 85-task DSA fixture is about 20 KB).
 - `softDeletePlan` also tombstones the plan's events and versions.
+
+## Calendar import (`calendar.ts`)
+
+`importCalendar(db, { items, rows, courses, startDate, feed? })` imports an LMS calendar (parsed by src/domain/ics): per ticked course, new rows go through `importPlan` (a new course creates plan `course-<slug>`; an existing one keeps its title, goal and other content), rows whose due date moved only get the new `deadline` (the person's title and minute edits stay), then the plan's live tasks are renumbered in due order. The whole import is one transaction (a failing course leaves nothing behind), and an existing plan keeps its scheduling mode. Class times and exams of ticked courses are upserted into `events` by `uid` with the course's `planId`. `rowStates` says per row: new, changed (with the old due date), same, or deleted (the person deleted it; never re-added). With `feed`, the link is saved (or reused, matched by id or URL, or a restored feed with no link that made one of these plans) in `feeds` with the plans and `lastResult`. `feedChanges` counts new rows, moved due dates and moved class times or exams of a feed's courses, with a fingerprint of them; the notice appears only when the fingerprint differs from the feed's `noticeFp`, so rows the person left unticked are not announced every 6 hours; `src/pwa/feeds.ts` `checkFeedsIfDue` runs it on app open for feeds last fetched 6 hours ago or more, through the Worker's `POST /feed/fetch`, and stores `lastFetchedAt`/`lastResult`. Nothing is imported without the person's review.
 
 ## Scheduling
 
