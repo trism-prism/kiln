@@ -118,17 +118,18 @@ export function DateField({
     return ''
   }
 
-  // With a minimum, "nov 7" two days ago is read as that day (and refused), not as next year's; with a maximum, as that day (and kept).
+  // With a minimum, "nov 7" two days ago is read as that day (and refused), not as next year's. With only a
+  // maximum, a date with no year ("oct 5", "fri") is its latest occurrence up to today.
   const type = (t: string) => {
     setText(t)
     setProblem('')
-    const iso = parseDateText(t, toLocalISODate(new Date()), locale, { recent: !!(min || max) })
+    const iso = parseDateText(t, toLocalISODate(new Date()), locale, { recent: !!min, past: !!max && !min })
     if (iso && !outOfRange(iso)) send(iso)
   }
   /** Reads the text; false when it can't be used. */
   const commit = (): boolean => {
     const t = text.trim()
-    const iso = t === '' ? '' : parseDateText(t, toLocalISODate(new Date()), locale, { recent: !!(min || max) })
+    const iso = t === '' ? '' : parseDateText(t, toLocalISODate(new Date()), locale, { recent: !!min, past: !!max && !min })
     const p = iso === undefined ? 'Try a date like Nov 20' : iso === '' ? '' : outOfRange(iso)
     setProblem(p)
     if (p) send(before)
