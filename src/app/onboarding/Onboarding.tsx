@@ -159,7 +159,7 @@ function Flow({ onClose }: { onClose: () => void }) {
 
         {step === 2 && (
           <div className="grid gap-3">
-            <p className="text-sm text-text-muted">You can turn this on later in Settings.</p>
+            {push === 'ready' && !pushOn && <p className="text-sm text-text-muted">Get a daily reminder of what's due. You can change this later in Settings.</p>}
             <TimeInput label="Reminder time" value={time} onChange={setTime} isInvalid={!timeOk} />
             {pushOn ? (
               <p role="status" tabIndex={-1} ref={onNote} className="text-sm text-success outline-none">Reminders are on.</p>
@@ -173,7 +173,7 @@ function Flow({ onClose }: { onClose: () => void }) {
 
         {step === 3 && (
           <div className="grid gap-3">
-            <p className="text-sm text-text-muted">Kiln schedules a study plan you bring. Import one from your AI tool or a spreadsheet to fill your To Do list.</p>
+            <p className="text-sm text-text-muted">Bring a plan from an AI chat or a spreadsheet.</p>
             <div className="flex flex-wrap gap-2">
               <Button onPress={() => void done(() => void navigate('/import'))} isDisabled={busy}>Import a plan</Button>
               {canSeed && (
