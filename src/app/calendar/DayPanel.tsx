@@ -18,10 +18,13 @@ function MoveField({ item, date, today, onMove, onDone }: { item: TodoItem; date
   const [to, setTo] = useState(date < today ? today : date)
   // The field itself keeps the day from today on and shows its own error for text it can't read.
   const [bad, setBad] = useState(false)
-  const valid = !bad && to >= today && to !== date
+  // Like the to-do form: Move stays enabled, and pressing it flags what is wrong.
+  const [shown, setShown] = useState(false)
+  const sameDay = to === date
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    if (!valid) return
+    setShown(true)
+    if (bad || sameDay || to < today) return
     onMove({ kind: item.kind as 'task' | 'practice', id: item.id, title: item.title, from: date }, to)
     onDone()
     // The row leaves the list, so its focus would fall to the page: keep it in the panel.
@@ -35,10 +38,11 @@ function MoveField({ item, date, today, onMove, onDone }: { item: TodoItem; date
         value={to}
         onChange={setTo}
         onInvalidChange={setBad}
-        description={to === date && !bad ? 'Pick a day from today on, other than this one.' : undefined}
+        isInvalid={shown && sameDay}
+        errorMessage="Pick a different day"
         className="w-full sm:w-56"
       />
-      <Button type="submit" variant="secondary" isDisabled={!valid}>
+      <Button type="submit" variant="secondary">
         Move
       </Button>
       <Button variant="quiet" onPress={onDone}>
