@@ -25,6 +25,9 @@ function Harness({ initial = '', min, onBlur }: { initial?: string; min?: string
       <DateField label="Deadline" value={value} onChange={setValue} min={min} onInvalidChange={setBad} onBlur={() => onBlur?.(value)} />
       <output data-testid="value">{value}</output>
       <output data-testid="bad">{String(bad)}</output>
+      <button type="button" onClick={() => setValue('2026-11-10')}>
+        Use tomorrow
+      </button>
     </I18nProvider>
   )
 }
@@ -118,6 +121,18 @@ describe('DateField', () => {
     await user.click(screen.getByRole('textbox', { name: 'Day (optional)' }))
     await user.keyboard('fri{Escape}')
     expect(closed).toEqual([true])
+  })
+
+  it('clears the invalid flag when a valid date arrives from outside', async () => {
+    const user = userEvent.setup()
+    render(<Harness />)
+    await user.type(box(), 'soon')
+    await user.tab()
+    expect(screen.getByTestId('bad').textContent).toBe('true')
+    await user.click(screen.getByRole('button', { name: 'Use tomorrow' }))
+    expect(box()).toHaveProperty('value', 'Tue, Nov 10, 2026')
+    expect(screen.queryByText('Try a date like Nov 20')).toBeNull()
+    expect(screen.getByTestId('bad').textContent).toBe('false')
   })
 
   it('has no spin buttons, and TextField type="date" renders it', () => {

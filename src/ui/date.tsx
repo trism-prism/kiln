@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { parseDate } from '@internationalized/date'
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
 import {
@@ -96,14 +96,20 @@ export function DateField({
     if (commits > 0) committed()
   }, [commits])
 
+  // Tell the form each time the error comes or goes, whatever cleared it (a fix, or a new value from outside).
+  const bad = problem !== ''
+  const reported = useRef(false)
+  const report = useEffectEvent((b: boolean) => onInvalidChange?.(b))
+  useEffect(() => {
+    if (bad === reported.current) return
+    reported.current = bad
+    report(bad)
+  }, [bad])
+
   const send = (v: string) => {
     if (v === value) return
     setSent(v)
     onChange(v)
-  }
-  const tell = (p: string) => {
-    if (p !== problem) onInvalidChange?.(p !== '')
-    setProblem(p)
   }
   const outOfRange = (iso: string) => {
     const today = toLocalISODate(new Date())
@@ -114,7 +120,7 @@ export function DateField({
 
   const type = (t: string) => {
     setText(t)
-    tell('')
+    setProblem('')
     const iso = parseDateText(t, toLocalISODate(new Date()), locale)
     if (iso && !outOfRange(iso)) send(iso)
   }
@@ -123,7 +129,7 @@ export function DateField({
     const t = text.trim()
     const iso = t === '' ? '' : parseDateText(t, toLocalISODate(new Date()), locale)
     const p = iso === undefined ? 'Try a date like Nov 20' : iso === '' ? '' : outOfRange(iso)
-    tell(p)
+    setProblem(p)
     if (p) send(before)
     else {
       send(iso!)
@@ -135,7 +141,7 @@ export function DateField({
   }
   const pick = (iso: string) => {
     setText(display(iso))
-    tell('')
+    setProblem('')
     send(iso)
     setBefore(iso)
     setOpen(false)
