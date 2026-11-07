@@ -1,5 +1,43 @@
-import { expect, test } from '@playwright/test'
+import AxeBuilder from '@axe-core/playwright'
+import { expect, test, type Locator } from '@playwright/test'
 import { openSeeded } from './seed'
+
+// The header used to wrap its buttons into three rows on a phone, two of them outside the 64px bar.
+for (const width of [320, 360, 390, 1280]) {
+  test(`plan header at ${width}: title and star in the bar, the three actions in one row on screen`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 })
+    await openSeeded(page, '/plans')
+    await page.getByRole('main').getByRole('heading', { level: 2 }).first().getByRole('link').click()
+    await expect(page.getByRole('heading', { level: 2, name: 'Modules' })).toBeVisible()
+    await page.evaluate(() => document.fonts.ready) // measure in Instrument Sans, not the wider fallback
+    const box = async (loc: Locator) => {
+      await expect(loc).toBeVisible()
+      return (await loc.boundingBox())!
+    }
+    const button = (name: string) => page.getByRole('button', { name, exact: true })
+    const title = await box(page.getByRole('heading', { level: 1 }))
+    const star = await box(button('Favorite'))
+    const rowLoc = button('Edit plan').locator('..')
+    const row = await box(rowLoc)
+    const buttons = [await box(button('Edit plan')), await box(button('Reschedule')), await box(button('Delete plan'))]
+    const middle = (b: { y: number; height: number }) => b.y + b.height / 2
+    expect(middle(star)).toBeCloseTo(middle(title), 0)
+    expect(star.x).toBeGreaterThan(title.x + title.width)
+    // All three on one line, each fully inside its row (nothing scrolled out of sight).
+    for (const b of buttons) {
+      expect(b.y).toBeCloseTo(buttons[0]!.y, 0)
+      expect(b.x).toBeGreaterThanOrEqual(row.x)
+      expect(b.x + b.width).toBeLessThanOrEqual(row.x + row.width)
+    }
+    expect(row.x + row.width).toBeLessThanOrEqual(width)
+    expect(await rowLoc.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
+    // Phone: the actions sit below the 64px bar; desktop: in it, to the right of the star.
+    if (width < 768) expect(buttons[0]!.y).toBeGreaterThanOrEqual(64)
+    else expect(middle(buttons[0]!)).toBeCloseTo(middle(star), 0)
+    const { violations } = await new AxeBuilder({ page }).analyze()
+    expect(violations.filter((v) => v.impact === 'serious' || v.impact === 'critical').map((v) => v.id)).toEqual([])
+  })
+}
 
 test('favorite a plan, edit it, then restore the older version', async ({ page }) => {
   await openSeeded(page, '/plans')
