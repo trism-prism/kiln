@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { brushUp, db, masteryByTopic, type BrushUpEntry } from '../../data'
+import { brushUp, db, listPlans, masteryByTopic, reviewsOn, type BrushUpEntry } from '../../data'
 import { formatDay } from '../../lib/date'
 import { localDate } from '../../domain/mastery'
 import { Button, Link } from '../../ui/button'
@@ -47,7 +47,7 @@ export default function BrushUpPage() {
   const minute = useMinute()
   const data = useLiveQuery(async () => {
     const now = Date.now()
-    return { entries: await brushUp(db, now), topics: await masteryByTopic(db, now) }
+    return { entries: await brushUp(db, now), topics: await masteryByTopic(db, now), anyOn: (await listPlans(db)).some(reviewsOn) }
   }, [today, minute])
   const { complete } = useCompleter()
 
@@ -56,6 +56,8 @@ export default function BrushUpPage() {
     <Page title="Brush up">
       {!data ? (
         <Skeleton className="h-48 w-full" />
+      ) : !data.anyOn ? (
+        <p className="text-sm text-text-muted">Turn on Schedule reviews in a plan&apos;s settings.</p>
       ) : (
         <div className="grid gap-10">
           <section aria-labelledby="weakest" className="grid gap-3">
@@ -64,7 +66,7 @@ export default function BrushUpPage() {
             </h2>
             {data.entries.length === 0 ? (
               <EmptyState title="Nothing to brush up on">
-                Topics you rate as shaky come back here, spaced out so you review them just before you would forget.
+                Lessons that are due for review show up here.
               </EmptyState>
             ) : (
               <ul className="divide-y divide-border rounded-lg border border-border bg-surface-raised px-4 shadow-sm">
