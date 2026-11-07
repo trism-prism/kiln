@@ -7,7 +7,7 @@ const badgeCount = async (page: Page) => {
 }
 
 test('seed, To Do matches the badge, complete a lesson, review comes back and shows in brush up', async ({ page }) => {
-  await openSeeded(page, '/todo')
+  await openSeeded(page, '/todo', { reviews: true })
   await expect(page.getByRole('heading', { level: 1, name: 'To Do' })).toBeVisible()
   const today = page.getByRole('region', { name: 'Today' })
   await expect(today).toBeVisible()
@@ -23,15 +23,11 @@ test('seed, To Do matches the badge, complete a lesson, review comes back and sh
   await expect(daily.getByRole('link', { name: /Solve in Python/ })).toHaveAttribute('href', /^https:\/\/leetcode\.com\/problems\/[a-z0-9-]+\/$/)
   await expect(daily.getByText(/^LeetCode (Easy|Medium|Hard)$/)).toBeVisible()
 
-  // Complete a lesson with "Good" (key 3).
+  // Completing a lesson is one click: no rating step.
   const lesson = today.getByRole('listitem').filter({ hasText: '· Lesson ·' }).first()
   const title = (await lesson.getByRole('link').first().innerText()).trim()
   await lesson.getByRole('checkbox').click({ force: true })
-  const sheet = page.getByRole('dialog', { name: 'How did it go?' })
-  await expect(sheet).toBeVisible()
-  await expect(sheet.getByRole('button', { name: /^Again/ })).toBeVisible()
-  await page.keyboard.press('3')
-  await expect(sheet).toBeHidden()
+  await expect(page.getByRole('dialog')).toBeHidden()
   await expect(lesson.getByRole('checkbox')).toBeChecked()
   await expect(lesson.getByText('Done', { exact: true })).toBeVisible()
   await expect.poll(() => badgeCount(page)).toBe(before - 1)
@@ -40,7 +36,7 @@ test('seed, To Do matches the badge, complete a lesson, review comes back and sh
   await lesson.getByRole('link').first().click()
   await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible()
   await expect(page.getByText(/^Completed /)).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Rate again' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Mark done' })).toBeHidden()
   await page.goBack()
 
   // Three days later the first review is due, listed as its own item.
@@ -48,16 +44,39 @@ test('seed, To Do matches the badge, complete a lesson, review comes back and sh
   await expect(page.getByRole('listitem').filter({ hasText: `Review: ${title}` })).toBeVisible()
   await expect.poll(() => badgeCount(page)).toBeGreaterThan(0)
 
-  // Brush up lists it as due, with a recall bar, and Review now rates it.
+  // Brush up lists it as due, with a recall bar, and Review now completes it at once.
   await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Brush up' }).click()
   const entry = page.getByRole('main').getByRole('listitem').filter({ hasText: title })
   await expect(entry).toBeVisible()
   await expect(entry.getByText('Due', { exact: true })).toBeVisible()
   await expect(entry.getByRole('meter', { name: 'Recall' })).toBeVisible()
   await entry.getByRole('button', { name: /^Review now/ }).click()
-  await page.getByRole('button', { name: /^Easy/ }).click()
   await expect(page.getByText(`Reviewed: ${title}`)).toBeVisible()
   await expect(entry.getByText('Due', { exact: true })).toBeHidden()
+})
+
+test('reviews are off by default: a finished lesson brings no review, and the plan switch turns them on', async ({ page }) => {
+  await openSeeded(page, '/todo')
+  const today = page.getByRole('region', { name: 'Today' })
+  const lesson = today.getByRole('listitem').filter({ hasText: '· Lesson ·' }).first()
+  const title = (await lesson.getByRole('link').first().innerText()).trim()
+  await lesson.getByRole('checkbox').click({ force: true })
+  await expect(lesson.getByRole('checkbox')).toBeChecked()
+  await advanceDays(page, 3)
+  await expect(page.getByRole('listitem').filter({ hasText: `Review: ${title}` })).toBeHidden()
+
+  // The switch is in the plan's settings, off; the cap line in Settings is hidden while every plan has reviews off.
+  await page.goto('/settings')
+  await expect(page.getByRole('heading', { level: 2, name: 'Study time' })).toBeVisible()
+  await expect(page.getByText(/^Spaced reviews take at most/)).toBeHidden()
+  await page.goto('/plans')
+  await page.getByRole('main').getByRole('heading', { level: 2 }).first().getByRole('link').click()
+  const reviews = page.getByRole('switch', { name: 'Schedule reviews' })
+  await expect(reviews).not.toBeChecked()
+  await reviews.click({ force: true })
+  await expect(reviews).toBeChecked()
+  await page.goto('/settings')
+  await expect(page.getByText(/^Spaced reviews take at most/)).toBeVisible()
 })
 
 test('undo from the toast puts a completion back', async ({ page }) => {
@@ -67,7 +86,6 @@ test('undo from the toast puts a completion back', async ({ page }) => {
   await expect(lesson).toBeVisible()
   const before = await today.getByRole('checkbox', { checked: false }).count()
   await lesson.getByRole('checkbox').click({ force: true })
-  await page.getByRole('button', { name: /^Hard/ }).click()
   await expect(lesson.getByRole('checkbox')).toBeChecked()
   // A toast with an action stays until dismissed.
   await page.clock.fastForward(30_000)
@@ -186,7 +204,7 @@ test('dashboard shows one card per plan', async ({ page }) => {
   const cards = page.getByRole('heading', { level: 2 })
   await expect(cards).toHaveCount(2)
   await expect(page.getByText('Essential tasks')).toHaveCount(2)
-  await expect(page.getByText('Mastery')).toHaveCount(2)
+  await expect(page.getByText('Mastery')).toHaveCount(0) // reviews are off by default
   await expect(page.getByText(/Expected finish/).first()).toBeVisible()
   await expect(page.getByText(/Next: /).first()).toBeVisible()
 })

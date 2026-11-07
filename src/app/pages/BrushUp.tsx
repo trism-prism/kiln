@@ -49,7 +49,7 @@ export default function BrushUpPage() {
     const now = Date.now()
     return { entries: await brushUp(db, now), topics: await masteryByTopic(db, now) }
   }, [today, minute])
-  const { complete, sheet } = useCompleter()
+  const { complete } = useCompleter()
 
   const topics = data ? Object.entries(data.topics).sort(([a, x], [b, y]) => x.mastery - y.mastery || a.localeCompare(b)) : []
   return (
@@ -69,7 +69,7 @@ export default function BrushUpPage() {
             ) : (
               <ul className="divide-y divide-border rounded-lg border border-border bg-surface-raised px-4 shadow-sm">
                 {data.entries.map((e) => (
-                  <Entry key={e.card.id} e={e} onReview={() => complete({ kind: 'review', id: e.card.id, title: `Review: ${e.title}`, rates: true })} />
+                  <Entry key={e.card.id} e={e} onReview={() => complete({ kind: 'review', id: e.card.id, title: `Review: ${e.title}` })} />
                 ))}
               </ul>
             )}
@@ -92,7 +92,6 @@ export default function BrushUpPage() {
           </section>
         </div>
       )}
-      {sheet}
     </Page>
   )
 }

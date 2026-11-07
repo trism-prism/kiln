@@ -5,7 +5,7 @@ import { Button, Link } from '../../ui/button'
 import { Badge, EmptyState, Skeleton } from '../../ui/surface'
 import { TextField } from '../../ui/form'
 import { formatDay, isRealISODate } from '../../lib/date'
-import { cardMinutes, localDate } from '../../domain/mastery'
+import { localDate } from '../../domain/mastery'
 import { practiceLanguage } from '../../data'
 import { pinTask, rescheduleOverdue, toggleSkip } from '../actions'
 import { Page } from '../Page'
@@ -47,7 +47,7 @@ const cap = (s: string) => s[0]!.toUpperCase() + s.slice(1)
 export default function TaskPage() {
   const { taskId } = useParams()
   const detail = useTaskDetail(taskId)
-  const { complete, sheet } = useCompleter()
+  const { complete } = useCompleter()
   const [pinDate, setPinDate] = useState('')
   // The pin field shows its own error for text it can't read; Pin waits until it is fixed.
   const [pinBad, setPinBad] = useState(false)
@@ -72,7 +72,6 @@ export default function TaskPage() {
   const { task, plan, module, dependencies } = detail
   const done = task.status === 'done'
   const skipped = task.status === 'skipped'
-  const hasCard = cardMinutes(task) !== undefined
   const lc = task.practice?.provider === 'leetcode' && task.practice.slug ? task.practice : undefined
   const validPin = isRealISODate(pinDate) && !pinBad
 
@@ -198,13 +197,11 @@ export default function TaskPage() {
         </article>
 
         <aside aria-label="Actions" className="grid h-fit gap-4 rounded-lg border border-border bg-surface-raised p-5 shadow-sm">
-          <Button
-            isDisabled={skipped}
-            variant={done ? 'secondary' : 'primary'}
-            onPress={() => complete({ kind: 'task', id: task.id, title: task.title, rates: hasCard })}
-          >
-            {done ? 'Rate again' : 'Mark done'}
-          </Button>
+          {!done && (
+            <Button isDisabled={skipped} onPress={() => complete({ kind: 'task', id: task.id, title: task.title })}>
+              Mark done
+            </Button>
+          )}
           <Button variant="secondary" onPress={() => void toggleSkip(task.id, !skipped, task.title)}>
             {skipped ? 'Unskip' : 'Skip'}
           </Button>
@@ -229,7 +226,6 @@ export default function TaskPage() {
           </div>
         </aside>
       </div>
-      {sheet}
     </Page>
   )
 }
