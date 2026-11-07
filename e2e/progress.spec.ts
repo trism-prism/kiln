@@ -36,9 +36,11 @@ test('logged study time makes today count, and Undo takes it back', async ({ pag
   await openSeeded(page, '/todo')
   await page.getByRole('link', { name: 'Streak: 0 days, not done today' }).click()
   await page.getByRole('button', { name: 'Log study time' }).click()
-  const sheet = page.getByRole('dialog', { name: 'Log study time' })
+  const sheet = page.getByRole('dialog', { name: 'Log Study Time', exact: true })
   await expect(sheet.getByLabel('Subject')).toBeFocused()
   await expect(sheet.getByLabel('Day')).toHaveValue('Mon, Nov 9, 2026')
+  // No example text in the boxes: the errors give the examples.
+  await expect(sheet.locator('input[placeholder]')).toHaveCount(0)
 
   // Errors show on Save, in plain words; the sheet stays open.
   await sheet.getByRole('button', { name: 'Save' }).click()
@@ -70,7 +72,7 @@ test('logged study time makes today count, and Undo takes it back', async ({ pag
 test('the chip fills once today counts, and a past day logs to that day', async ({ page }) => {
   await openSeeded(page, '/progress')
   await page.getByRole('button', { name: 'Log study time' }).click()
-  const sheet = page.getByRole('dialog', { name: 'Log study time' })
+  const sheet = page.getByRole('dialog', { name: 'Log Study Time', exact: true })
   await sheet.getByLabel('Subject').fill('Spanish')
   await sheet.getByLabel('Minutes').fill('20')
   await sheet.getByLabel('Day').fill('nov 8')
@@ -105,7 +107,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await expect(page.getByRole('group', { name: 'Study activity, last year' })).toBeVisible()
       expect(await seriousViolations(page)).toEqual([])
       await page.getByRole('button', { name: 'Log study time' }).click()
-      const sheet = page.getByRole('dialog', { name: 'Log study time' })
+      const sheet = page.getByRole('dialog', { name: 'Log Study Time', exact: true })
       await sheet.getByRole('button', { name: 'Save' }).click()
       await expect(sheet.getByText('Add a subject')).toBeVisible()
       await animationsDone(page)

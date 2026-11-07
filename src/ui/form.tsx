@@ -49,12 +49,9 @@ export function TextField({
   className = '',
   onInvalidChange,
   min,
-  placeholder,
   ...props
 }: Omit<TextFieldProps, 'className'> & {
   label: string
-  /** An example value, shown while the box is empty. Never instead of the label. */
-  placeholder?: string
   description?: string
   errorMessage?: string
   className?: string
@@ -83,7 +80,7 @@ export function TextField({
   return (
     <AriaTextField {...props} className={`${field} ${className}`}>
       <Label className="font-medium">{label}</Label>
-      <Input placeholder={placeholder} className={`${control} placeholder:text-text-muted`} />
+      <Input className={`${control} placeholder:text-text-muted`} />
       {description && <Text slot="description" className={help}>{description}</Text>}
       <FieldError className={error}>{errorMessage}</FieldError>
     </AriaTextField>

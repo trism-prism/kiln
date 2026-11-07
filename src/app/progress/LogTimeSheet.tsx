@@ -55,7 +55,7 @@ export function LogTimeSheet({ isOpen, today, onClose }: { isOpen: boolean; toda
   }
 
   return (
-    <FormSheet title="Log study time" isOpen={isOpen} onCancel={onClose} onDone={() => void save()} doneLabel="Save">
+    <FormSheet title="Log Study Time" isOpen={isOpen} onCancel={onClose} onDone={() => void save()} doneLabel="Save">
       <form
         noValidate
         className="grid gap-4 p-4"
@@ -64,8 +64,8 @@ export function LogTimeSheet({ isOpen, today, onClose }: { isOpen: boolean; toda
           void save()
         }}
       >
-        <TextField label="Subject" placeholder="Psychology" value={subject} onChange={setSubject} autoFocus isInvalid={shown && !!subjectError} errorMessage={subjectError} />
-        <TextField label="Minutes" placeholder="30" value={minutes} onChange={setMinutes} isInvalid={shown && !!minutesError} errorMessage={minutesError} />
+        <TextField label="Subject" value={subject} onChange={setSubject} autoFocus isInvalid={shown && !!subjectError} errorMessage={subjectError} />
+        <TextField label="Minutes" value={minutes} onChange={setMinutes} isInvalid={shown && !!minutesError} errorMessage={minutesError} />
         <DateField label="Day" value={date} onChange={setDate} max={today} onInvalidChange={setDateBad} isInvalid={shown && !!dateError} errorMessage={dateError} />
         {/* Enter in a field submits; the visible Save is in the sheet's header. */}
         <button type="submit" hidden />
