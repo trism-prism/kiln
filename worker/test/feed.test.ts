@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import worker from '../src/index'
-import { checkFeedUrl, fetchFeed, MAX_FEED_BYTES, type FeedDeps } from '../src/feed'
+import { checkFeedUrl, fetchFeed, MAX_FEED_BYTES, rateKey, type FeedDeps } from '../src/feed'
 import { HttpError } from '../src/http'
 
 const GOOD = 'https://school.instructure.com/feeds/calendars/user_abc123.ics'
@@ -92,6 +92,23 @@ describe('checkFeedUrl', () => {
   it('refuses localhost and private-network names', () => {
     for (const host of ['localhost', 'LOCALHOST.', 'api.localhost', 'printer.local', 'metadata.google.internal', 'intranet', 'nas.lan', 'router.home', 'x.home.arpa', 'site.test'])
       expect(checkFeedUrl(`https://${host}/feed.ics`), host).toBe('url must use a public host name')
+  })
+
+  it('strips every trailing dot and refuses empty labels', () => {
+    for (const host of ['localhost..', 'localhost...', 'metadata.google.internal..', 'printer.local...'])
+      expect(checkFeedUrl(`https://${host}/feed.ics`), host).toBe('url must use a public host name')
+    expect(checkFeedUrl('https://school.edu../feed.ics')).toBeInstanceOf(URL)
+    expect(checkFeedUrl('https://school..edu/feed.ics')).toBe('url must use a public host name')
+  })
+
+  it('keys an IPv6 client on its /64 and leaves IPv4 alone', () => {
+    expect(rateKey('203.0.113.9')).toBe('203.0.113.9')
+    expect(rateKey('2001:db8:1:2:aaaa:bbbb:cccc:dddd')).toBe('2001:db8:1:2::/64')
+    expect(rateKey('2001:db8:1:2:1111:2222:3333:4444')).toBe(rateKey('2001:0DB8:1:2::7'))
+    expect(rateKey('2001:db8::1')).toBe('2001:db8:0:0::/64')
+    expect(rateKey('::1')).toBe('0:0:0:0::/64')
+    expect(rateKey('2001:db8:1:3::1')).not.toBe(rateKey('2001:db8:1:2::1'))
+    expect(rateKey('::ffff:203.0.113.9')).toBe('::ffff:203.0.113.9')
   })
 
   it('refuses credentials, other ports and bad input', () => {
@@ -246,6 +263,14 @@ describe('fetchFeed', () => {
       const { f } = ok()
       await run({ url: 'http://x.edu/a.ics' }, deps(f, { limiter: spy }))
       expect(keys).toEqual(['203.0.113.9'])
+    })
+
+    it('keys an IPv6 caller on its /64', async () => {
+      const keys: string[] = []
+      const spy: RateLimit = { limit: async ({ key }) => (keys.push(key), { success: true }) }
+      const { f } = ok()
+      await fetchFeed({ url: GOOD }, '2001:db8:1:2:aaaa:bbbb:cccc:dddd', deps(f, { limiter: spy }))
+      expect(keys).toEqual(['2001:db8:1:2::/64'])
     })
 
     it('is off (503) without the binding', async () => {

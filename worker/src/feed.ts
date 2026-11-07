@@ -26,11 +26,13 @@ export function checkFeedUrl(raw: unknown): URL | string {
   if (u.protocol !== 'https:') return 'url must use https'
   if (u.username || u.password) return 'url must not contain a user name or password'
   if (u.port !== '') return 'url must use the default https port'
-  const host = u.hostname.toLowerCase().replace(/\.$/, '')
+  // "localhost.." and "metadata.google.internal.." resolve like their dotless forms, so every trailing dot goes.
+  const host = u.hostname.toLowerCase().replace(/\.+$/, '')
   // The URL parser turns every IPv4 spelling (decimal, hex, octal, short forms) into dotted digits,
   // and IPv6 literals keep their brackets, so this rejects every IP literal, private or not.
   if (host.startsWith('[') || /^[0-9.]+$/.test(host) || /^(0x[0-9a-f]*|[0-9]+)(\.(0x[0-9a-f]*|[0-9]+))*$/.test(host)) return 'url must use a host name, not an IP address'
   const labels = host.split('.')
+  if (labels.some((l) => l === '')) return 'url must use a public host name'
   if (labels.length < 2) return 'url must use a public host name'
   if (PRIVATE_SUFFIXES.includes(labels[labels.length - 1] as string)) return 'url must use a public host name'
   const path = u.pathname.toLowerCase()
@@ -70,6 +72,17 @@ async function readCapped(body: ReadableStream<Uint8Array> | null, max: number, 
   return new TextDecoder().decode(bytes)
 }
 
+/** The rate-limit key: an IPv4 address as is, an IPv6 address as its /64 (one subscriber holds a whole /64). */
+export function rateKey(ip: string): string {
+  if (!ip.includes(':') || ip.includes('.')) return ip
+  const [head = '', tail] = ip.split('::')
+  const a = head === '' ? [] : head.split(':')
+  const b = tail === undefined || tail === '' ? [] : tail.split(':')
+  const groups = tail === undefined ? a : [...a, ...Array<string>(Math.max(0, 8 - a.length - b.length)).fill('0'), ...b]
+  if (groups.length !== 8) return ip
+  return `${groups.slice(0, 4).map((g) => g.toLowerCase().replace(/^0+(?=.)/, '')).join(':')}::/64`
+}
+
 export interface FeedDeps {
   fetch: typeof fetch
   timeoutMs: number
@@ -80,7 +93,7 @@ export interface FeedDeps {
 export async function fetchFeed(body: unknown, clientKey: string, deps: FeedDeps): Promise<Response> {
   // Fail closed: without the binding there is no rate limit, so the route is off.
   if (!deps.limiter) throw new HttpError(503, 'calendar sync is not available')
-  if (!(await deps.limiter.limit({ key: clientKey })).success) throw new HttpError(429, 'too many calendar requests, try again in a minute')
+  if (!(await deps.limiter.limit({ key: rateKey(clientKey) })).success) throw new HttpError(429, 'too many calendar requests, try again in a minute')
 
   const b = body as Record<string, unknown> | null
   if (!b || typeof b !== 'object' || Array.isArray(b) || Object.keys(b).some((k) => k !== 'url')) throw new HttpError(400, 'body must be {url}')

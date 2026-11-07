@@ -23,7 +23,6 @@ All bodies are JSON (`Content-Type: application/json`), max 4096 bytes (1 MB for
 | `POST /push/subscription` | `{endpoint, p256dh, auth, reminderTime, nudgeTime|null, timezone, token}` | `204`. Upsert by endpoint; 403 if the endpoint exists with a different token; 503 when the table holds 50,000 rows (`MAX_SUBSCRIPTIONS` var overrides) |
 | `DELETE /push/subscription` | `{endpoint, token}` | `204` (idempotent); 403 on a wrong token |
 | `POST /ping` | `{deviceId}` 16-128 chars of `A-Za-z0-9_-`, random, made by the client | `204`. Stores `sha256(deviceId)` once per device per UTC day |
-
 | `POST /feed/fetch` | `{url}` | `200 text/calendar` (the feed, `Cache-Control: no-store`). See Calendar feeds |
 
 Validation is strict: unknown fields are rejected; `endpoint` must be an `https` URL on a known push service (`fcm.googleapis.com`, `push.services.mozilla.com`, `push.apple.com`, `notify.windows.com`), so the cron cannot be pointed at arbitrary hosts; `p256dh` is a base64url 65-byte uncompressed P-256 key, `auth` is 16 base64url bytes; times are `HH:MM`; `timezone` must be accepted by `Intl.DateTimeFormat`.
@@ -68,9 +67,12 @@ There is no route to delete a space. Turning sync off on the device leaves the e
 - Path ends in `.ics` (Canvas, Blackboard, Brightspace, Schoology, Google Calendar) or is Moodle's `/calendar/export_execute.php`.
 - No IP literals at all (the URL parser turns decimal, hex, octal and short IPv4 forms into dotted digits; IPv6 keeps brackets), so loopback, private, link-local and metadata addresses are out. No `localhost`, single-label hosts, or private-network suffixes (`.local`, `.internal`, `.lan`, `.home`, `.arpa`, `.test` and others).
 - `redirect: 'manual'`: every `Location` is resolved and checked with the same rules, at most 3 hops.
-- 2 MB cap (declared `Content-Length` and bytes counted while streaming), 10 s timeout for the whole fetch including the body, and the answer must start with `BEGIN:VCALENDAR` (422 otherwise), so the route is no use as a general proxy.
-- Rate limited per IP (`CF-Connecting-IP`) by the `FEED_LIMITER` binding (`[[ratelimits]]` in `wrangler.toml`, 10 a minute). Without the binding the route answers 503 (fails closed).
+- 2 MB cap (declared `Content-Length` and bytes counted while streaming), 10 s timeout for the whole fetch including the body, and the answer must start with `BEGIN:VCALENDAR` (422 otherwise).
+- Hosts: trailing dots are all stripped before the checks and empty labels are refused (`localhost..` and `metadata.google.internal..` are out).
+- Rate limited per IP (`CF-Connecting-IP`; an IPv6 client is keyed on its /64) by the `FEED_LIMITER` binding (`[[ratelimits]]` in `wrangler.toml`, 10 a minute). Without the binding the route answers 503 (fails closed).
 - Nothing from the caller is forwarded (no cookies or headers); the upstream answer's headers are not passed back.
+
+There is no host allowlist: the route fetches any public https `.ics` URL whose body is a VCALENDAR, because schools run Canvas, Moodle and others on their own domains. What limits it is the size and time caps, the VCALENDAR check and the rate limit.
 
 Cloudflare Workers cannot reach private networks, so a public name that resolves to a private address gets nowhere either. Errors: 400 refused URL or body, 413, 422, 429, 502 (upstream error, refused redirect), 503, 504.
 
