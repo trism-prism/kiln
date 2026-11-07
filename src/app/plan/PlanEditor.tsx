@@ -113,8 +113,8 @@ function TaskFields({ task, all, pin, onChange, onPin }: { task: Task; all: Task
             </ListBoxItem>
           ))}
         </Select>
-        <TextField label="Due" type="date" value={task.deadline ?? ''} onChange={(v) => onChange({ ...task, deadline: v || undefined })} description="Optional. Kiln warns you if the task lands later." />
-        <TextField label="Pinned to" type="date" value={pin} onChange={onPin} description="Optional. The scheduler keeps the task on this day." />
+        <TextField label="Due (optional)" type="date" value={task.deadline ?? ''} onChange={(v) => onChange({ ...task, deadline: v || undefined })} />
+        <TextField label="Pinned to (optional)" type="date" value={pin} onChange={onPin} />
       </div>
       <fieldset className="grid gap-2">
         <legend className="mb-1.5 text-sm font-medium">Links</legend>
