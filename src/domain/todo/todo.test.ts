@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_TODO_PREFS, buildTodoItems, dayLabel, filterTodoItems, optionBounds, parseTodoPrefs, rangeBounds, todoView, type TodoCard, type TodoPrefs, type TodoProblem, type TodoSource, type TodoTask } from './index'
+import { DEFAULT_TODO_PREFS, buildTodoItems, dayLabel, filterTodoItems, optionBounds, parseTodoPrefs, shortDate, rangeBounds, todoView, type TodoCard, type TodoPrefs, type TodoProblem, type TodoSource, type TodoTask } from './index'
 
 const TODAY = '2026-11-11' // a Wednesday
 const at = (day: number, h = 12) => new Date(2026, 10, day, h).getTime()
@@ -114,6 +114,14 @@ describe('optionBounds', () => {
     expect(b.until.weeks4).toBe('2027-01-31')
     expect(b.from.thisWeek).toBe('2026-12-28')
     expect(optionBounds(prefs({}), '2027-01-04', 'monday').from.weeks4).toBe('2026-12-07')
+  })
+})
+
+describe('shortDate', () => {
+  it('adds the year only when it is not the year of today', () => {
+    expect(shortDate('2025-12-28', '2026-01-04')).toContain('2025')
+    expect(shortDate('2026-12-28', '2026-01-04')).not.toContain('2026')
+    expect(shortDate('2026-12-28', '2026-01-04')).toContain('28')
   })
 })
 

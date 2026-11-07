@@ -1,17 +1,10 @@
 // "To-do List Preferences": what the To Do list shows and over which days, kept on this device.
 // Rows edit a draft; Done saves it, Cancel (or Escape, or a tap outside) drops it.
 import { useState } from 'react'
-import { FROM_OPTIONS, UNTIL_OPTIONS, optionBounds, type FromAnchor, type TodoPrefs, type UntilAnchor } from '../../domain/todo'
+import { FROM_OPTIONS, UNTIL_OPTIONS, optionBounds, shortDate, type FromAnchor, type TodoPrefs, type UntilAnchor } from '../../domain/todo'
 import type { WeekStart } from '../../domain/calendar'
 import { CheckboxRow, ListSection, RadioListSection, RadioRow } from '../../ui/list'
 import { FormSheet } from '../../ui/overlay'
-
-/** "Oct 12", with the year only when it isn't this year ("Dec 28, 2025"). */
-function shortDate(iso: string, today: string) {
-  const [y, m, d] = iso.split('-').map(Number) as [number, number, number]
-  const sameYear = iso.slice(0, 4) === today.slice(0, 4)
-  return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }) })
-}
 
 type Props = { prefs: TodoPrefs; today: string; weekStartsOn: WeekStart; isOpen: boolean; onSave: (p: TodoPrefs) => void; onClose: () => void }
 

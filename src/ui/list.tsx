@@ -7,7 +7,7 @@ const caption = 'block px-4 pt-5 pb-2 text-sm text-text-muted'
 const box = 'border-y border-border bg-surface-raised'
 // The hairline between rows starts 16px in, under the control column; hover and focus still fill the whole row.
 const row =
-  'group relative flex cursor-default items-center gap-4 px-4 text-base text-text outline-none transition-colors not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-4 not-first:before:border-t not-first:before:border-border data-hovered:bg-surface-muted data-pressed:bg-surface-muted data-focus-visible:-outline-offset-2'
+  'group relative flex cursor-default items-center gap-4 px-4 text-base text-text outline-none transition-colors not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-4 not-first:before:border-t not-first:before:border-border data-hovered:bg-surface-muted data-pressed:bg-surface-muted data-focus-visible:outline-2 data-focus-visible:outline-solid data-focus-visible:-outline-offset-2 data-focus-visible:outline-focus'
 
 /** A captioned group of CheckboxRows. */
 export function ListSection({ title, children }: { title: string; children: ReactNode }) {

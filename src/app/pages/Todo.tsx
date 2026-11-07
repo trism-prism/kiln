@@ -93,7 +93,7 @@ export default function TodoPage() {
   const trigger = data && prefs && (
     <IconButton variant="secondary" aria-label={narrowed ? 'To-do List Preferences, filters on' : 'To-do List Preferences'} onPress={() => setPrefsOpen(true)} className="relative">
       <SlidersHorizontal size={18} aria-hidden="true" />
-      {narrowed && <span aria-hidden="true" className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-accent" />}
+      {narrowed && <span aria-hidden="true" className="absolute -top-1 -right-1 size-2 rounded-full bg-accent ring-2 ring-surface" />}
     </IconButton>
   )
 

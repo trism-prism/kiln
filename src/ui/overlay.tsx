@@ -69,8 +69,8 @@ export function Sheet({ title, children, isDismissable = true, ...props }: Sheet
  * all call onCancel (the caller discards its draft); Done calls onDone.
  */
 export function FormSheet({ title, isOpen, onCancel, onDone, doneLabel = 'Done', children }: { title: string; isOpen: boolean; onCancel: () => void; onDone: () => void; doneLabel?: string; children: ReactNode }) {
-  // Important: Button's base h-10 and rounded-md otherwise win the cascade.
-  const pill = 'h-9! rounded-full!'
+  // 44px pills of equal width keep the title centred. Important: Button's base h-10, px-4 and rounded-md otherwise win the cascade.
+  const pill = 'h-11! min-w-20 rounded-full! px-3!'
   return (
     <ModalOverlay
       isOpen={isOpen}
@@ -80,11 +80,11 @@ export function FormSheet({ title, isOpen, onCancel, onDone, doneLabel = 'Done',
     >
       <Modal className="flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-xl border border-border bg-surface text-text shadow-lg data-entering:animate-sheet md:max-h-[80dvh] md:max-w-md md:rounded-xl">
         <Dialog className="flex min-h-0 flex-1 flex-col outline-none">
-          <div className="grid shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-border bg-surface-raised px-4 py-3">
-            <Button variant="secondary" className={pill} onPress={onCancel}>
+          <div className="grid shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 border-b border-border bg-surface-raised px-4 py-3">
+            <Button variant="secondary" className={pill} onPress={onCancel} autoFocus>
               Cancel
             </Button>
-            <Heading slot="title" className="truncate text-center text-base font-medium">
+            <Heading slot="title" className="text-center text-base leading-tight font-medium text-balance">
               {title}
             </Heading>
             <Button variant="primary" className={pill} onPress={onDone}>

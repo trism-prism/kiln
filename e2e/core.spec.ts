@@ -99,8 +99,16 @@ test('to-do list preferences: Cancel drops changes, Done applies them, kept afte
 
   // Cancel: the change is gone when the sheet opens again.
   await open()
+  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused()
   await expect(dialog.getByRole('checkbox', { name: 'Show Personal To-dos' })).toBeChecked()
   await expect(dialog.getByRole('radio', { name: '4 Weeks Ago, From Oct 12' })).toBeVisible()
+  // Keyboard: Cancel, Done, then the first row, which shows a focus ring.
+  await page.keyboard.press('Tab')
+  await page.keyboard.press('Tab')
+  await expect(dialog.getByRole('checkbox', { name: 'Show Personal To-dos' })).toBeFocused()
+  const ring = dialog.locator('label', { hasText: 'Show Personal To-dos' })
+  await expect(ring).toHaveAttribute('data-focus-visible', 'true')
+  expect(await ring.evaluate((el) => getComputedStyle(el).outlineStyle)).not.toBe('none')
   await until.locator('label', { hasText: 'Next Week' }).click()
   await expect(until.getByRole('radio', { name: /^Next Week/ })).toBeChecked()
   await dialog.getByRole('button', { name: 'Cancel' }).click()
@@ -115,6 +123,10 @@ test('to-do list preferences: Cancel drops changes, Done applies them, kept afte
   const mids = boxes.map((b) => b!.y + b!.height / 2)
   for (const m of mids) expect(Math.abs(m - mids[0]!)).toBeLessThan(2)
   expect(boxes[1]!.height).toBeLessThan(30)
+  // 44px pills of equal width, so the title sits in the middle of the sheet.
+  expect(boxes[0]!.height).toBe(44)
+  expect(boxes[0]!.width).toBe(boxes[2]!.width)
+  expect(Math.abs(boxes[1]!.x + boxes[1]!.width / 2 - 195)).toBeLessThan(2)
 
   // The last row scrolls into view below the fixed header and can be chosen.
   const last = until.getByRole('radio', { name: 'In 4 Weeks, Until Dec 13' })

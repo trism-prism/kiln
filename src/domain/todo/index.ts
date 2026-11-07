@@ -311,6 +311,12 @@ export function dayLabel(date: string, today: string): { label: string; dateText
   return { label: d.toLocaleDateString('en-US', { weekday: 'long' }), dateText }
 }
 
+/** "Oct 12" in the user's locale, with the year only when it isn't today's year ("Dec 28, 2025"). */
+export function shortDate(date: string, today: string): string {
+  const withYear = date.slice(0, 4) !== today.slice(0, 4)
+  return dateOf(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', ...(withYear ? { year: 'numeric' } : {}) })
+}
+
 /**
  * The list for a range of days. When the range includes today, every open overdue item (any age) is
  * pinned in `overdue` and the rest are listed by day; otherwise there is no pinned section.
