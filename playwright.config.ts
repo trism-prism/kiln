@@ -18,7 +18,7 @@ export default defineConfig({
     command: `npm run build:e2e && npm run preview -- --outDir dist-e2e --port ${port} --strictPort`,
     url: origin,
     reuseExistingServer: !process.env.CI && !custom,
-    timeout: 120_000,
+    timeout: 300_000,
     // The build points at a pretend Worker; the tests answer its requests (e2e/worker-mock.ts).
     // The VAPID key is a syntactically valid placeholder (0x04 then 64 zero bytes), never used to push.
     env: {

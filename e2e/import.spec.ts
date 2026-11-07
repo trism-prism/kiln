@@ -6,9 +6,20 @@ import { expect, test, type Page } from '@playwright/test'
 const fixture = (name: string) => readFileSync(new URL(`../fixtures/plans/${name}.json`, import.meta.url), 'utf8')
 const publicFile = (name: string) => fileURLToPath(new URL(`../public/${name}`, import.meta.url))
 
+/**
+ * Puts the plan into the textarea the way a paste does: one value change and one input event.
+ * locator.fill() of a 40 to 50 kB plan takes 1.5 to 2 s in Chromium (it inserts the text through the editing
+ * pipeline and lays out every wrapped line), which times out the four-import test when the machine is busy.
+ */
 async function paste(page: Page, text: string) {
   await page.goto('/import')
-  await page.getByLabel('Plan text').fill(text)
+  const box = page.getByLabel('Plan text')
+  await expect(box).toBeVisible()
+  await box.evaluate((el, value) => {
+    // React tracks the value itself, so go through the native setter or it ignores the event.
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(el, value)
+    el.dispatchEvent(new Event('input', { bubbles: true }))
+  }, text)
 }
 
 /** Waits for the preview, imports, and checks that the app moved to the new plan's page. */

@@ -73,6 +73,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await animationsDone(page)
       await page.keyboard.press('4')
       await expect(page.getByText(/^Completed /)).toBeVisible()
+      await animationsDone(page) // the Undo toast and the status fade in; axe must read their final colors
       expect(await seriousViolations(page)).toEqual([])
     })
 
