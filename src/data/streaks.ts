@@ -18,7 +18,10 @@ export async function studyEvents(db: KilnDB): Promise<StudyEvent[]> {
   for (const p of await db.practiceItems.toArray()) {
     if (!p.deleted && p.status === 'done' && p.completedAt) out.push({ at: p.completedAt, minutes: p.minutes })
   }
-  for (const t of await db.personalTodos.toArray()) {
+  // Through the updatedAt index, not toArray(): the calendar's live query reads the whole table with toArray(), and
+  // sharing that Dexie cache entry between two live queries left a later write (Undo after a move) in the calendar
+  // query's zone, failing with "Readwrite transaction in liveQuery context". Every record has updatedAt > 0.
+  for (const t of await db.personalTodos.where('updatedAt').above(0).toArray()) {
     if (!t.deleted && t.done && t.completedAt) out.push({ at: t.completedAt, minutes: t.minutes ?? 0 })
   }
   const cardMinutes = new Map((await db.reviewCards.toArray()).map((c) => [c.id, c.minutes ?? 10]))

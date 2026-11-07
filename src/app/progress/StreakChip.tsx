@@ -19,8 +19,8 @@ export function StreakChip() {
     const before = was.current
     was.current = counted
     if (before !== false || counted !== true) return
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
-    icon.current?.animate(
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+    icon.current?.animate?.(
       [
         { transform: 'scale(0.85)', fillOpacity: 0 },
         { transform: 'scale(1)', fillOpacity: 1 },
