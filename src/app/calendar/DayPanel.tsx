@@ -78,12 +78,8 @@ function Row({ item, date, today, onMove }: { item: TodoItem; date: string; toda
           </div>
           <p className="mt-0.5 text-xs text-text-muted">{itemMeta(item)}</p>
         </div>
-<<<<<<< HEAD
         {item.leetcode && !item.done && <LeetCodeLink slug={item.leetcode.slug} title={item.title} language={item.leetcode.language} />}
-=======
-        {item.leetcode && !item.done && <LeetCodeLink slug={item.leetcode.slug} title={item.title} />}
         {item.kind === 'personal' && <PersonalActions item={item} />}
->>>>>>> origin/main
       </div>
       {movable &&
         (moving ? (
