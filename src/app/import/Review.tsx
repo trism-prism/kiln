@@ -1,14 +1,15 @@
 // Steps 3-7 of docs/plan-import.md for one input: validation report, plan details, match, preview, import.
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router'
 import { RadioGroup, Radio, Label } from 'react-aria-components'
 import { Dot } from './Dot'
 import { db, importPlan, previewImport, scheduleAll, type ImportPreview } from '../../data'
 import type { Plan } from '../../domain/plan-format'
+import { cardMinutes } from '../../domain/mastery'
 import { addDaysISO, toLocalISODate } from '../../lib/date'
 import { Button } from '../../ui/button'
-import { TextField } from '../../ui/form'
+import { Checkbox, TextField } from '../../ui/form'
 import { toasts } from '../../ui/overlay'
 import { Card } from '../../ui/surface'
 import { META_START_DATE } from '../../pwa/onboarding'
@@ -74,6 +75,9 @@ export function Review({ input }: { input: Input }) {
   const [deadlineBad, setDeadlineBad] = useState(false)
   const [chosen, setChosen] = useState<Choice | null>(null)
   const [copyId, setCopyId] = useState<string | null>(null)
+  // Reviews are opt-in (off unless ticked).
+  const [reviews, setReviews] = useState(false)
+  const reviewsHelp = useId()
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<string>()
 
@@ -124,7 +128,7 @@ export function Review({ input }: { input: Input }) {
     setBusy(true)
     setFailure(undefined)
     try {
-      const result = await importPlan(db, finalPlan, { startDate, deadline: deadlineValue || undefined })
+      const result = await importPlan(db, finalPlan, { startDate, deadline: deadlineValue || undefined, reviewsOn: reviews })
       const parts = [`${result.tasksAdded} added`, ...(result.tasksUpdated > 0 ? [`${result.tasksUpdated} updated`] : [])]
       let scheduled = ''
       try {
@@ -191,6 +195,16 @@ export function Review({ input }: { input: Input }) {
               description={plan?.deadline ? 'Empty uses the deadline in the plan file.' : undefined}
             />
           </div>
+          {plan?.tasks.some((t) => cardMinutes(t) !== undefined) && (
+            <div className="grid gap-1">
+              <Checkbox isSelected={reviews} onChange={setReviews} aria-describedby={reviewsHelp}>
+                Schedule reviews
+              </Checkbox>
+              <p id={reviewsHelp} className="pl-8 text-sm text-text-muted">
+                Finished lessons come back for a short review on later days.
+              </p>
+            </div>
+          )}
           {input.kind === 'build' && plan?.schedulingMode === 'fixed' && (
             <p className="text-sm text-text-muted">
               Fixed dates: a task has a due date, so the plan follows its dates.

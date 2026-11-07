@@ -1,12 +1,13 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Trash2 } from 'lucide-react'
-import { useEffect, useRef, useState, type RefObject } from 'react'
+import { useEffect, useId, useRef, useState, type RefObject } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import {
   db,
   getSettings,
   listPlans,
   practiceOn,
+  reviewsOn,
   scheduleAll,
   setPlanShare,
   SHARE_LABEL,
@@ -17,6 +18,7 @@ import {
   type Share,
   type TaskRecord,
 } from '../../data'
+import { cardMinutes } from '../../domain/mastery'
 import { formatDay, isRealISODate, toLocalISODate } from '../../lib/date'
 import { Button, Link } from '../../ui/button'
 import { ListBoxItem, Select, Switch, TextField } from '../../ui/form'
@@ -83,6 +85,9 @@ function Modules({ detail, today }: { detail: PlanDetail; today: string }) {
 function Settings({ detail, today }: { detail: PlanDetail; today: string }) {
   const { plan } = detail
   const [deadline, setDeadline] = useState(plan.deadline ?? '')
+  const reviewsHelp = useId()
+  // Plans with no lessons (course calendars) have nothing to review, so they get no switch.
+  const hasReviewable = detail.modules.some((m) => m.tasks.some((t) => cardMinutes(t) !== undefined))
   const others = useLiveQuery(async () => ({ plans: await listPlans(db), settings: await getSettings(db) }))
   // A half-typed date reads as empty, so only a complete date is saved; Clear removes the deadline.
   const commitDeadline = () => {
@@ -100,7 +105,7 @@ function Settings({ detail, today }: { detail: PlanDetail; today: string }) {
       {others && others.plans.length > 1 && (
         <Select
           label="Share of study time"
-          description={`How much of each day this plan gets compared with your other plans${example ? `: ${example}` : ''}.`}
+          description={example ? `${example[0]!.toUpperCase()}${example.slice(1)}.` : undefined}
           selectedKey={plan.share ?? shareFromWeight(plan.weight)}
           onSelectionChange={(k) => rescheduleAfter(() => setPlanShare(db, plan.id, k as Share))}
         >
@@ -111,25 +116,29 @@ function Settings({ detail, today }: { detail: PlanDetail; today: string }) {
           ))}
         </Select>
       )}
-      <div className="grid gap-1.5">
-        <Switch isSelected={!!plan.skipOptional} onChange={(on) => rescheduleAfter(() => updateRecord(db, 'plans', plan.id, { skipOptional: on }))}>
-          Skip optional work
-        </Switch>
-        <p className="text-sm text-text-muted">Optional tasks go to the backlog instead of your days, so the plan finishes sooner.</p>
-      </div>
-      <div className="grid gap-1.5">
-        <Switch isSelected={practiceOn(plan)} onChange={(on) => rescheduleAfter(() => updateRecord(db, 'plans', plan.id, { dailyPracticeOn: on }))}>
-          Daily practice problem
-        </Switch>
-        <p className="text-sm text-text-muted">A practice problem on each study day, on top of the plan&apos;s tasks.</p>
-      </div>
+      <Switch isSelected={!!plan.skipOptional} onChange={(on) => rescheduleAfter(() => updateRecord(db, 'plans', plan.id, { skipOptional: on }))}>
+        Skip optional work
+      </Switch>
+      <Switch isSelected={practiceOn(plan)} onChange={(on) => rescheduleAfter(() => updateRecord(db, 'plans', plan.id, { dailyPracticeOn: on }))}>
+        Daily practice problem
+      </Switch>
+      {hasReviewable && (
+        <div className="grid gap-1.5">
+          <Switch isSelected={reviewsOn(plan)} onChange={(on) => rescheduleAfter(() => updateRecord(db, 'plans', plan.id, { reviewsOn: on }))} aria-describedby={reviewsHelp}>
+            Schedule reviews
+          </Switch>
+          <p id={reviewsHelp} className="text-sm text-text-muted">
+            Finished lessons come back for a short review on later days.
+          </p>
+        </div>
+      )}
       <TextField
-        label="Deadline"
+        label="Deadline (optional)"
         type="date"
         value={deadline}
         onChange={setDeadline}
         onBlur={commitDeadline}
-        description="Optional. Kiln warns you if your expected finish is later."
+        description="Takes effect the next time you reschedule."
       />
       {plan.deadline && (
         <Button
@@ -143,7 +152,6 @@ function Settings({ detail, today }: { detail: PlanDetail; today: string }) {
           Clear deadline
         </Button>
       )}
-      <p className="text-sm text-text-muted">The deadline applies the next time you reschedule.</p>
     </Card>
   )
 }
