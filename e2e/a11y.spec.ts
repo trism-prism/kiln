@@ -5,7 +5,7 @@ import { animationsDone, openSeeded } from './seed'
 for (const colorScheme of ['light', 'dark'] as const) {
   test.describe(`axe, ${colorScheme}`, () => {
     test.use({ colorScheme })
-    for (const path of ['/', '/todo', '/design', '/settings', '/privacy', '/terms', '/licenses']) {
+    for (const path of ['/', '/todo', '/design', '/settings', '/progress', '/privacy', '/terms', '/licenses']) {
       test(`${path} has no serious or critical violations`, async ({ page }) => {
         await page.goto(path)
         await expect(page.getByRole('heading', { level: 1 })).toBeVisible()

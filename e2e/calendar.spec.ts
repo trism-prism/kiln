@@ -157,23 +157,6 @@ test('the day panel adds a to-do on that day', async ({ page }) => {
   await expect(panel.getByRole('listitem').filter({ hasText: 'Read chapter 3' })).toBeVisible()
 })
 
-test('the streak is 1 after completing an item, on the calendar and the dashboard', async ({ page }) => {
-  await openSeeded(page, '/calendar')
-  await expect(page.getByRole('region', { name: 'Streak' }).getByText('0 days').first()).toBeVisible()
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /^To Do/ }).click()
-  const lesson = page.getByRole('region', { name: 'Today' }).getByRole('listitem').filter({ hasText: '· Lesson ·' }).first()
-  await lesson.getByRole('checkbox').click({ force: true })
-  await page.keyboard.press('3')
-  await expect(lesson.getByText('Done', { exact: true })).toBeVisible()
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Calendar' }).click()
-  const streak = page.getByRole('region', { name: 'Streak' })
-  await expect(streak.getByText('Current streak').locator('xpath=following-sibling::dd[1]')).toHaveText('1 day')
-  await expect(streak.getByText('Longest streak').locator('xpath=following-sibling::dd[1]')).toHaveText('1 day')
-  await expect(streak.locator('[data-date="2026-11-09"][data-level]')).toHaveAttribute('aria-label', /\d+ (min|h)( [0-9]+ min)? studied, 1 task done on Mon, Nov 9/)
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Dashboard' }).click()
-  await expect(page.getByRole('link', { name: '1 day streak' })).toBeVisible()
-})
-
 for (const colorScheme of ['light', 'dark'] as const) {
   test.describe(`axe /calendar, ${colorScheme}`, () => {
     test.use({ colorScheme })
@@ -181,7 +164,6 @@ for (const colorScheme of ['light', 'dark'] as const) {
     test('month view, the day panel and the Move to field', async ({ page }) => {
       await openSeeded(page, '/calendar')
       await expect(page.getByRole('grid', { name: 'November 2026' })).toBeVisible()
-      await expect(page.getByRole('region', { name: 'Streak' })).toBeVisible()
       expect(await seriousViolations(page)).toEqual([])
       await page.locator('[data-day="2026-11-09"]').focus()
       await page.keyboard.press('Enter')
@@ -195,12 +177,6 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await openSeeded(page, '/calendar')
       await page.getByRole('tab', { name: 'Week' }).click()
       await expect(page.getByRole('grid', { name: 'Nov 9 to Nov 15, 2026' })).toBeVisible()
-      expect(await seriousViolations(page)).toEqual([])
-    })
-
-    test('the dashboard with its streak chip', async ({ page }) => {
-      await openSeeded(page, '/')
-      await expect(page.getByRole('link', { name: /streak/ })).toBeVisible()
       expect(await seriousViolations(page)).toEqual([])
     })
   })
