@@ -11,6 +11,7 @@ import {
 } from '../domain/mastery'
 import type { GeneratedPractice } from '../domain/scheduler'
 import type { KilnDB } from './db'
+import { reviewsOn } from './plan-settings'
 import { getDeviceId, insertRecord, revertWrite, stampAfter, updateRecord } from './repo'
 import type { PracticeItemRecord, PracticeLogRecord, ReviewCardRecord, ReviewLogRecord } from './types'
 import { uuidv7 } from './uuid'
@@ -80,8 +81,9 @@ export async function persistPractice(
 
 export interface PracticeResult {
   item: PracticeItemRecord
-  card: ReviewCardRecord
-  log: ReviewLogRecord
+  /** Undefined when the plan has reviews off: no re-solve card is made or rated. */
+  card?: ReviewCardRecord
+  log?: ReviewLogRecord
   /** Puts the item, the practice log row and the card back as they were. */
   undo: () => Promise<boolean>
 }
@@ -90,6 +92,7 @@ export interface PracticeResult {
  * Marks a generated daily problem done with a rating, the way completeTask does for a plan problem:
  * the first time it writes a practiceLog row (the streak and the ramp read it) and creates the
  * re-solve review card (15/25/35 minutes by difficulty); again, it only rates the existing card.
+ * With the plan's reviews off it only marks the problem done and logs it: no card is made or rated.
  * Atomic.
  */
 export async function completePractice(
@@ -100,25 +103,33 @@ export async function completePractice(
   opts: SchedulerOptions = APP_OPTS,
 ): Promise<PracticeResult> {
   await getDeviceId(db)
-  return db.transaction('rw', db.practiceItems, db.practiceLog, db.reviewCards, db.reviewLogs, async () => {
+  return db.transaction('rw', db.practiceItems, db.practiceLog, db.plans, db.reviewCards, db.reviewLogs, async () => {
     const before = await db.practiceItems.get(itemId)
     if (!before || before.deleted) throw new Error(`Practice item ${itemId} not found`)
     const item = (await updateRecord(db, 'practiceItems', itemId, { status: 'done', rating: RATING_VALUE[rating], completedAt: now }))!
 
-    const existing = (await db.reviewCards.toArray())
-      .filter((c) => !c.deleted && !c.taskId && c.slug === item.slug)
-      .sort((a, b) => (a.id < b.id ? -1 : 1))[0]
-    const { card, log } = rate(existing ?? newCard(now), rating, now, opts)
-    const rec = existing
-      ? (await updateRecord(db, 'reviewCards', existing.id, { ...card, suspended: false }))!
-      : await insertRecord(db, 'reviewCards', {
-          ...card,
-          planId: item.planId,
-          slug: item.slug,
-          topics: item.topic ? [item.topic] : [],
-          minutes: LEETCODE_REVIEW_MINUTES[item.difficulty],
-        })
-    const logRec = await insertRecord(db, 'reviewLogs', { cardId: rec.id, ...log })
+    const plan = await db.plans.get(item.planId)
+    const withCard = !!plan && !plan.deleted && reviewsOn(plan)
+    const existing = withCard
+      ? (await db.reviewCards.toArray())
+          .filter((c) => !c.deleted && !c.taskId && c.slug === item.slug)
+          .sort((a, b) => (a.id < b.id ? -1 : 1))[0]
+      : undefined
+    let rec: ReviewCardRecord | undefined
+    let logRec: ReviewLogRecord | undefined
+    if (withCard) {
+      const { card, log } = rate(existing ?? newCard(now), rating, now, opts)
+      rec = existing
+        ? (await updateRecord(db, 'reviewCards', existing.id, { ...card, suspended: false }))!
+        : await insertRecord(db, 'reviewCards', {
+            ...card,
+            planId: item.planId,
+            slug: item.slug,
+            topics: item.topic ? [item.topic] : [],
+            minutes: LEETCODE_REVIEW_MINUTES[item.difficulty],
+          })
+      logRec = await insertRecord(db, 'reviewLogs', { cardId: rec.id, ...log })
+    }
 
     let practiceRow: PracticeLogRecord | undefined
     if (before.status !== 'done') {
@@ -135,10 +146,10 @@ export async function completePractice(
     }
     const undo = () =>
       revertWrite(db, {
-        restore: existing ? [['practiceItems', before, item.updatedAt], ['reviewCards', existing, rec.updatedAt]] : [['practiceItems', before, item.updatedAt]],
+        restore: [['practiceItems', before, item.updatedAt], ...(existing && rec ? [['reviewCards', existing, rec.updatedAt] as ['reviewCards', ReviewCardRecord, number]] : [])],
         remove: [
-          ['reviewLogs', logRec.id],
-          ...(existing ? [] : [['reviewCards', rec.id] as ['reviewCards', string]]),
+          ...(logRec ? [['reviewLogs', logRec.id] as ['reviewLogs', string]] : []),
+          ...(rec && !existing ? [['reviewCards', rec.id] as ['reviewCards', string]] : []),
           ...(practiceRow ? [['practiceLog', practiceRow.id] as ['practiceLog', string]] : []),
         ],
       })

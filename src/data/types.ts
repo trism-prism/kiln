@@ -45,6 +45,12 @@ export interface PlanRecord extends Base {
   /** Day 1 of the plan. */
   startDate: string
   deadline?: string
+  /**
+   * Spaced reviews for this plan (schema 4+, opt-in). Unset means off, so plans from before the setting
+   * (and plans synced from older devices) start off with no rewrite. Their old cards are kept but ignored
+   * until this is true (reviewPlanIds in plan-settings.ts).
+   */
+  reviewsOn?: boolean
   /** Keep this plan's optional tasks in the backlog. */
   skipOptional?: boolean
   // Part progress

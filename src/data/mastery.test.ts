@@ -5,7 +5,7 @@ import { badgeCount } from '../domain/badge'
 import { fixtureTexts, validateParts } from './fixtures'
 import { KilnDB } from './db'
 import { brushUp, completeTask, dueCards, masteryByPlan, masteryByTopic, reviewCard, reviewsDue, skipTask, unskipTask } from './mastery'
-import { importPlan, insertRecord, listTasks, softDelete } from './repo'
+import { importPlan, insertRecord, listTasks, softDelete, updateRecord } from './repo'
 import { newDb } from './test-db'
 import { uuidv7 } from './uuid'
 
@@ -17,7 +17,7 @@ const dsa = validateParts([fixtureTexts.dsa1, fixtureTexts.dsa2, fixtureTexts.ds
 async function seeded() {
   const db = newDb()
   let planId = ''
-  for (const part of dsa) planId = (await importPlan(db, part, { startDate: '2026-11-09' })).planId
+  for (const part of dsa) planId = (await importPlan(db, part, { startDate: '2026-11-09', reviewsOn: true })).planId
   const tasks = await listTasks(db, planId)
   const lesson = tasks.find((t) => t.type === 'lesson')!
   const lc = tasks.find((t) => t.practice?.provider === 'leetcode' && t.practice.slug)!
@@ -239,6 +239,70 @@ describe('review fixes', () => {
     const [c] = await dueCards(db, '2030-01-01')
     expect(c).toMatchObject({ learningSteps: 0, minutes: Math.min(20, Math.max(5, Math.round(0.25 * lesson.estimatedMinutes))) })
     await expect(reviewCard(db, a.card!.id, 'good', a.card!.due, NO_FUZZ)).resolves.toBeTruthy()
+  })
+})
+
+describe('opt-in reviews', () => {
+  it('a new plan has reviews off: completing a lesson makes no card', async () => {
+    const db = newDb()
+    const { planId } = await importPlan(db, dsa[0]!, { startDate: '2026-11-09' })
+    expect((await db.plans.get(planId))!.reviewsOn).toBeUndefined()
+    const lesson = (await listTasks(db, planId)).find((t) => t.type === 'lesson')!
+    const r = await completeTask(db, lesson.id, 'good', T0, NO_FUZZ)
+    expect(r.task.status).toBe('done')
+    expect(r.card).toBeUndefined()
+    expect(await db.reviewCards.count()).toBe(0)
+    expect(await db.reviewLogs.count()).toBe(0)
+    await r.undo()
+    expect((await db.tasks.get(lesson.id))!.status).toBe('open')
+  })
+
+  it('importPlan sets the flag only when it creates the plan; an update keeps the plan setting', async () => {
+    const db = newDb()
+    const { planId } = await importPlan(db, dsa[0]!, { startDate: '2026-11-09', reviewsOn: true })
+    expect((await db.plans.get(planId))!.reviewsOn).toBe(true)
+    await updateRecord(db, 'plans', planId, { reviewsOn: false })
+    await importPlan(db, dsa[0]!, { startDate: '2026-11-09', reviewsOn: true })
+    expect((await db.plans.get(planId))!.reviewsOn).toBe(false)
+  })
+
+  it('migration: a plan stored before the setting (no field) has its cards kept but ignored everywhere, and switching on resumes them', async () => {
+    const { db, planId, lesson } = await seeded()
+    const done = await completeTask(db, lesson.id, 'again', T0, NO_FUZZ)
+    const far = T0 + 400 * DAY
+    expect(await dueCards(db, '2030-01-01')).toHaveLength(1)
+    expect((await masteryByTopic(db, far))[lesson.topics[0]!]).toBeDefined()
+
+    // The stored row an older version wrote: the field is simply absent.
+    const row: Record<string, unknown> = { ...(await db.plans.get(planId))! }
+    delete row.reviewsOn
+    await db.plans.put(row as never)
+
+    expect(await db.reviewCards.count()).toBe(1) // kept
+    expect(await dueCards(db, '2030-01-01')).toEqual([])
+    expect(await brushUp(db, far)).toEqual([])
+    expect(await reviewsDue(db, '2026-11-09', '2030-01-01')).toEqual({})
+    expect(await masteryByTopic(db, far)).toEqual({})
+    expect(await masteryByPlan(db, far)).toEqual({})
+
+    // Finished while off: no new card, so nothing is queued for it later.
+    const other = (await listTasks(db, planId)).find((t) => t.type === 'lesson' && t.id !== lesson.id)!
+    await completeTask(db, other.id, 'good', T0, NO_FUZZ)
+    expect(await db.reviewCards.count()).toBe(1)
+
+    await updateRecord(db, 'plans', planId, { reviewsOn: true })
+    expect((await dueCards(db, '2030-01-01')).map((c) => c.id)).toEqual([done.card!.id])
+    expect((await brushUp(db, far)).map((i) => i.card.id)).toEqual([done.card!.id])
+    expect(Object.values(await reviewsDue(db, '2026-11-09', '2030-01-01')).map((e) => e.count)).toEqual([1])
+  })
+
+  it('one plan on and one off: only the plan that is on has due cards', async () => {
+    const { db, planId, lesson } = await seeded()
+    await completeTask(db, lesson.id, 'good', T0, NO_FUZZ)
+    const second = await importPlan(db, validateParts([fixtureTexts.sd]).plans[0]!, { startDate: '2026-11-09' })
+    const sdLesson = (await listTasks(db, second.planId)).find((t) => t.type === 'lesson')!
+    await completeTask(db, sdLesson.id, 'good', T0, NO_FUZZ)
+    expect((await dueCards(db, '2030-01-01')).map((c) => c.planId)).toEqual([planId])
   })
 })
 

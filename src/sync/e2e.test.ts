@@ -558,7 +558,7 @@ describe('schema 4 tables', () => {
     const feed = await insertRecord(a, 'feeds', { lms: 'canvas', url: 'https://canvas.example/feeds/calendars/user_secret.ics', planIds: [], lastResult: { ok: true, added: 2 } })
     const plan = validateParts([fixtureTexts.sd]).plans[0]!
     const { planId } = await importPlan(a, plan, { startDate: '2026-11-09' })
-    await updateRecord(a, 'plans', planId, { favorite: true, dailyPracticeOn: true })
+    await updateRecord(a, 'plans', planId, { favorite: true, dailyPracticeOn: true, reviewsOn: true })
     await setPlanShare(a, planId, 'more')
     const version = await snapshotPlan(a, planId, { summary: 'Imported' })
     ok(await sync(a))
@@ -568,7 +568,7 @@ describe('schema 4 tables', () => {
     expect(await b.feeds.get(feed.id)).toEqual(feed)
     expect(await b.planVersions.get(version.id)).toEqual(version)
     expect((await readSnapshot((await b.planVersions.get(version.id))!)).title).toBe(plan.title)
-    expect(await b.plans.get(planId)).toMatchObject({ favorite: true, dailyPracticeOn: true, share: 'more', weight: 5 })
+    expect(await b.plans.get(planId)).toMatchObject({ favorite: true, dailyPracticeOn: true, reviewsOn: true, share: 'more', weight: 5 })
 
     // Back the other way: B edits and deletes, A receives.
     await setPersonalTodoDone(b, todo.id, true)
@@ -579,6 +579,12 @@ describe('schema 4 tables', () => {
     expect(await a.personalTodos.get(todo.id)).toMatchObject({ done: true })
     expect(await a.events.get(event.id)).toMatchObject({ deleted: true })
     expect(await a.feeds.get(feed.id)).toMatchObject({ lastFetchedAt: NOW })
+
+    // The review switch, flipped on the other device, comes back too.
+    await updateRecord(b, 'plans', planId, { reviewsOn: false })
+    ok(await sync(b))
+    ok(await sync(a))
+    expect((await a.plans.get(planId))!.reviewsOn).toBe(false)
 
     // The feed URL is a secret: the server only ever holds ciphertext.
     const dump = JSON.stringify((await d1.prepare('SELECT * FROM sync_records').all()).results)

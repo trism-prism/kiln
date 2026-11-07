@@ -6,17 +6,17 @@ import { db } from '../data'
 declare global {
   interface Window {
     /** Loads the sample plans (dev and e2e builds only). */
-    kilnSeed?: () => Promise<boolean>
+    kilnSeed?: (opts?: { reviews?: boolean }) => Promise<boolean>
   }
 }
 
 /** True in `npm run dev` and in the e2e build, false in the production build. */
 export const canSeed = import.meta.env.DEV || import.meta.env.MODE === 'e2e'
 
-export async function loadSamplePlans(): Promise<boolean> {
+export async function loadSamplePlans(opts?: { reviews?: boolean }): Promise<boolean> {
   if (import.meta.env.DEV || import.meta.env.MODE === 'e2e') {
     const { seedFixtures } = await import('../data/seed')
-    return seedFixtures(db)
+    return seedFixtures(db, undefined, opts?.reviews === true)
   }
   return false
 }
@@ -24,7 +24,7 @@ export async function loadSamplePlans(): Promise<boolean> {
 /** Exposes `window.kilnSeed()` and handles `?seed=1` (seed, then drop the parameter). */
 export async function installSeedHook(): Promise<void> {
   if (import.meta.env.DEV || import.meta.env.MODE === 'e2e') {
-    window.kilnSeed = loadSamplePlans
+    window.kilnSeed = (opts) => loadSamplePlans(opts)
     const url = new URL(location.href)
     if (url.searchParams.get('seed') === '1') {
       await loadSamplePlans()
