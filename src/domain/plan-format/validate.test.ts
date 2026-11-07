@@ -95,6 +95,15 @@ describe('validatePlan', () => {
     ])
   })
 
+  it('warns once with the number of videos that have no link, counting a source link', () => {
+    const video = (extra: Record<string, unknown> = {}) => ({ title: 'V', kind: 'video', minutes: 10, ...extra })
+    const out = texts((p) => {
+      p.sources = [{ id: 'course', title: 'Course', kind: 'course', url: 'https://example.com/c' }, { id: 'book', title: 'Book', kind: 'book' }]
+      p.tasks[0]!.resources = [video(), video({ url: 'https://example.com/v' }), video({ sourceId: 'course' }), video({ sourceId: 'book' })]
+    })
+    expect(out.filter((m) => m.includes('without a link'))).toEqual(['warning: plan "Demo plan": 2 videos without a link'])
+  })
+
   it('treats null and empty strings as absent and trims text', () => {
     const r = validatePlan(
       (() => {

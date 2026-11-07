@@ -65,6 +65,8 @@ export function checkMeaning(root: Obj, opts: SemanticOptions = {}): RawIssue[] 
 
   const moduleIds = new Set(modules.flatMap((m) => str(m.id) ?? []))
   const sourceIds = new Set(sources.flatMap((s) => str(s.id) ?? []))
+  const linkedSourceIds = new Set(sources.flatMap((s) => (str(s.url) ? (str(s.id) ?? []) : [])))
+  let videosWithoutLink = 0
   const taskIndex = new Map<string, number>()
   tasks.forEach((t, i) => {
     const id = str(t.id)
@@ -210,6 +212,8 @@ export function checkMeaning(root: Obj, opts: SemanticOptions = {}): RawIssue[] 
       const rloc: Segment[] = [...loc, 'resources', j]
       if (int(res.minutes) === undefined && res.minutes === undefined) warn(rloc, 'minutes', 'is missing; add it so Kiln can total study time')
       if (res.required !== false) requiredMinutes += int(res.minutes) ?? 0
+      const rSource = str(res.sourceId)
+      if (res.kind === 'video' && !str(res.url) && !(rSource !== undefined && (linkedSourceIds.has(rSource) || !sourceIds.has(rSource)))) videosWithoutLink++ // a source from an earlier part is not checked
       const sourceId = str(res.sourceId)
       if (sourceId !== undefined && !sourceIds.has(sourceId) && !opts.priorParts?.sources.has(sourceId)) {
         if (laterPart && opts.priorParts === undefined) warn(rloc, 'sourceId', `"${sourceId}" is not in this file; it must be in part 1`)
@@ -335,6 +339,10 @@ export function checkMeaning(root: Obj, opts: SemanticOptions = {}): RawIssue[] 
   const daily = asObj(root.dailyPractice)
   if (daily.source === 'neetcode' && ![...taskTopics].some((t) => (NEETCODE_TOPICS as readonly string[]).includes(t))) {
     warn(['dailyPractice'], 'source', 'is "neetcode" but no task topic matches a NeetCode topic, so daily problems cannot follow the lessons')
+  }
+
+  if (videosWithoutLink > 0) {
+    warn([], '', `${videosWithoutLink} ${videosWithoutLink === 1 ? 'video' : 'videos'} without a link`)
   }
 
   return out
