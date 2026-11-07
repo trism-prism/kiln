@@ -6,6 +6,7 @@ import { I18nProvider } from 'react-aria-components'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DateField } from './date'
 import { TextField } from './form'
+import { Sheet } from './overlay'
 
 beforeEach(() => {
   // Monday 9 Nov 2026; only Date is faked so user-event's timers still run.
@@ -102,6 +103,21 @@ describe('DateField', () => {
     expect(value()).toBe('2026-11-24')
     expect(box()).toHaveProperty('value', 'Tue, Nov 24, 2026')
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('lets Escape close a sheet around it', async () => {
+    const user = userEvent.setup()
+    const closed: boolean[] = []
+    render(
+      <I18nProvider locale="en-US">
+        <Sheet title="Add to-do" isOpen onOpenChange={(o) => closed.push(!o)}>
+          <DateField label="Day (optional)" value="" onChange={() => {}} />
+        </Sheet>
+      </I18nProvider>,
+    )
+    await user.click(screen.getByRole('textbox', { name: 'Day (optional)' }))
+    await user.keyboard('fri{Escape}')
+    expect(closed).toEqual([true])
   })
 
   it('has no spin buttons, and TextField type="date" renders it', () => {
