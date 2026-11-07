@@ -152,7 +152,6 @@ function Flow({ onClose }: { onClose: () => void }) {
 
         {step === 1 && (
           <div className="grid gap-3">
-            <p className="text-sm text-text-muted">The day your first plan starts. You can change it per plan when you import.</p>
             <TextField label="Start date" type="date" value={start} onChange={setStart} isInvalid={!startOk} errorMessage="Choose a date" className="max-w-48" />
             <Button variant="quiet" className="justify-self-start" onPress={() => setStart(addDaysISO(today, 1))}>Use tomorrow</Button>
           </div>
@@ -160,7 +159,7 @@ function Flow({ onClose }: { onClose: () => void }) {
 
         {step === 2 && (
           <div className="grid gap-3">
-            <p className="text-sm text-text-muted">A daily notification with your task count. Optional: you can turn it on later in Settings.</p>
+            <p className="text-sm text-text-muted">You can turn this on later in Settings.</p>
             <TimeInput label="Reminder time" value={time} onChange={setTime} isInvalid={!timeOk} />
             {pushOn ? (
               <p role="status" tabIndex={-1} ref={onNote} className="text-sm text-success outline-none">Reminders are on.</p>
