@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_TODO_PREFS, buildTodoItems, dayLabel, filterTodoItems, parseTodoPrefs, rangeBounds, todoView, type TodoCard, type TodoPrefs, type TodoProblem, type TodoSource, type TodoTask } from './index'
+import { DEFAULT_TODO_PREFS, buildTodoItems, dayLabel, filterTodoItems, isRealMonthDay, nearestMonthDay, parseTodoPrefs, rangeBounds, todoView, type TodoCard, type TodoPrefs, type TodoProblem, type TodoSource, type TodoTask } from './index'
 
 const TODAY = '2026-11-11' // a Wednesday
 const at = (day: number, h = 12) => new Date(2026, 10, day, h).getTime()
@@ -89,8 +89,23 @@ describe('rangeBounds', () => {
     expect(rangeBounds(prefs({ customFrom: { month: 11, day: 1 } }), TODAY)).toEqual({ from: '2026-11-01', to: TODAY })
   })
 
-  it('takes an Until before the From in next year, and ignores a date that does not exist', () => {
-    expect(rangeBounds(prefs({ customFrom: { month: 12, day: 1 }, customUntil: { month: 1, day: 15 } }), TODAY)).toEqual({ from: '2026-12-01', to: '2027-01-15' })
+  it('picks the occurrence nearest today for both ends', () => {
+    // From Dec 1 on Jan 5 is last December; Until Dec 20 is this coming one.
+    expect(rangeBounds(prefs({ customFrom: { month: 12, day: 1 }, customUntil: { month: 1, day: 20 } }), '2027-01-05')).toEqual({ from: '2026-12-01', to: '2027-01-20' })
+    expect(nearestMonthDay({ month: 1, day: 3 }, '2026-12-28')).toBe('2027-01-03')
+    expect(nearestMonthDay({ month: 2, day: 29 }, '2026-11-11')).toBeUndefined() // no leap year within a year of today
+  })
+
+  it('an Until before the From gives an empty range, not a year-long one', () => {
+    const r = rangeBounds(prefs({ customUntil: { month: 11, day: 1 } }), TODAY)
+    expect(r).toEqual({ from: TODAY, to: '2026-11-01' })
+    expect(todoView([], r, TODAY)).toEqual({ overdue: [], days: [] })
+    expect(r.from > r.to).toBe(true)
+  })
+
+  it('ignores a date that does not exist', () => {
+    expect(isRealMonthDay({ month: 2, day: 29 })).toBe(true)
+    expect(isRealMonthDay({ month: 4, day: 31 })).toBe(false)
     expect(rangeBounds(prefs({ customFrom: { month: 2, day: 30 } }), TODAY)).toEqual({ from: TODAY, to: TODAY })
   })
 })

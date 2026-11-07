@@ -111,6 +111,7 @@ test('personal to-dos: add with minutes, mark done, edit, delete', async ({ page
   await form.getByLabel('Title').fill('Buy lab notebook')
   await form.getByLabel('Minutes (optional)').fill('20')
   await form.getByRole('button', { name: 'Add to-do' }).click()
+  await expect(form).toBeHidden() // the closing dialog's overlay swallows clicks on the page behind it
   const row = page.getByRole('region', { name: 'Today' }).getByRole('listitem').filter({ hasText: 'Buy lab notebook' })
   await expect(row).toContainText('To-do · 20 min')
   await row.getByRole('checkbox').click({ force: true })
@@ -121,7 +122,9 @@ test('personal to-dos: add with minutes, mark done, edit, delete', async ({ page
   const renamed = page.getByRole('listitem').filter({ hasText: 'Buy two lab notebooks' })
   await expect(renamed).toBeVisible()
   await renamed.getByRole('button', { name: 'Delete Buy two lab notebooks' }).click()
-  await expect(page.getByRole('listitem').filter({ hasText: 'Buy two lab notebooks' })).toBeHidden()
+  // The Undo toast also names the to-do, so check the list (main) and the toast separately.
+  await expect(page.getByRole('main').getByRole('listitem').filter({ hasText: 'Buy two lab notebooks' })).toBeHidden()
+  await expect(page.getByText('Deleted: Buy two lab notebooks')).toBeVisible()
 })
 
 test('dashboard shows one card per plan', async ({ page }) => {
