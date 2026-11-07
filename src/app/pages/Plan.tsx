@@ -202,7 +202,8 @@ function PlanActions({ className, editRef, editing, onEdit, onDelete }: PlanActi
         Reschedule
       </Button>
       <Button variant="danger-outline" onPress={onDelete}>
-        <Trash2 size={16} aria-hidden="true" /> Delete plan
+        {/* No icon on phones, so the row fits a 360px screen. */}
+        <Trash2 size={16} aria-hidden="true" className="hidden md:block" /> Delete plan
       </Button>
     </div>
   )
@@ -219,9 +220,9 @@ export default function PlanPage() {
   // Closing the editor returns focus to the button that opened it (the copy that is on screen).
   const wasEditing = useRef(false)
   useEffect(() => {
-    if (wasEditing.current && !editing) [barEdit, rowEdit].find((r) => r.current?.offsetParent)?.current?.focus()
+    if (wasEditing.current && !editing) [barEdit, rowEdit].find((r) => r.current?.checkVisibility())?.current?.focus()
     wasEditing.current = editing
-  }, [editing, detail])
+  }, [editing])
 
   if (detail === undefined) {
     return (
