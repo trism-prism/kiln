@@ -26,9 +26,9 @@ interface HeatmapSettings {
   blackoutDates: readonly string[]
 }
 
-/** "45 min studied, 3 tasks done on Tue, Nov 12" */
+/** "45 min studied on Tue, Nov 12" */
 const cellLabel = (date: string, count: number, minutes: number) =>
-  count === 0 ? `Nothing done on ${formatDay(date)}` : `${minutesText(minutes)} studied, ${plural(count, 'task')} done on ${formatDay(date)}`
+  count === 0 ? `Nothing done on ${formatDay(date)}` : `${minutesText(minutes)} studied on ${formatDay(date)}`
 
 export function Heatmap({ days, today, settings }: { days: ReadonlyMap<string, DayStudy>; today: string; settings: HeatmapSettings }) {
   const { weekStartsOn, minutesPerWeekday, blackoutDates } = settings

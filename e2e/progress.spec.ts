@@ -78,7 +78,7 @@ test('the chip fills once today counts, and a past day logs to that day', async 
   await sheet.getByLabel('Day').fill('nov 8')
   await sheet.getByRole('button', { name: 'Save' }).click()
   await expect(sheet).toBeHidden()
-  await expect(page.locator('[data-date="2026-11-08"]')).toHaveAttribute('aria-label', '20 min studied, 1 task done on Sun, Nov 8')
+  await expect(page.locator('[data-date="2026-11-08"]')).toHaveAttribute('aria-label', '20 min studied on Sun, Nov 8')
 
   // Yesterday alone: a 1-day streak, but today not done yet.
   await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /^To Do/ }).click()
