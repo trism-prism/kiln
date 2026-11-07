@@ -21,6 +21,12 @@ export function parseStudyMinutes(text: string): number | undefined {
   return p.title === '' && p.minutes !== undefined && !p.due && !p.priority && p.links.length === 0 ? Number(p.minutes) : undefined
 }
 
+/** The minutes a session may log, 1 to MAX_LOG_MINUTES, or undefined when the text isn't that. */
+export function loggableMinutes(text: string): number | undefined {
+  const m = parseStudyMinutes(text)
+  return m !== undefined && m >= 1 && m <= MAX_LOG_MINUTES ? m : undefined
+}
+
 export function LogTimeSheet({ isOpen, today, onClose }: { isOpen: boolean; today: string; onClose: () => void }) {
   const [subject, setSubject] = useState('')
   const [minutes, setMinutes] = useState('')
@@ -43,9 +49,9 @@ export function LogTimeSheet({ isOpen, today, onClose }: { isOpen: boolean; toda
   }
 
   const title = subject.trim()
-  const mins = parseStudyMinutes(minutes)
+  const mins = loggableMinutes(minutes)
   const subjectError = title === '' ? 'Add a subject' : title.length > 300 ? 'Use 300 characters or fewer' : ''
-  const minutesError = mins === undefined || mins < 1 || mins > MAX_LOG_MINUTES ? 'Enter the minutes, like 30' : ''
+  const minutesError = mins === undefined ? 'Enter the minutes, like 30' : ''
   // An emptied day field is the one problem the field itself doesn't report.
   const dateError = date === '' ? 'Pick today or earlier' : ''
 

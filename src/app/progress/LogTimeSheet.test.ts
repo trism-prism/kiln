@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseStudyMinutes } from './LogTimeSheet'
+import { loggableMinutes, parseStudyMinutes } from './LogTimeSheet'
 
 describe('parseStudyMinutes', () => {
   it('reads minutes the way people type them', () => {
@@ -7,5 +7,11 @@ describe('parseStudyMinutes', () => {
   })
   it('refuses anything that is not only a duration', () => {
     expect(['', 'abc', '30 psych', 'fri', '-5', '1,5h'].map(parseStudyMinutes)).toEqual([undefined, undefined, undefined, undefined, undefined, undefined])
+  })
+})
+
+describe('loggableMinutes', () => {
+  it('takes 1 to 600 minutes', () => {
+    expect(['0', '1', '600', '601', '10h', '10h 1m'].map(loggableMinutes)).toEqual([undefined, 1, 600, undefined, 600, undefined])
   })
 })
