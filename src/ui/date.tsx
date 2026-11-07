@@ -172,7 +172,7 @@ export function DateField({
       }}
       isInvalid={!!problem || isInvalid}
       aria-label={label ? undefined : ariaLabel}
-      className={`grid gap-1.5 text-sm ${className}`}
+      className={`grid content-start gap-1.5 text-sm ${className}`}
     >
       {label && <Label className="font-medium">{label}</Label>}
       <div className="relative">

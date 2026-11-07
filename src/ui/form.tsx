@@ -25,7 +25,8 @@ import {
 import { controlClass as control, popoverClass as popover } from './classes'
 import { DateField, type DateFieldProps } from './date'
 
-const field = 'grid gap-1.5 text-sm'
+// content-start: in a grid row next to a taller field (one showing an error), the rows stay at the top.
+const field = 'grid content-start gap-1.5 text-sm'
 const help = 'text-sm text-text-muted'
 const error = 'text-sm text-danger'
 
