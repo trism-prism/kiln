@@ -8,7 +8,7 @@ import { Button, IconButton } from '../../ui/button'
 import { Checkbox, ListBoxItem, Select, TextAreaField, TextField } from '../../ui/form'
 import { toasts } from '../../ui/overlay'
 import { rescheduleOverdue } from '../actions'
-import { PRIORITY_HINT, PRIORITY_LABEL } from '../priority'
+import { PRIORITY_LABEL } from '../priority'
 import type { PlanDetail } from '../queries'
 
 interface Draft {
@@ -106,15 +106,15 @@ function TaskFields({ task, all, pin, onChange, onPin }: { task: Task; all: Task
           value={String(task.estimatedMinutes)}
           onChange={(v) => onChange({ ...task, estimatedMinutes: Math.max(0, Math.round(Number(v) || 0)) })}
         />
-        <Select label="Priority" description={PRIORITY_HINT[task.priority]} selectedKey={task.priority} onSelectionChange={(k) => onChange({ ...task, priority: k as Priority })}>
+        <Select label="Priority" selectedKey={task.priority} onSelectionChange={(k) => onChange({ ...task, priority: k as Priority })}>
           {PRIORITIES.map((p) => (
             <ListBoxItem key={p} id={p}>
               {PRIORITY_LABEL[p]}
             </ListBoxItem>
           ))}
         </Select>
-        <TextField label="Due" type="date" value={task.deadline ?? ''} onChange={(v) => onChange({ ...task, deadline: v || undefined })} description="Optional. Kiln warns you if the task lands later." />
-        <TextField label="Pinned to" type="date" value={pin} onChange={onPin} description="Optional. The scheduler keeps the task on this day." />
+        <TextField label="Deadline (optional)" type="date" value={task.deadline ?? ''} onChange={(v) => onChange({ ...task, deadline: v || undefined })} />
+        <TextField label="Pinned to (optional)" type="date" value={pin} onChange={onPin} />
       </div>
       <fieldset className="grid gap-2">
         <legend className="mb-1.5 text-sm font-medium">Links</legend>
