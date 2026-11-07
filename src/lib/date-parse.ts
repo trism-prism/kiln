@@ -17,23 +17,23 @@ const iso = (y: number, month: number, day: number) => `${y}-${String(month + 1)
 const daysApart = (a: string, b: string) => Math.abs(Date.parse(b) - Date.parse(a)) / 86_400_000
 
 /**
- * A month and day with no year: the next time that date comes (today counts). With `nearest`, the last
- * time it came instead when that is closer, so a field with a minimum can say "Nov 7" has passed.
+ * A month and day with no year: the next time that date comes (today counts). With `recent`, a date up to
+ * 30 days back stays in the past, so a field with a minimum can say "Nov 7" has passed; older ones roll forward.
  */
-function monthDay(today: string, month: number, day: number, nearest = false): string | undefined {
+function monthDay(today: string, month: number, day: number, recent = false): string | undefined {
   const year = Number(today.slice(0, 4))
   let next: string | undefined
   // Up to 8 years either way, so Feb 29 finds a leap year.
   for (let y = year; y <= year + 8 && !next; y++) if (isRealISODate(iso(y, month, day)) && iso(y, month, day) >= today) next = iso(y, month, day)
-  if (!nearest || !next) return next
+  if (!recent || !next) return next
   let last: string | undefined
   for (let y = year; y >= year - 8 && !last; y--) if (isRealISODate(iso(y, month, day)) && iso(y, month, day) < today) last = iso(y, month, day)
-  return last && daysApart(last, today) < daysApart(today, next) ? last : next
+  return last && daysApart(last, today) <= 30 ? last : next
 }
 
 /** Month (0-11) and day with an optional typed year ("26" or "2026"). */
-function withYear(today: string, month: number, day: number, year?: string, nearest = false): string | undefined {
-  if (year === undefined) return monthDay(today, month, day, nearest)
+function withYear(today: string, month: number, day: number, year?: string, recent = false): string | undefined {
+  if (year === undefined) return monthDay(today, month, day, recent)
   if (!/^(?:[0-9]{2}|[0-9]{4})$/.test(year)) return undefined
   const out = iso(year.length === 2 ? 2000 + Number(year) : Number(year), month, day)
   return isRealISODate(out) ? out : undefined
@@ -51,10 +51,10 @@ const DAY = /^([0-9]{1,2})(?:st|nd|rd|th)?$/
  * A typed date as yyyy-mm-dd, or undefined when it can't be read. Accepts "today", "tomorrow", a weekday
  * ("fri": the next one after today), "nov 20", "20 nov", "November 20 2026", numeric dates in the locale's
  * order ("11/20", "11/20/26"), and "2026-11-20". A missing year means the next time that date comes.
- * A weekday in front ("Fri, Nov 20, 2026", how the field shows a date) is ignored. `nearest`: a date with no
- * year goes to its nearest occurrence, past or future, instead of always the next one.
+ * A weekday in front ("Fri, Nov 20, 2026", how the field shows a date) is ignored. `recent`: a date with no
+ * year up to 30 days back is read as that past day instead of next year's.
  */
-export function parseDateText(text: string, today: string, locale: string, { nearest = false } = {}): string | undefined {
+export function parseDateText(text: string, today: string, locale: string, { recent = false } = {}): string | undefined {
   // Trim after commas become spaces, so a trailing comma ("Nov 20,") reads the same as none.
   const t = text.toLowerCase().replace(/,/g, ' ').replace(/\s+/g, ' ').trim().replace(/[.]$/, '')
   if (t === 'today') return today
@@ -70,8 +70,8 @@ export function parseDateText(text: string, today: string, locale: string, { nea
     const [a, b, year] = words as [string, string, string?]
     const monthThenDay = nameIndex(a, MONTHS) >= 0 && DAY.exec(b)
     const dayThenMonth = nameIndex(b, MONTHS) >= 0 && DAY.exec(a)
-    if (monthThenDay) return withYear(today, nameIndex(a, MONTHS), Number(monthThenDay[1]), year, nearest)
-    if (dayThenMonth) return withYear(today, nameIndex(b, MONTHS), Number(dayThenMonth[1]), year, nearest)
+    if (monthThenDay) return withYear(today, nameIndex(a, MONTHS), Number(monthThenDay[1]), year, recent)
+    if (dayThenMonth) return withYear(today, nameIndex(b, MONTHS), Number(dayThenMonth[1]), year, recent)
   }
   if (words.length !== 1) return undefined
   const ymd = /^([0-9]{4})[/.-]([0-9]{1,2})[/.-]([0-9]{1,2})$/.exec(words[0]!)
@@ -81,5 +81,5 @@ export function parseDateText(text: string, today: string, locale: string, { nea
   const [first, second] = [Number(num[1]), Number(num[2])]
   const [month, day] = monthFirst(locale) ? [first, second] : [second, first]
   if (month < 1 || month > 12) return undefined
-  return withYear(today, month - 1, day, num[3], nearest)
+  return withYear(today, month - 1, day, num[3], recent)
 }

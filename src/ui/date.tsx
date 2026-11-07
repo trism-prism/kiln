@@ -122,13 +122,13 @@ export function DateField({
   const type = (t: string) => {
     setText(t)
     setProblem('')
-    const iso = parseDateText(t, toLocalISODate(new Date()), locale, { nearest: !!min })
+    const iso = parseDateText(t, toLocalISODate(new Date()), locale, { recent: !!min })
     if (iso && !outOfRange(iso)) send(iso)
   }
   /** Reads the text; false when it can't be used. */
   const commit = (): boolean => {
     const t = text.trim()
-    const iso = t === '' ? '' : parseDateText(t, toLocalISODate(new Date()), locale, { nearest: !!min })
+    const iso = t === '' ? '' : parseDateText(t, toLocalISODate(new Date()), locale, { recent: !!min })
     const p = iso === undefined ? 'Try a date like Nov 20' : iso === '' ? '' : outOfRange(iso)
     setProblem(p)
     if (p) send(before)

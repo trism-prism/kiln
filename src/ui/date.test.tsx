@@ -96,9 +96,17 @@ describe('DateField', () => {
     expect(screen.getByText('Pick today or later')).toBeTruthy()
     expect(value()).toBe('')
     await user.clear(box())
-    await user.type(box(), 'jan 2') // the nearest Jan 2 is next year's
+    await user.type(box(), 'jan 2') // the next Jan 2
     await user.tab()
     expect(value()).toBe('2027-01-02')
+    await user.clear(box())
+    await user.type(box(), 'oct 20') // 20 days back: refused, not next year
+    await user.tab()
+    expect(screen.getByText('Pick today or later')).toBeTruthy()
+    await user.clear(box())
+    await user.type(box(), 'jun 1') // long past, so next June
+    await user.tab()
+    expect(value()).toBe('2027-06-01')
   })
 
   it('calls onBlur after the new value has rendered', async () => {

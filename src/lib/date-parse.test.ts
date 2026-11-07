@@ -47,14 +47,21 @@ describe('parseDateText', () => {
     expect(parseDateText(text, TODAY, 'en-US')).toBeUndefined()
   })
 
-  it('nearest: a date with no year goes to its nearest occurrence', () => {
-    const near = (t: string) => parseDateText(t, TODAY, 'en-US', { nearest: true })
-    expect(near('nov 7')).toBe('2026-11-07') // two days ago, not next year
-    expect(near('11/7')).toBe('2026-11-07')
-    expect(near('nov 20')).toBe('2026-11-20')
-    expect(near('jan 2')).toBe('2027-01-02')
-    expect(near('nov 7 2027')).toBe('2027-11-07') // a typed year is kept
-    expect(near('nov 9')).toBe('2026-11-09')
+  it('recent: a date with no year up to 30 days back stays this year; anything older rolls forward', () => {
+    const recent = (t: string, today = TODAY) => parseDateText(t, today, 'en-US', { recent: true })
+    expect(recent('nov 7')).toBe('2026-11-07') // two days ago, not next year
+    expect(recent('11/7')).toBe('2026-11-07')
+    expect(recent('oct 20')).toBe('2026-10-20') // 20 days back: still a past day, so a min refuses it
+    expect(recent('oct 10')).toBe('2026-10-10') // 30 days back
+    expect(recent('oct 9')).toBe('2027-10-09') // 31 days back
+    expect(recent('jun 1')).toBe('2027-06-01') // long past: next year, though last June is closer
+    expect(recent('nov 20')).toBe('2026-11-20')
+    expect(recent('jan 2')).toBe('2027-01-02')
+    expect(recent('nov 7 2027')).toBe('2027-11-07') // a typed year is kept
+    expect(recent('nov 9')).toBe('2026-11-09')
+    // Across the new year, both ways.
+    expect(recent('dec 28', '2027-01-05')).toBe('2026-12-28')
+    expect(recent('jan 2', '2026-12-28')).toBe('2027-01-02')
   })
 
   it('reads numeric dates in the locale order', () => {
