@@ -73,7 +73,7 @@ export default function DashboardPage() {
             </div>
           }
         >
-          Import a study plan and Kiln turns it into a daily list with due dates, reviews and one LeetCode problem a day.
+          Import a study plan and Kiln turns it into a daily list with due dates and spaced reviews.
         </EmptyState>
       ) : (
         <div className="grid gap-4">

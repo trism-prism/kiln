@@ -205,7 +205,7 @@ A LeetCode slug used twice in a plan is a warning (re-solves come from spaced re
 |---|---|---|---|---|
 | `source` | enum | yes | `neetcode`, `plan` | Where daily problems come from. |
 | `perDay` | integer | no | 1-5, default 1 | Problems per study day (a day with budget above 0). |
-| `language` | text(30) | no | | e.g. "python". Display only ("Solve in Python"); the app setting wins if set. |
+| `language` | text(30) | no | | e.g. "python". Shown on the Solve link ("Solve in Go"); Python when absent. |
 | `startDifficulty` | enum | no | `easy` (default), `medium`, `hard` | Where the ramp starts for generated problems. |
 | `topicFollowsLessons` | boolean | no | default `true` | `true`: generated problems match the topics of the most recent lesson. `false`: NeetCode roadmap order. |
 

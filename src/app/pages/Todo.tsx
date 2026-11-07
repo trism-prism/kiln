@@ -47,7 +47,7 @@ function Row({ item, onComplete, pending }: { item: TodoItem; onComplete: (i: Co
       </div>
       {item.leetcode && !item.done && (
         <div className="shrink-0 pt-0.5">
-          <LeetCodeLink slug={item.leetcode.slug} title={item.title} />
+          <LeetCodeLink slug={item.leetcode.slug} title={item.title} language={item.leetcode.language} />
         </div>
       )}
       {personal && <PersonalActions item={item} />}

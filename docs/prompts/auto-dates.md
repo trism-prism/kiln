@@ -12,7 +12,7 @@ Ask me, in one message, for anything below that I have not already told you, the
 1. Goal: what I want to be able to do at the end, and how I will know I am done.
 2. Current level: what I already know, specifically (not just "beginner").
 3. Time: about how many minutes per day I can study, and whether I have a deadline (I enter dates in Kiln; you only use them to size the plan).
-4. Resources: anything I want to use or avoid, and whether everything must be free.
+4. Resources: anything I want to use or avoid, and whether everything must be free, and links to any videos, problem sets, flashcards (Quizlet) or docs I already have.
 5. Programming subjects: which language. Coding interview prep: whether I want one practice problem a day.
 
 If I attached material (a syllabus, an existing plan, notes), use it as the backbone and still ask about anything missing.
@@ -30,7 +30,7 @@ Rules:
 - Fill every task completely. `description` says exactly what to do (which chapter, which video section, which exercises). Lessons get 2-4 `objectives`, `keyConcepts`, 2-4 `verificationQuestions`, `topics` and at least one resource. Add `tradeoffs` wherever the topic involves real choices. Every resource gets `minutes`.
 - One problem per practice task, in `practice`, and it `dependsOn` the lesson that teaches it. Use a LeetCode slug only if you are sure it is the official one; otherwise omit `practice` and name the problem in `description`.
 - Priority: `core` for what the goal needs, `recommended` for useful but skippable work, `optional` for extra depth. Kiln drops optional work first, then recommended, when time runs short. A task may only depend on tasks of the same or higher priority.
-- URLs: include `url` only when you are confident the page exists at that address. Otherwise omit `url` and give the title, author or channel, and `section` so I can find it. Never invent a link.
+- Links: give every video, problem set, flashcard deck (for example Quizlet) and documentation page a `url`, in any subject. Include a `url` only when you are confident the page exists at that address; never invent a link. When you are not sure, ask me for the link in your first message, before you write the plan, instead of leaving it out. If I cannot give one, omit `url` and give the title, author or channel, and `section` so I can find it.
 - Ids: lowercase slugs, unique across modules, tasks and sources, descriptive (`hash-map-basics`, not `t7`). `order` starts at 1 in each module.
 - Topics: short kebab-case strings, reused exactly across tasks. For data structures and algorithms use these where they fit: arrays-hashing, two-pointers, sliding-window, stack, binary-search, linked-list, trees, tries, heap, backtracking, graphs, advanced-graphs, dp-1d, dp-2d, greedy, intervals, math-geometry, bit-manipulation.
 - Long plans: if the plan has more than 40 tasks, split it into parts of whole modules, at most 40 tasks each. Every part is a complete JSON block with the same `id`, `title`, `schedulingMode` and `"part": {"index": n, "total": N}`; `sources` and `dailyPractice` go in part 1 only; `dependsOn` may point to earlier parts. Write part 1, then stop and tell me to reply "next".
