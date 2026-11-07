@@ -1,7 +1,8 @@
 // "Edit plan": the plan's content as a draft, saved through savePlanEdit (by key, progress kept).
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
-import { db, planFromRecords, savePlanEdit, uuidv7 } from '../../data'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { db, editBase, planFromRecords, savePlanEdit, uuidv7 } from '../../data'
+import { checkMeaning } from '../../domain/plan-format/semantic'
 import { planSchema, type Plan, type PlanModule, type Priority, type Resource, type Task } from '../../domain/plan-format'
 import { Button, IconButton } from '../../ui/button'
 import { Checkbox, ListBoxItem, Select, TextAreaField, TextField } from '../../ui/form'
@@ -49,29 +50,44 @@ function toPlan(base: Plan, d: Draft): Plan {
   }
 }
 
-/** 'Task "Intro": title must not be empty' for each problem with the plan file's shape. */
-function shapeErrors(plan: Plan): string[] {
+/** 'Task "Intro": title must not be empty' for each problem with the plan file's shape, and each cycle or module-order problem the plan did not already have (`base`: the plan as opened). */
+function shapeErrors(plan: Plan, base?: Plan): string[] {
   const parsed = planSchema.safeParse(plan)
-  if (parsed.success) return []
-  return parsed.error.issues.map(({ path, message }) => {
-    const [kind, i, ...field] = path
-    const item = kind === 'tasks' ? plan.tasks[i as number] : kind === 'modules' ? plan.modules[i as number] : undefined
-    const where = item ? `${kind === 'tasks' ? 'Task' : 'Module'} "${item.title || 'untitled'}"` : 'Plan'
-    return `${where}: ${(item ? field : path).join(' ')} ${message}`
-  })
+  const where = (kind: unknown, i: unknown, p: Plan = plan) => {
+    const item = kind === 'tasks' ? p.tasks[i as number] : kind === 'modules' ? p.modules[i as number] : undefined
+    return item ? `${kind === 'tasks' ? 'Task' : 'Module'} "${item.title || 'untitled'}"` : 'Plan'
+  }
+  if (!parsed.success) {
+    return parsed.error.issues.map(({ path, message }) => {
+      const [kind, i, ...field] = path
+      const w = where(kind, i)
+      return `${w}: ${(w === 'Plan' ? path : field).join(' ')} ${message}`
+    })
+  }
+  // The two authoring rules the editor can break (the others are not checked, see save).
+  // Problems the plan already had when opened (sample or older plans) do not block an unrelated edit.
+  const rules = (p: Plan) =>
+    checkMeaning(p as unknown as Record<string, unknown>)
+    .filter((x) => x.severity === 'error' && ((x.loc[0] === 'tasks' && x.field === 'dependsOn' && x.rest.startsWith('creates a cycle')) || (x.loc[0] === 'modules' && x.field === 'notBeforeDay')))
+    .map((x) => `${where(x.loc[0], x.loc[1], p)}: ${x.field} ${x.rest}`)
+  const known = new Set(base ? rules(base).map(sameIssue) : [])
+  return rules(plan).filter((m) => !known.has(sameIssue(m)))
 }
 
-function Row({ label, onUp, onDown, onDelete, children }: { label: string; onUp: () => void; onDown: () => void; onDelete: () => void; children: ReactNode }) {
+/** An issue message without list positions, so moving a module does not make an old problem look new. */
+const sameIssue = (m: string) => m.replace(/\[\d+\]/g, '[]')
+
+function Row({ label, first, last, onUp, onDown, onDelete, children }: { label: string; first: boolean; last: boolean; onUp: () => void; onDown: () => void; onDelete: () => void; children: ReactNode }) {
   return (
     <div className="flex items-end gap-1">
       <div className="min-w-0 flex-1">{children}</div>
-      <IconButton aria-label={`Move ${label} up`} onPress={onUp}>
+      <IconButton aria-label={`Move ${label} up`} isDisabled={first} onPress={onUp}>
         <ArrowUp size={18} />
       </IconButton>
-      <IconButton aria-label={`Move ${label} down`} onPress={onDown}>
+      <IconButton aria-label={`Move ${label} down`} isDisabled={last} onPress={onDown}>
         <ArrowDown size={18} />
       </IconButton>
-      <IconButton aria-label={`Delete ${label}`} onPress={onDelete}>
+      <IconButton aria-label={`Delete ${label}`} data-act="delete" onPress={onDelete}>
         <Trash2 size={18} />
       </IconButton>
     </div>
@@ -82,7 +98,7 @@ function TaskFields({ task, all, pin, onChange, onPin }: { task: Task; all: Task
   const setLink = (i: number, r: Resource | undefined) =>
     onChange({ ...task, resources: r ? task.resources.map((x, j) => (j === i ? r : x)) : task.resources.filter((_, j) => j !== i) })
   return (
-    <div className="grid gap-4 rounded-md bg-surface-muted p-4">
+    <div id={`details-${task.id}`} className="grid gap-4 rounded-md bg-surface-muted p-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <TextField
           label="Minutes"
@@ -143,6 +159,26 @@ export function PlanEditor({ detail, onClose }: { detail: PlanDetail; onClose: (
       detail.modules.flatMap((m) => m.tasks),
     ),
   )
+  // What the editor opened with: save refuses if another device changed any of it meanwhile.
+  const [opened] = useState(() =>
+    editBase(
+      detail.plan,
+      detail.modules.map((m) => m.module),
+      detail.modules.flatMap((m) => m.tasks),
+    ),
+  )
+  const heading = useRef<HTMLHeadingElement>(null)
+  const form = useRef<HTMLFormElement>(null)
+  // A selector (inside the form) to focus after the next render: the row after a delete, a new field.
+  const focusSel = useRef<string | undefined>(undefined)
+  const setFocusSel = (sel: string) => {
+    focusSel.current = sel
+  }
+  useEffect(() => heading.current?.focus(), [])
+  useEffect(() => {
+    if (focusSel.current) form.current?.querySelector<HTMLElement>(focusSel.current)?.focus()
+    focusSel.current = undefined
+  })
   const [draft, setDraft] = useState<Draft>(() => ({
     title: base.title,
     goal: base.goal ?? '',
@@ -168,12 +204,12 @@ export function PlanEditor({ detail, onClose }: { detail: PlanDetail; onClose: (
     const plan = toPlan(base, draft)
     // Only the file shape is checked. The authoring rules (validatePlan) are not: plans joined from parts
     // or reordered here can break them (module notBeforeDay order), and the scheduler copes with the rest.
-    const found = shapeErrors(plan)
+    const found = shapeErrors(plan, base)
     setErrors(found)
     if (found.length) return
     setSaving(true)
     try {
-      const v = await savePlanEdit(db, detail.plan.id, plan, Object.fromEntries(Object.entries(pins).map(([k, d]) => [k, d || undefined])))
+      const v = await savePlanEdit(db, detail.plan.id, plan, Object.fromEntries(Object.entries(pins).map(([k, d]) => [k, d || undefined])), opened)
       onClose()
       toasts.add(
         { title: 'Plan saved', description: `${v.summary}. Reschedule to place new or changed tasks.`, action: { label: 'Reschedule', onPress: () => void rescheduleOverdue() } },
@@ -188,6 +224,7 @@ export function PlanEditor({ detail, onClose }: { detail: PlanDetail; onClose: (
 
   return (
     <form
+      ref={form}
       className="grid gap-6"
       aria-label="Edit plan"
       onSubmit={(e) => {
@@ -195,6 +232,9 @@ export function PlanEditor({ detail, onClose }: { detail: PlanDetail; onClose: (
         void save()
       }}
     >
+      <h2 ref={heading} tabIndex={-1} className="text-base font-medium outline-none">
+        Edit plan
+      </h2>
       <div className="grid gap-4">
         <TextField label="Plan name" value={draft.title} onChange={(title) => setDraft({ ...draft, title })} />
         <TextAreaField label="Goal" rows={2} value={draft.goal} onChange={(goal) => setDraft({ ...draft, goal })} />
@@ -202,12 +242,18 @@ export function PlanEditor({ detail, onClose }: { detail: PlanDetail; onClose: (
       </div>
 
       {draft.modules.map((m, i) => (
-        <section key={m.module.id} aria-label={`Module ${i + 1}`} className="grid gap-3 rounded-lg border border-border bg-surface-raised p-4 shadow-sm">
+        <section key={m.module.id} data-module={m.module.id} aria-label={`Module ${i + 1}`} className="grid gap-3 rounded-lg border border-border bg-surface-raised p-4 shadow-sm">
           <Row
             label={`module ${m.module.title || i + 1}`}
+            first={i === 0}
+            last={i === draft.modules.length - 1}
             onUp={() => setModules(swap(draft.modules, i, i - 1))}
             onDown={() => setModules(swap(draft.modules, i, i + 1))}
-            onDelete={() => setModules(without(draft.modules, new Set(m.tasks.map((t) => t.id))).filter((_, j) => j !== i))}
+            onDelete={() => {
+              setModules(without(draft.modules, new Set(m.tasks.map((t) => t.id))).filter((_, j) => j !== i))
+              const next = draft.modules[i + 1]
+              setFocusSel(next ? `[data-module="${next.module.id}"] [data-act="delete"]` : '[data-add-module]')
+            }}
           >
             <TextField label="Module name" value={m.module.title} onChange={(title) => setModule(i, { ...m, module: { ...m.module, title } })} />
           </Row>
@@ -215,16 +261,22 @@ export function PlanEditor({ detail, onClose }: { detail: PlanDetail; onClose: (
             {m.tasks.map((t, j) => {
               const setTask = (next: Task) => setModule(i, { ...m, tasks: m.tasks.map((x) => (x.id === t.id ? next : x)) })
               return (
-                <li key={t.id} className="grid gap-2 border-t border-border pt-3">
+                <li key={t.id} data-task={t.id} className="grid gap-2 border-t border-border pt-3">
                   <Row
                     label={`task ${t.title || j + 1}`}
+                    first={j === 0}
+                    last={j === m.tasks.length - 1}
                     onUp={() => setModule(i, { ...m, tasks: swap(m.tasks, j, j - 1) })}
                     onDown={() => setModule(i, { ...m, tasks: swap(m.tasks, j, j + 1) })}
-                    onDelete={() => setModules(without(draft.modules, new Set([t.id])))}
+                    onDelete={() => {
+                      setModules(without(draft.modules, new Set([t.id])))
+                      const next = m.tasks[j + 1]
+                      setFocusSel(next ? `[data-task="${next.id}"] [data-act="delete"]` : `[data-add-task="${m.module.id}"]`)
+                    }}
                   >
                     <TextField label="Task name" value={t.title} onChange={(title) => setTask({ ...t, title })} />
                   </Row>
-                  <Button variant="quiet" className="w-fit" aria-expanded={open === t.id} onPress={() => setOpen(open === t.id ? undefined : t.id)}>
+                  <Button variant="quiet" className="w-fit" aria-expanded={open === t.id} aria-controls={`details-${t.id}`} onPress={() => setOpen(open === t.id ? undefined : t.id)}>
                     {open === t.id ? 'Hide details' : 'Details'}
                   </Button>
                   {open === t.id && <TaskFields task={t} all={allTasks} pin={pins[t.id] ?? ''} onChange={setTask} onPin={(d) => setPins({ ...pins, [t.id]: d })} />}
@@ -235,6 +287,7 @@ export function PlanEditor({ detail, onClose }: { detail: PlanDetail; onClose: (
           <Button
             variant="secondary"
             className="w-fit"
+            data-add-task={m.module.id}
             onPress={() => {
               const id = newKey('task')
               const task: Task = {
@@ -255,6 +308,7 @@ export function PlanEditor({ detail, onClose }: { detail: PlanDetail; onClose: (
               }
               setModule(i, { ...m, tasks: [...m.tasks, task] })
               setOpen(id)
+              setFocusSel(`[data-task="${id}"] input`)
             }}
           >
             <Plus size={16} /> Add task
@@ -264,6 +318,7 @@ export function PlanEditor({ detail, onClose }: { detail: PlanDetail; onClose: (
       <Button
         variant="secondary"
         className="w-fit"
+        data-add-module
         onPress={() => setModules([...draft.modules, { module: { id: newKey('module'), title: '', order: draft.modules.length + 1 }, tasks: [] }])}
       >
         <Plus size={16} /> Add module

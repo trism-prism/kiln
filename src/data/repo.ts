@@ -252,6 +252,8 @@ export interface ImportOptions {
    * deleted ones that are in the file come back with their progress, live ones not in it are deleted.
    */
   replace?: boolean
+  /** With replace: delete only these keys (modules and tasks) when the file leaves them out; others left out stay. */
+  onlyRemove?: ReadonlySet<string>
 }
 
 export interface ImportResult {
@@ -292,7 +294,9 @@ export async function importPlan(db: KilnDB, plan: Plan, opts: ImportOptions): P
       sources: plan.sources,
       dailyPractice: plan.dailyPractice,
     }
-    const partsIn = [...new Set([...(existing?.partsIn ?? []), part.index])].sort((a, b) => a - b)
+    // An edit or restore of a split plan is not a part: it keeps the parts already in.
+    const keepParts = !!(opts.replace && existing)
+    const partsIn = keepParts ? existing.partsIn : [...new Set([...(existing?.partsIn ?? []), part.index])].sort((a, b) => a - b)
     let planRec: PlanRecord
     if (existing) {
       // Plan-level fields come from part 1 only (docs/plan-format.md, "Parts").
@@ -300,7 +304,7 @@ export async function importPlan(db: KilnDB, plan: Plan, opts: ImportOptions): P
         ...existing,
         ...(part.index === 1 ? content : {}),
         ...(opts.deadline ? { deadline: opts.deadline } : {}),
-        partTotal: part.total,
+        partTotal: keepParts ? existing.partTotal : part.total,
         partsIn,
         ...stamp(existing.updatedAt),
       }
@@ -343,7 +347,7 @@ export async function importPlan(db: KilnDB, plan: Plan, opts: ImportOptions): P
     }
     const notIn = <T extends { key: string; deleted: boolean }>(rows: Iterable<T>, keys: Set<string>) => [...rows].filter((r) => !r.deleted && !keys.has(r.key))
     if (opts.replace) {
-      for (const m of notIn(oldModules.values(), new Set(plan.modules.map((m) => m.id)))) {
+      for (const m of notIn(oldModules.values(), new Set(plan.modules.map((m) => m.id))).filter((m) => !opts.onlyRemove || opts.onlyRemove.has(m.key))) {
         await db.modules.put({ ...m, deleted: true, ...stamp(m.updatedAt) })
         moduleIds.delete(m.key)
       }
@@ -374,7 +378,7 @@ export async function importPlan(db: KilnDB, plan: Plan, opts: ImportOptions): P
       }
     }
     if (opts.replace) {
-      for (const t of notIn(oldTasks.values(), new Set(plan.tasks.map((t) => t.id)))) await db.tasks.put({ ...t, deleted: true, ...stamp(t.updatedAt) })
+      for (const t of notIn(oldTasks.values(), new Set(plan.tasks.map((t) => t.id))).filter((t) => !opts.onlyRemove || opts.onlyRemove.has(t.key))) await db.tasks.put({ ...t, deleted: true, ...stamp(t.updatedAt) })
     }
 
     return { planId, created: !existing, modulesAdded, tasksAdded, tasksUpdated, partsIn, complete: isPlanComplete(planRec) }

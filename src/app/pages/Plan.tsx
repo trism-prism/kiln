@@ -1,11 +1,10 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import {
   db,
   getSettings,
   listPlans,
-  planWeight,
   practiceOn,
   scheduleAll,
   setPlanShare,
@@ -14,12 +13,10 @@ import {
   SHARES,
   softDeletePlan,
   updateRecord,
-  type PlanRecord,
-  type SettingsRecord,
   type Share,
   type TaskRecord,
 } from '../../data'
-import { formatDay, isRealISODate, toLocalISODate, weekdayIndex } from '../../lib/date'
+import { formatDay, isRealISODate, toLocalISODate } from '../../lib/date'
 import { Button, Link } from '../../ui/button'
 import { ListBoxItem, Select, Switch, TextField } from '../../ui/form'
 import { Sheet, toasts } from '../../ui/overlay'
@@ -27,6 +24,7 @@ import { Badge, Card, EmptyState, ProgressBar, Skeleton } from '../../ui/surface
 import { rescheduleOverdue, safely, scheduleBacklogAgain } from '../actions'
 import { Page } from '../Page'
 import { PlanEditor } from '../plan/PlanEditor'
+import { shareExample } from '../plan/share-example'
 import { FavoriteButton, History } from '../plan/PlanExtras'
 import { minutesText, TitleLink } from '../parts'
 import { PRIORITY_LABEL } from '../priority'
@@ -79,15 +77,6 @@ function Modules({ detail, today }: { detail: PlanDetail; today: string }) {
       })}
     </div>
   )
-}
-
-/** "about 40 of your 90 min a day": the plan's part of today's study minutes (or the first study day's) at its share. */
-function shareExample(plan: PlanRecord, plans: PlanRecord[], settings: SettingsRecord, today: string): string | undefined {
-  const days = settings.minutesPerWeekday
-  const budget = days[weekdayIndex(today)] || days.find((m) => m > 0)
-  const total = plans.reduce((sum, p) => sum + planWeight(p), 0)
-  if (!budget || !total) return undefined
-  return `about ${Math.round((budget * planWeight(plan)) / total / 5) * 5} of your ${budget} min a day`
 }
 
 function Settings({ detail, today }: { detail: PlanDetail; today: string }) {
@@ -197,6 +186,12 @@ export default function PlanPage() {
   const today = useToday()
   const [confirming, setConfirming] = useState(false)
   const [editing, setEditing] = useState(false)
+  // Closing the editor returns focus to the button that opened it.
+  const wasEditing = useRef(false)
+  useEffect(() => {
+    if (wasEditing.current && !editing) document.getElementById('edit-plan')?.focus()
+    wasEditing.current = editing
+  }, [editing, detail])
 
   if (detail === undefined) {
     return (
@@ -224,7 +219,7 @@ export default function PlanPage() {
         <div className="flex flex-wrap gap-2">
           <FavoriteButton plan={detail.plan} />
           {!editing && (
-            <Button variant="secondary" onPress={() => setEditing(true)}>
+            <Button variant="secondary" id="edit-plan" onPress={() => setEditing(true)}>
               Edit plan
             </Button>
           )}

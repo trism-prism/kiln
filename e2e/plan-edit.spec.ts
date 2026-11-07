@@ -39,3 +39,42 @@ test('favorite a plan, edit it, then restore the older version', async ({ page }
   await expect(versions).toHaveCount(3)
   await expect(versions.first()).toContainText('Restored')
 })
+
+test('the editor manages focus, disables the end arrows and checks dependency cycles', async ({ page }) => {
+  await openSeeded(page, '/plans')
+  await page.getByRole('main').getByRole('heading', { level: 2 }).first().getByRole('link').click()
+  const edit = page.getByRole('button', { name: 'Edit plan', exact: true })
+  await edit.click()
+  const form = page.getByRole('form', { name: 'Edit plan' })
+  await expect(form.getByRole('heading', { name: 'Edit plan' })).toBeFocused()
+
+  const module = form.locator('[data-module]').first()
+  await expect(module.getByRole('button', { name: /^Move module .* up$/ })).toBeDisabled()
+  await expect(module.getByRole('button', { name: /^Move task .* up$/ }).first()).toBeDisabled()
+
+  // Add task focuses the new name field; Details points at its panel.
+  await module.getByRole('button', { name: 'Add task' }).click()
+  const name = module.getByRole('textbox', { name: 'Task name' }).last()
+  await expect(name).toBeFocused()
+  await expect(module.getByRole('button', { name: 'Hide details' })).toHaveAttribute('aria-controls', /^details-/)
+
+  // Deleting the last row moves focus to Add task.
+  await module.getByRole('button', { name: /^Delete task / }).last().click()
+  await expect(module.getByRole('button', { name: 'Add task' })).toBeFocused()
+
+  // Two tasks that depend on each other are refused with the reason.
+  const dependOnOther = async (details: number) => {
+    await module.getByRole('button', { name: 'Details' }).nth(details).click()
+    await module.getByText(/^Depends on/).first().click()
+    const box = module.getByRole('checkbox').first()
+    if (!(await box.isChecked())) await module.locator('label:has(input[type=checkbox])').first().click()
+    await expect(box).toBeChecked()
+  }
+  await dependOnOther(1)
+  await dependOnOther(0)
+  await form.getByRole('button', { name: 'Save plan' }).click()
+  await expect(form.getByRole('alert')).toContainText('creates a cycle')
+
+  await form.getByRole('button', { name: 'Cancel' }).click()
+  await expect(edit).toBeFocused()
+})

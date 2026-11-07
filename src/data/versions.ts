@@ -71,7 +71,7 @@ export async function snapshotPlan(db: KilnDB, planId: string, info: { summary: 
     const rec: PlanVersionRecord = {
       id: uuidv7(),
       planId,
-      createdAt: Date.now(),
+      createdAt: Math.max(Date.now(), (newestFirst(await db.planVersions.where('planId').equals(planId).toArray())[0]?.createdAt ?? -1) + 1),
       summary: info.summary,
       ...(info.label ? { label: info.label } : {}),
       snapshot,
@@ -150,22 +150,58 @@ async function currentPlan(db: KilnDB, planId: string): Promise<{ plan: PlanReco
   return { plan, content: planFromRecords(plan, await listModules(db, planId), await listTasks(db, planId)) }
 }
 
+/** What the editor opened with: the plan's text fields and each live module's and task's updatedAt, by key. */
+export interface EditBase {
+  plan: { title: string; goal?: string; description?: string }
+  modules: Record<string, number>
+  tasks: Record<string, number>
+}
+
+export const editBase = (plan: PlanRecord, modules: ModuleRecord[], tasks: TaskRecord[]): EditBase => ({
+  plan: { title: plan.title, goal: plan.goal, description: plan.description },
+  modules: Object.fromEntries(modules.filter((m) => !m.deleted).map((m) => [m.key, m.updatedAt])),
+  tasks: Object.fromEntries(tasks.filter((t) => !t.deleted).map((t) => [t.key, t.updatedAt])),
+})
+
+export const PLAN_CHANGED = 'This plan changed on another device. Reopen the editor.'
+
 /**
  * Saves an edit of the plan's content (a whole plan file with the plan's key as its id). Applied by
- * key with importPlan, so progress is kept; modules and tasks left out are deleted. `pins` sets or
+ * key with importPlan, so progress is kept. With `base` (what the editor opened with) only keys that
+ * were in the base and are missing from the edit are deleted, so records added elsewhere survive, and
+ * the save is refused (PLAN_CHANGED) if a base record or the plan's text changed since. `pins` sets or
  * clears (undefined) the pinned day of tasks by key. Snapshots the plan before its first edit and
  * after every edit.
  */
-export async function savePlanEdit(db: KilnDB, planId: string, edited: Plan, pins: Record<string, string | undefined> = {}): Promise<PlanVersionRecord> {
+export async function savePlanEdit(
+  db: KilnDB,
+  planId: string,
+  edited: Plan,
+  pins: Record<string, string | undefined> = {},
+  base?: EditBase,
+): Promise<PlanVersionRecord> {
   const { plan, content: before } = await currentPlan(db, planId)
+  let onlyRemove: Set<string> | undefined
+  if (base) {
+    const [modules, tasks] = [await listModules(db, planId), await listTasks(db, planId)]
+    const now = editBase(plan, modules, tasks)
+    const same = (a: Record<string, number>, b: Record<string, number>) => Object.keys(a).every((k) => k in b && a[k] === b[k])
+    const textChanged = (['title', 'goal', 'description'] as const).some((k) => base.plan[k] !== now.plan[k])
+    const removedModules = new Set(Object.keys(base.modules).filter((k) => !edited.modules.some((m) => m.id === k)))
+    const moduleKey = new Map(modules.map((m) => [m.id, m.key]))
+    // A task added elsewhere to a module this edit deletes would be orphaned.
+    const orphaned = tasks.some((t) => !(t.key in base.tasks) && removedModules.has(moduleKey.get(t.moduleId) ?? ''))
+    if (textChanged || !same(base.modules, now.modules) || !same(base.tasks, now.tasks) || orphaned) throw new Error(PLAN_CHANGED)
+    onlyRemove = new Set([...Object.keys(base.modules), ...Object.keys(base.tasks)])
+  }
   if (!(await listPlanVersions(db, planId)).length) await snapshotPlan(db, planId, { summary: 'Before your first edit' })
-  await importPlan(db, { ...edited, id: plan.key }, { startDate: plan.startDate, replace: true })
+  await importPlan(db, { ...edited, id: plan.key }, { startDate: plan.startDate, replace: true, onlyRemove })
   for (const t of await listTasks(db, planId)) {
     if (!(t.key in pins) || pins[t.key] === t.pinnedDate) continue
     const date = pins[t.key]
     await updateRecord(db, 'tasks', t.id, date ? { pinnedDate: date, scheduledDate: date, backlog: undefined } : { pinnedDate: undefined })
   }
-  return snapshotPlan(db, planId, { summary: describeChanges(before, edited) })
+  return snapshotPlan(db, planId, { summary: describeChanges(before, (await currentPlan(db, planId)).content) })
 }
 
 /**

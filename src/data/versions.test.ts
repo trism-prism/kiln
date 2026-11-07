@@ -1,11 +1,11 @@
 // Plan edits and version restores: progress kept, deleted tasks come back, summaries.
 import 'fake-indexeddb/auto'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { Plan } from '../domain/plan-format'
 import { fixtureTexts, validateParts } from './fixtures'
-import { getPlan, importPlan, listModules, listTasks, setTaskStatus } from './repo'
+import { getPlan, importPlan, listModules, listTasks, setTaskStatus, updateRecord } from './repo'
 import { newDb } from './test-db'
-import { describeChanges, listPlanVersions, planFromRecords, restoreVersion, savePlanEdit } from './versions'
+import { describeChanges, editBase, listPlanVersions, MAX_VERSIONS, PLAN_CHANGED, planFromRecords, restoreVersion, savePlanEdit, snapshotPlan } from './versions'
 
 const TODAY = '2026-11-09'
 const sd = () => validateParts([fixtureTexts.sd]).plans[0]!
@@ -83,5 +83,67 @@ describe('savePlanEdit and restoreVersion', () => {
     await restoreVersion(db, planId, original!)
     expect((await listModules(db, planId)).some((m) => m.key === gone)).toBe(true)
     expect((await listTasks(db, planId)).length).toBe(before.tasks.length)
+  })
+})
+
+describe('review fixes', () => {
+  const baseOf = async (db: ReturnType<typeof newDb>, planId: string) => editBase((await getPlan(db, planId))!, await listModules(db, planId), await listTasks(db, planId))
+
+  it('editing a split plan keeps its parts, so it stays incomplete', async () => {
+    const db = newDb()
+    const [p1, p2] = validateParts([fixtureTexts.dsa1, fixtureTexts.dsa2, fixtureTexts.dsa3]).plans
+    const { planId } = await importPlan(db, p1!, { startDate: TODAY })
+    await importPlan(db, p2!, { startDate: TODAY })
+    expect(await getPlan(db, planId)).toMatchObject({ partTotal: 3, partsIn: [1, 2] })
+    const content = planFromRecords((await getPlan(db, planId))!, await listModules(db, planId), await listTasks(db, planId))
+    await savePlanEdit(db, planId, { ...content, title: 'Edited' })
+    expect(await getPlan(db, planId)).toMatchObject({ title: 'Edited', partTotal: 3, partsIn: [1, 2] })
+    await restoreVersion(db, planId, (await listPlanVersions(db, planId))[1]!)
+    expect(await getPlan(db, planId)).toMatchObject({ partTotal: 3, partsIn: [1, 2] })
+  })
+
+  it('a stale editor keeps what another device added and refuses when a record changed', async () => {
+    const { db, planId, content } = await setup()
+    const before = await content()
+    const base = await baseOf(db, planId)
+    // Another device adds a task.
+    await importPlan(db, { ...before, tasks: [...before.tasks, { ...before.tasks[0]!, id: 'from-elsewhere', title: 'Elsewhere', order: 900 }] }, { startDate: TODAY })
+    const gone = before.tasks[1]!
+    await savePlanEdit(db, planId, { ...before, title: 'Mine', tasks: before.tasks.filter((t) => t.id !== gone.id) }, {}, base)
+    const live = await listTasks(db, planId)
+    expect(live.some((t) => t.key === 'from-elsewhere')).toBe(true)
+    expect(live.some((t) => t.key === gone.id)).toBe(false)
+    expect((await getPlan(db, planId))!.title).toBe('Mine')
+
+    // Now a base record changes underneath: refused, nothing written.
+    const base2 = await baseOf(db, planId)
+    const target = (await listTasks(db, planId))[0]!
+    await updateRecord(db, 'tasks', target.id, { title: 'Changed elsewhere' })
+    const stale = await content()
+    await expect(savePlanEdit(db, planId, { ...stale, title: 'Overwrite' }, {}, base2)).rejects.toThrow(PLAN_CHANGED)
+    expect((await getPlan(db, planId))!.title).toBe('Mine')
+    expect((await listTasks(db, planId)).find((t) => t.id === target.id)!.title).toBe('Changed elsewhere')
+  })
+
+  it('a version made with the clock behind is still the newest, and only 20 are kept', async () => {
+    const { db, planId } = await setup()
+    const first = await snapshotPlan(db, planId, { summary: 'first' })
+    const spy = vi.spyOn(Date, 'now').mockReturnValue(first.createdAt - 100_000)
+    const skewed = await snapshotPlan(db, planId, { summary: 'skewed' })
+    spy.mockRestore()
+    expect(skewed.createdAt).toBeGreaterThan(first.createdAt)
+    expect((await listPlanVersions(db, planId))[0]!.summary).toBe('skewed')
+    for (let i = 0; i < 25; i++) await snapshotPlan(db, planId, { summary: `v${i}` })
+    const kept = await listPlanVersions(db, planId)
+    expect(kept).toHaveLength(MAX_VERSIONS)
+    expect(kept[0]!.summary).toBe('v24')
+    expect(kept.some((v) => v.summary === 'first')).toBe(false)
+  })
+
+  it('the daily practice setting survives an edit', async () => {
+    const { db, planId, content } = await setup()
+    await updateRecord(db, 'plans', planId, { dailyPracticeOn: false })
+    await savePlanEdit(db, planId, { ...(await content()), title: 'Edited' })
+    expect((await getPlan(db, planId))!.dailyPracticeOn).toBe(false)
   })
 })
