@@ -36,13 +36,13 @@ const addDays = (iso: string, n: number) => {
 /** Course and the title without its course tag. Canvas puts the course code in a trailing `[CODE]`. */
 export function courseOf(ev: IcsEvent): { course: string; title: string } {
   const tag = /^(.*?)\s*\[([^\]]{1,120})\]\s*$/.exec(ev.summary)
-  if (tag && tag[1]) return { course: tag[2].trim(), title: tag[1].trim() }
+  if (tag?.[1] && tag[2]) return { course: tag[2].trim(), title: tag[1].trim() }
   // Heuristics for other LMSs: Moodle puts the course short name in CATEGORIES; some feeds start
   // the title with the code ("CS 101: Lab 2") or put it in LOCATION.
   const cat = ev.categories[0]
   if (cat) return { course: cat.slice(0, 120), title: ev.summary }
   const lead = /^([A-Z]{2,6}[ -]?[0-9]{2,4}[A-Z]?)\s*[:\-–]\s+(.+)$/.exec(ev.summary)
-  if (lead) return { course: lead[1], title: lead[2] }
+  if (lead?.[1] && lead[2]) return { course: lead[1], title: lead[2] }
   if (ev.location && CODE.test(ev.location.trim())) return { course: ev.location.trim(), title: ev.summary }
   return { course: OTHER_COURSE, title: ev.summary }
 }

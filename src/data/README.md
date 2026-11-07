@@ -41,6 +41,10 @@ Every table except `meta` syncs (`src/sync/README.md`). It reuses `rowSchemas` a
 - Versions (`versions.ts`): `snapshotPlan(db, planId, { summary, label? })` stores the plan's content as a plan file (gzip + base64url, built by `planFromRecords`) and tombstones versions beyond the newest 20, emptying their snapshot. `listPlanVersions` lists them newest first; `readSnapshot(v)` returns the plan file, which `importPlan` applies by key keeping progress. A plan of a few hundred tasks fits the 64 KB sync limit (the 85-task DSA fixture is about 20 KB).
 - `softDeletePlan` also tombstones the plan's events and versions.
 
+## Calendar import (`calendar.ts`)
+
+`importCalendar(db, { items, rows, courses, startDate, feed? })` imports an LMS calendar (parsed by src/domain/ics): per ticked course, new rows go through `importPlan` (a new course creates plan `course-<slug>`; an existing one keeps its title, goal and other content), rows whose due date moved only get the new `deadline` (the person's title and minute edits stay), then the plan's live tasks are renumbered in due order. Class times and exams of ticked courses are upserted into `events` by `uid` with the course's `planId`. `rowStates` says per row: new, changed (with the old due date), same, or deleted (the person deleted it; never re-added). With `feed`, the link is saved (or reused, matched by id or URL) in `feeds` with the plans and `lastResult`. `feedChanges` counts new and moved rows of a feed's courses; `src/pwa/feeds.ts` `checkFeedsIfDue` runs it on app open for feeds last fetched 6 hours ago or more, through the Worker's `POST /feed/fetch`, and stores `lastFetchedAt`/`lastResult`. Nothing is imported without the person's review.
+
 ## Scheduling
 
 `scheduleAll(db, today, { mode, skipOptional, reviewsDue })` (`schedule.ts`) runs the scheduler (src/domain/scheduler) over all complete plans and writes `scheduledDate` or `backlog` in one transaction. A plan's own `skipOptional` flag sends only that plan's optional work to the backlog.

@@ -15,6 +15,10 @@ Pure TypeScript domain modules (no React): plan-format, import, scheduler, pract
 - Violations: `plan-deadline`, `task-deadline`, and `dependency` (a pinned or already dated task whose open dependency is in the backlog, undated, or not dated earlier).
 - Tasks that can never be placed (a dependency cycle, a core task behind a backlog task) or cannot start within the horizon are listed in `unplaceable`.
 
+## ics
+
+`ics/parse.ts` reads LMS calendar feeds (RFC 5545): unfolding, VEVENT (nested VALARM skipped), DTSTART/DTEND as UTC, TZID (IANA, via Intl), floating or all-day (DTEND exclusive), SUMMARY, DESCRIPTION, URL (http/https only), UID, LOCATION, CATEGORIES. RRULE, DURATION and VTIMEZONE bodies are ignored (an unknown TZID reads as device-local time). `ics/lms.ts` maps items to Kiln: course from a trailing `[CODE]` (Canvas), else CATEGORIES (Moodle), a leading code ("CS 101: ...") or a code-like LOCATION; kind from the Canvas UID (`event-assignment-*`, `event-calendar-event-*`), else exam/assignment keywords or a zero-length event (a due time). Assignments become grid rows due on the local day of the due time (midnight = the day before), exams get a "Prepare for ..." row due the day before plus an event. Minute defaults by keyword (exam prep 180, project 240, essay/paper 180, lab 90, quiz 30, discussion 30, homework/problem set 60, reading 60, else 60). `coursePlan` builds a fixed-mode plan file per course (`course-<slug>`, one Assignments module, task ids hashed from the UID so re-imports match, work over 90 minutes split into sessions except assessments).
+
 ## practice
 
 `practice/ramp.ts`: `targetDifficulty` (easy until 5 Good/Easy easy problems with at least 2 in the topic, then medium; after 10 mediums or in the final 14 days every third problem is hard) and `pickProblem` (topic first, then difficulty, NeetCode 150 first). `neetcode-problems.json` is a reduced snapshot of NeetCode's MIT problem list (title, slug, difficulty, topic); regenerate with `npm run neetcode`. `NEETCODE_SLUGS` is the `knownSlugs` set for `validatePlan`.
