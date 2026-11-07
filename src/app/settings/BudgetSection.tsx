@@ -57,6 +57,7 @@ export function BudgetSection({ settings, onChanged }: { settings: SettingsRecor
 /** Days with no study. Each change is saved at once. */
 export function BlackoutSection({ settings, onChanged }: { settings: SettingsRecord; onChanged: () => void }) {
   const [date, setDate] = useState('')
+  const [dateBad, setDateBad] = useState(false)
   const days = [...settings.blackoutDates].sort()
 
   async function set(next: string[]): Promise<boolean> {
@@ -78,10 +79,10 @@ export function BlackoutSection({ settings, onChanged }: { settings: SettingsRec
           <p className="text-sm text-text-muted">Kiln schedules nothing on these dates.</p>
         </div>
         <div className="flex items-end gap-3">
-          <TextField label="Date" type="date" value={date} onChange={setDate} />
+          <TextField label="Date" type="date" value={date} onChange={setDate} onInvalidChange={setDateBad} />
           <Button
             variant="secondary"
-            isDisabled={date === '' || days.includes(date)}
+            isDisabled={date === '' || dateBad || days.includes(date)}
             onPress={async () => {
               if (await set([...days, date])) setDate('')
             }}

@@ -46,8 +46,16 @@ export function TextField({
   description,
   errorMessage,
   className = '',
+  onInvalidChange,
   ...props
-}: Omit<TextFieldProps, 'className'> & { label: string; description?: string; errorMessage?: string; className?: string }) {
+}: Omit<TextFieldProps, 'className'> & {
+  label: string
+  description?: string
+  errorMessage?: string
+  className?: string
+  /** Date fields only: told whether the typed text can't be used, so the form can hold off saving. */
+  onInvalidChange?: (invalid: boolean) => void
+}) {
   if (props.type === 'date') {
     return (
       <DateField
@@ -56,6 +64,7 @@ export function TextField({
         onChange={props.onChange ?? (() => {})}
         // A date field calls it after each commit, without an event; no date caller reads the event.
         onBlur={props.onBlur as DateFieldProps['onBlur']}
+        onInvalidChange={onInvalidChange}
         isInvalid={props.isInvalid}
         errorMessage={errorMessage}
         description={description}

@@ -129,4 +129,23 @@ describe('DateField', () => {
     expect(screen.getByRole('textbox', { name: 'Start date' })).toHaveProperty('value', 'Fri, Nov 20, 2026')
     expect(screen.queryAllByRole('spinbutton')).toHaveLength(0)
   })
+
+  it('TextField type="date" tells the form when its text cannot be read', async () => {
+    const user = userEvent.setup()
+    const told: boolean[] = []
+    render(
+      <I18nProvider locale="en-US">
+        <TextField label="Start date" type="date" value="2026-11-20" onChange={() => {}} onInvalidChange={(b) => told.push(b)} />
+      </I18nProvider>,
+    )
+    const field = screen.getByRole('textbox', { name: 'Start date' })
+    await user.clear(field)
+    await user.type(field, 'soon')
+    await user.tab()
+    expect(told).toEqual([true])
+    await user.clear(field)
+    await user.type(field, 'nov 21')
+    await user.tab()
+    expect(told).toEqual([true, false])
+  })
 })

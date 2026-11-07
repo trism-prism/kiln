@@ -125,3 +125,21 @@ describe('Settings reset dialog', () => {
     await db.meta.clear()
   })
 })
+
+describe('Days off', () => {
+  it('does not add a day off while the date text cannot be read', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    const field = await screen.findByRole('textbox', { name: 'Date' })
+    const add = screen.getByRole('button', { name: 'Add day off' })
+    await user.type(field, '2030-01-02')
+    await user.tab()
+    expect(add.hasAttribute('disabled')).toBe(false)
+    // The field goes back to Jan 2 underneath, but shows an error: adding must wait for a fix.
+    await user.type(field, 'x')
+    await user.click(add)
+    expect(screen.getByText('Try a date like Nov 20')).toBeTruthy()
+    expect(add.hasAttribute('disabled')).toBe(true)
+    expect((await getSettings(db)).blackoutDates).toEqual([])
+  })
+})
