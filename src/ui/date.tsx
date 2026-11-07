@@ -118,16 +118,17 @@ export function DateField({
     return ''
   }
 
+  // With a minimum, "nov 7" two days ago is read as that day (and refused), not as next year's.
   const type = (t: string) => {
     setText(t)
     setProblem('')
-    const iso = parseDateText(t, toLocalISODate(new Date()), locale)
+    const iso = parseDateText(t, toLocalISODate(new Date()), locale, { nearest: !!min })
     if (iso && !outOfRange(iso)) send(iso)
   }
   /** Reads the text; false when it can't be used. */
   const commit = (): boolean => {
     const t = text.trim()
-    const iso = t === '' ? '' : parseDateText(t, toLocalISODate(new Date()), locale)
+    const iso = t === '' ? '' : parseDateText(t, toLocalISODate(new Date()), locale, { nearest: !!min })
     const p = iso === undefined ? 'Try a date like Nov 20' : iso === '' ? '' : outOfRange(iso)
     setProblem(p)
     if (p) send(before)

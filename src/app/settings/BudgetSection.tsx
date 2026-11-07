@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
 import { db, updateSettings, type SettingsRecord } from '../../data'
+import { toLocalISODate } from '../../lib/date'
 import { Button, IconButton } from '../../ui/button'
 import { ListBoxItem, Select, TextField } from '../../ui/form'
 import { toasts } from '../../ui/overlay'
@@ -79,7 +80,7 @@ export function BlackoutSection({ settings, onChanged }: { settings: SettingsRec
           <p className="text-sm text-text-muted">Kiln schedules nothing on these dates.</p>
         </div>
         <div className="flex items-end gap-3">
-          <TextField label="Date" type="date" value={date} onChange={setDate} onInvalidChange={setDateBad} />
+          <TextField label="Date" type="date" min={toLocalISODate(new Date())} value={date} onChange={setDate} onInvalidChange={setDateBad} />
           <Button
             variant="secondary"
             isDisabled={date === '' || dateBad || days.includes(date)}

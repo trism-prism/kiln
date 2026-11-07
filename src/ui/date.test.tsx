@@ -88,6 +88,19 @@ describe('DateField', () => {
     expect(value()).toBe('')
   })
 
+  it('with min, reads a just-passed day with no year as that day, not next year', async () => {
+    const user = userEvent.setup()
+    render(<Harness min="2026-11-09" />)
+    await user.type(box(), 'nov 7')
+    await user.tab()
+    expect(screen.getByText('Pick today or later')).toBeTruthy()
+    expect(value()).toBe('')
+    await user.clear(box())
+    await user.type(box(), 'jan 2') // the nearest Jan 2 is next year's
+    await user.tab()
+    expect(value()).toBe('2027-01-02')
+  })
+
   it('calls onBlur after the new value has rendered', async () => {
     const user = userEvent.setup()
     const seen: string[] = []

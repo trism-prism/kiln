@@ -47,6 +47,16 @@ describe('parseDateText', () => {
     expect(parseDateText(text, TODAY, 'en-US')).toBeUndefined()
   })
 
+  it('nearest: a date with no year goes to its nearest occurrence', () => {
+    const near = (t: string) => parseDateText(t, TODAY, 'en-US', { nearest: true })
+    expect(near('nov 7')).toBe('2026-11-07') // two days ago, not next year
+    expect(near('11/7')).toBe('2026-11-07')
+    expect(near('nov 20')).toBe('2026-11-20')
+    expect(near('jan 2')).toBe('2027-01-02')
+    expect(near('nov 7 2027')).toBe('2027-11-07') // a typed year is kept
+    expect(near('nov 9')).toBe('2026-11-09')
+  })
+
   it('reads numeric dates in the locale order', () => {
     expect(parseDateText('20/11', TODAY, 'en-GB')).toBe('2026-11-20')
     expect(parseDateText('20.11.2026', TODAY, 'de-DE')).toBe('2026-11-20')
