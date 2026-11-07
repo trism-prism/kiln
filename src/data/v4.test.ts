@@ -1,7 +1,7 @@
 // Schema 4: migration, plan settings, personal to-dos, events, plan versions, backup of the new tables.
 import 'fake-indexeddb/auto'
 import Dexie from 'dexie'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { exportBackup, importBackup } from './backup'
 import { KilnDB } from './db'
 import { fixtureTexts, validateParts } from './fixtures'
@@ -106,7 +106,17 @@ describe('personal to-dos and events', () => {
     const done = await setPersonalTodoDone(db, first.id, true)
     expect(done).toMatchObject({ done: true, completedAt: expect.any(Number) })
     expect(done!.updatedAt).toBeGreaterThan(first.updatedAt)
-    expect(await setPersonalTodoDone(db, first.id, false)).toMatchObject({ done: false, completedAt: undefined })
+    // With minutes, the first completion time survives untick and re-tick (logged past study stays on its day).
+    expect(await setPersonalTodoDone(db, first.id, false)).toMatchObject({ done: false, completedAt: done!.completedAt })
+    vi.useFakeTimers({ toFake: ['Date'], now: done!.completedAt! + 86_400_000 })
+    try {
+      expect(await setPersonalTodoDone(db, first.id, true)).toMatchObject({ done: true, completedAt: done!.completedAt })
+      // Without minutes it clears and restamps.
+      await setPersonalTodoDone(db, later.id, true)
+      expect(await setPersonalTodoDone(db, later.id, false)).toMatchObject({ done: false, completedAt: undefined })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('eventsBetween includes multi-day events that started earlier', async () => {

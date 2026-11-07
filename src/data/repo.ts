@@ -209,9 +209,18 @@ export async function listPersonalTodos(db: KilnDB): Promise<PersonalTodoRecord[
   return live(await db.personalTodos.toArray()).sort((a, b) => day(a).localeCompare(day(b)) || a.id.localeCompare(b.id))
 }
 
-/** Marks a personal to-do done (sets `completedAt`) or open again (clears it). */
-export function setPersonalTodoDone(db: KilnDB, id: string, done: boolean) {
-  return updateRecord(db, 'personalTodos', id, { done, completedAt: done ? Date.now() : undefined })
+/**
+ * Marks a personal to-do done (sets `completedAt`) or open again. A to-do with minutes keeps its first
+ * `completedAt` through untick and re-tick, so study logged for a past day stays on that day in the streak
+ * and heatmap; one without minutes counts nothing there, so it simply clears and restamps.
+ */
+export async function setPersonalTodoDone(db: KilnDB, id: string, done: boolean) {
+  await getDeviceId(db) // resolve before the transaction opens; updateRecord reuses it
+  return db.transaction('rw', db.personalTodos, async () => {
+    const old = await db.personalTodos.get(id)
+    const keep = (old?.minutes ?? 0) > 0 ? old?.completedAt : undefined
+    return updateRecord(db, 'personalTodos', id, { done, completedAt: done ? (keep ?? Date.now()) : keep })
+  })
 }
 
 /** Live events shown from `from` to `to` inclusive ("yyyy-mm-dd"), including multi-day ones that started earlier, by date then start. */
