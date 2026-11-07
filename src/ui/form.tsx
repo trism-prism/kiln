@@ -129,4 +129,4 @@ export function Switch({ children, className = '', ...props }: Omit<SwitchProps,
   )
 }
 
-export { popover as popoverClass }
+export { popover as popoverClass, control as controlClass }
