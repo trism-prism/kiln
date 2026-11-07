@@ -18,6 +18,8 @@ export interface IcsEvent {
   endDate?: string
   start?: number
   end?: number
+  /** Zone of the times: the event's TZID, else the calendar's X-WR-TIMEZONE; none = the device's zone. */
+  tz?: string
 }
 
 /** Joins folded lines (CRLF or LF followed by a space or tab). */
@@ -68,7 +70,13 @@ export function unescapeText(v: string): string {
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
-const localDay = (ms: number) => {
+/** The calendar day (yyyy-mm-dd) of instant `ms` in zone `tz`, or on this device when there is none. */
+export function dayIn(ms: number, tz?: string): string {
+  if (tz && validZone(tz)) {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(ms))
+    const get = (t: string) => parts.find((p) => p.type === t)?.value ?? ''
+    return `${get('year')}-${get('month')}-${get('day')}`
+  }
   const d = new Date(ms)
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
@@ -130,6 +138,7 @@ export function parseIcs(text: string): IcsEvent[] {
   const out: IcsEvent[] = []
   let cur: Record<string, Line[]> | undefined
   let depth = 0 // nested components inside a VEVENT (VALARM)
+  let calTz: string | undefined // X-WR-TIMEZONE of the calendar
   for (const raw of unfold(text)) {
     const line = parseLine(raw)
     if (!line) continue
@@ -141,18 +150,19 @@ export function parseIcs(text: string): IcsEvent[] {
     if (line.name === 'END') {
       if (cur && depth > 0) depth--
       else if (cur && line.value.toUpperCase() === 'VEVENT') {
-        const ev = toEvent(cur)
+        const ev = toEvent(cur, calTz)
         if (ev) out.push(ev)
         cur = undefined
       }
       continue
     }
     if (cur && depth === 0) (cur[line.name] ??= []).push(line)
+    else if (!cur && line.name === 'X-WR-TIMEZONE') calTz = line.value.trim().replace(/^\//, '')
   }
   return out
 }
 
-function toEvent(p: Record<string, Line[]>): IcsEvent | undefined {
+function toEvent(p: Record<string, Line[]>, calTz?: string): IcsEvent | undefined {
   const one = (n: string) => p[n]?.[0]
   const text = (n: string) => {
     const v = one(n)?.value
@@ -161,14 +171,19 @@ function toEvent(p: Record<string, Line[]>): IcsEvent | undefined {
   const uid = one('UID')?.value.trim()
   const s = one('DTSTART')
   if (!uid || !s) return undefined
-  const start = parseTime(s.value, s.params)
-  if (!start) return undefined
   const e = one('DTEND')
-  const end = e ? parseTime(e.value, e.params) : undefined
+  // Zone: the event's TZID, else the calendar's; a time with neither is read in the device's zone.
+  const eventTz = [s.params.TZID, e?.params.TZID].map((z) => z?.replace(/^\//, '')).find((z) => z && validZone(z))
+  const zone = eventTz ?? (calTz && validZone(calTz) ? calTz : undefined)
+  const withZone = (l: Line) => (zone && !l.params.TZID ? { ...l.params, TZID: zone } : l.params)
+  const start = parseTime(s.value, withZone(s))
+  if (!start) return undefined
+  const end = e ? parseTime(e.value, withZone(e)) : undefined
   const url = text('URL')
   const base = {
     uid,
-    summary: text('SUMMARY') ?? '(untitled)',
+    // Capped before any pattern runs on it.
+    summary: text('SUMMARY')?.slice(0, 500) ?? '(untitled)',
     description: text('DESCRIPTION'),
     url: url && /^https?:\/\//i.test(url) ? url : undefined,
     location: text('LOCATION'),
@@ -180,5 +195,5 @@ function toEvent(p: Record<string, Line[]>): IcsEvent | undefined {
     return { ...base, allDay: true, date: start.date, ...(last > start.date ? { endDate: last } : {}) }
   }
   const endMs = end && !end.allDay && end.ms >= start.ms ? end.ms : start.ms
-  return { ...base, allDay: false, date: localDay(start.ms), start: start.ms, end: endMs }
+  return { ...base, allDay: false, date: dayIn(start.ms, zone), start: start.ms, end: endMs, ...(zone ? { tz: zone } : {}) }
 }

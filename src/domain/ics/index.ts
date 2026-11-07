@@ -1,5 +1,5 @@
 // Public entry of the calendar (.ics) module: parsing and the LMS mapping.
-export { parseIcs, parseLine, parseTime, unescapeText, unfold } from './parse'
+export { dayIn, parseIcs, parseLine, parseTime, unescapeText, unfold } from './parse'
 export type { IcsEvent, IcsTime } from './parse'
 export {
   OTHER_COURSE,
@@ -12,6 +12,7 @@ export {
   eventItems,
   kindOf,
   sessions,
+  shortHash,
   taskKey,
   taskRows,
 } from './lms'

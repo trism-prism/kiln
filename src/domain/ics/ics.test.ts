@@ -11,6 +11,7 @@ import {
   parseIcs,
   parseLine,
   parseTime,
+  shortHash,
   sessions,
   taskKey,
   taskRows,
@@ -128,7 +129,9 @@ describe('LMS mapping', () => {
     expect(one({ summary: 'Weekly seminar', location: 'Room 5' })).toMatchObject({ course: OTHER_COURSE, kind: 'event' })
     expect(one({ summary: 'Chapter 3 thing', start: 5, end: 5 })).toMatchObject({ kind: 'assignment' }) // a due time
     expect(one({ summary: 'Office hours' })).toMatchObject({ kind: 'event' })
-    expect(one({ summary: 'Final exam', uid: 'event-assignment-9' })).toMatchObject({ kind: 'exam' })
+    expect(one({ summary: 'Midterm Reflection Essay', uid: 'event-assignment-9' })).toMatchObject({ kind: 'assignment' }) // the UID decides first
+    expect(one({ summary: 'Midterm Exam', uid: 'event-calendar-event-9' })).toMatchObject({ kind: 'exam' })
+    expect(one({ summary: 'Final exam', uid: 'abc-1' })).toMatchObject({ kind: 'exam' })
     expect(one({ summary: 'Anything', uid: 'abc-assignment-1@brightspace' })).toMatchObject({ kind: 'assignment' })
   })
 
@@ -175,8 +178,43 @@ describe('LMS mapping', () => {
     expect(taskKey('event-assignment-1001')).not.toBe(taskKey('event-assignment-1002'))
     expect(taskKey('x')).toMatch(/^a-[0-9a-f]{16}$/)
     expect(courseKey('MATH-221-001')).toBe('course-math-221-001')
-    expect(courseKey('Biología 1')).toBe('course-biolog-a-1')
+    expect(courseKey('Biología 1')).toBe(`course-biolog-a-1-${shortHash('Biología 1')}`)
     expect(courseKey('日本語')).toMatch(/^course-[0-9a-f]{8}$/)
+  })
+
+  it('keeps courses apart whose names share a slug or a 40-character start', () => {
+    const a = 'Introduction to Comparative Politics in Europe, Section A'
+    const b = 'Introduction to Comparative Politics in Europe, Section B'
+    expect(courseKey(a)).not.toBe(courseKey(b))
+    expect(courseKey('MATH 101')).not.toBe(courseKey('MATH-101'))
+    expect(courseKey('math-101')).not.toBe(courseKey('MATH-101'))
+    expect(courseKey('MATH-101')).toBe('course-math-101') // plain codes keep their key
+    expect(courseKey(a)).toMatch(/^course-[a-z0-9-]{1,40}-[0-9a-f]{8}$/)
+    const plan = coursePlan(a, [{ uid: 'u', key: 'a-1', course: a, title: 'T', minutes: 30, due: '2030-02-01', type: 'practice' }], '2030-01-01').plan
+    expect(plan?.id).toBe(courseKey(a))
+  })
+
+  it('reads the due day in the event zone, else the calendar zone, whatever the device zone', () => {
+    const lines = (...l: string[]) => l.join('\n')
+    const cal = (head: string[], dt: string[]) =>
+      lines('BEGIN:VCALENDAR', 'VERSION:2.0', ...head, 'BEGIN:VEVENT', 'UID:event-assignment-1', 'SUMMARY:Problem Set 3 [MATH-221-001]', ...dt, 'END:VEVENT', 'END:VCALENDAR')
+    const due = (text: string) => taskRows(classify(parseIcs(text)))[0]?.due
+    // 04:59 UTC is 23:59 the day before in New York (EST) and already the 12th in Tokyo.
+    const utc = ['DTSTART:20300212T045900Z', 'DTEND:20300212T045900Z']
+    expect(due(cal(['X-WR-TIMEZONE:America/New_York'], utc))).toBe('2030-02-11')
+    expect(due(cal(['X-WR-TIMEZONE:Asia/Tokyo'], utc))).toBe('2030-02-12')
+    // The event's own TZID wins over the calendar's.
+    expect(due(cal(['X-WR-TIMEZONE:Asia/Tokyo'], ['DTSTART;TZID=America/New_York:20300211T235900', 'DTEND;TZID=America/New_York:20300211T235900']))).toBe('2030-02-11')
+    // Floating times belong to the calendar zone too.
+    expect(due(cal(['X-WR-TIMEZONE:America/New_York'], ['DTSTART:20300211T235900', 'DTEND:20300211T235900']))).toBe('2030-02-11')
+    // The Canvas fixture's Problem Set 3 with a New York calendar.
+    const ny = canvas.replace('BEGIN:VCALENDAR', 'BEGIN:VCALENDAR\nX-WR-TIMEZONE:America/New_York')
+    expect(taskRows(classify(parseIcs(ny))).find((r) => r.title === 'Problem Set 3')?.due).toBe('2030-02-11')
+  })
+
+  it('caps SUMMARY at 500 characters', () => {
+    const text = ['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'UID:u', 'DTSTART:20300101T100000Z', `SUMMARY:${'a'.repeat(5000)}`, 'END:VEVENT', 'END:VCALENDAR'].join('\n')
+    expect(parseIcs(text)[0]?.summary).toHaveLength(500)
   })
 
   it('splits work over 90 minutes into sessions, except assessments', () => {

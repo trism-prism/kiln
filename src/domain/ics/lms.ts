@@ -1,7 +1,7 @@
 // LMS calendar items -> Kiln: which items are assignments, exams or class times, which course each
 // belongs to, minute defaults by keyword, and one plan file per course. Pure.
 import { validatePlan, type Issue, type Plan, type TaskType } from '../plan-format'
-import type { IcsEvent } from './parse'
+import { dayIn, type IcsEvent } from './parse'
 
 export type ItemKind = 'assignment' | 'exam' | 'event'
 
@@ -23,10 +23,6 @@ const ASSIGNMENT_WORDS =
 // "CS 101", "MATH-221", "BIO101L": letters, optional space or dash, digits.
 const CODE = /^[A-Z]{2,6}[ -]?[0-9]{2,4}[A-Z]?(?:[ -][0-9A-Z]{1,4})*$/
 
-const day = (ms: number) => {
-  const d = new Date(ms)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
 const addDays = (iso: string, n: number) => {
   const d = new Date(`${iso}T12:00:00Z`)
   d.setUTCDate(d.getUTCDate() + n)
@@ -49,8 +45,9 @@ export function courseOf(ev: IcsEvent): { course: string; title: string } {
 
 /** Assignment, exam or class time. Canvas marks assignments in the UID; other LMSs by keyword or a zero-length (due-time) event. */
 export function kindOf(ev: IcsEvent, title: string): ItemKind {
-  if (EXAM.test(title)) return 'exam'
+  // The Canvas UID says what the item is, whatever its title: "Midterm Reflection Essay" stays an assignment.
   if (/^event-assignment-/i.test(ev.uid)) return 'assignment'
+  if (EXAM.test(title)) return 'exam'
   if (/^event-calendar-event-/i.test(ev.uid)) return 'event'
   if (ASSIGNMENT_WORDS.test(title) || /assign|submission|attempt|quiz/i.test(ev.uid)) return 'assignment'
   if (!ev.allDay && ev.start === ev.end) return 'assignment'
@@ -76,12 +73,16 @@ const MINUTES: [RegExp, number, TaskType][] = [
   [/\b(reading|readings|read|chapter|chapters)\b/i, 60, 'lesson'],
 ]
 
-export function defaultMinutes(title: string): { minutes: number; type: TaskType } {
-  const hit = MINUTES.find(([re]) => re.test(title))
+export function defaultMinutes(title: string, exam = true): { minutes: number; type: TaskType } {
+  const hit = MINUTES.find(([re]) => (exam || re !== EXAM) && re.test(title))
   return hit ? { minutes: hit[1], type: hit[2] } : { minutes: 60, type: 'practice' }
 }
 
 /** FNV-1a 32-bit, as 8 hex digits. */
+export function shortHash(s: string): string {
+  return fnv(s, 0x811c9dc5)
+}
+
 function fnv(s: string, seed: number): string {
   let h = seed
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193) >>> 0
@@ -93,13 +94,17 @@ export const taskKey = (uid: string) => `a-${fnv(uid, 0x811c9dc5)}${fnv(uid, 0x0
 
 /** Stable plan id for a course. */
 export function courseKey(course: string): string {
+  // Plain upper-case codes ("MATH-221-001") keep the bare slug. Anything else (other case, spaces,
+  // a name cut at 40 characters) gets a hash of the raw name, so "MATH 101" and "MATH-101", or two
+  // long names that share a start, stay separate plans.
+  const plain = /^[A-Z0-9]+(?:-[A-Z0-9]+)*$/.test(course) && course.length <= 40
   const slug = course
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 40)
     .replace(/-+$/, '')
-  return `course-${slug || fnv(course, 0x811c9dc5)}`
+  return `course-${plain && slug ? slug : slug ? `${slug}-${shortHash(course)}` : shortHash(course)}`
 }
 
 /** One line of the review grid: an assignment, or the prep for an exam. */
@@ -123,8 +128,8 @@ export function taskRows(items: CalendarItem[]): TaskRow[] {
     const url = ev.url
     if (it.kind === 'assignment') {
       // A due time of exactly midnight means the end of the day before.
-      const due = ev.allDay ? ev.date : day((ev.end ?? ev.start ?? 0) - 1)
-      const d = defaultMinutes(it.title)
+      const due = ev.allDay ? ev.date : dayIn((ev.end ?? ev.start ?? 0) - 1, ev.tz)
+      const d = defaultMinutes(it.title, false)
       rows.push({ uid: it.uid, key: taskKey(it.uid), course: it.course, title: it.title, minutes: d.minutes, due, type: d.type, url })
     } else if (it.kind === 'exam') {
       const title = `Prepare for ${it.title}`.slice(0, 120)
