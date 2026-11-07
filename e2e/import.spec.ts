@@ -145,47 +145,56 @@ test('Paste from clipboard shows a hint when the browser refuses', async ({ page
   await expect(page.getByLabel('Plan text')).toBeFocused()
 })
 
-test('builds a plan by hand and imports it', async ({ page }) => {
-  await page.goto('/import')
-  await page.getByRole('tab', { name: 'Build by hand' }).click()
-  await page.getByLabel('Plan title').fill('Hand made')
-  await page.getByLabel('Module 1 title').fill('Basics')
-  const task = page.getByRole('group', { name: 'Task 1.1' })
-  await task.getByLabel('Title').fill('Read chapter one')
-  await task.getByLabel('Minutes').fill('45')
-  await page.getByRole('button', { name: 'Add task to module 1' }).click()
-  const second = page.getByRole('group', { name: 'Task 1.2' })
-  await second.getByLabel('Title').fill('Two Sum')
-  await second.getByLabel('Minutes').fill('30')
-  await second.getByRole('button', { name: /Type/ }).click()
-  await page.getByRole('option', { name: 'practice' }).click()
-  await second.getByLabel('LeetCode problem (optional)').fill('two-sum')
-  await page.getByRole('button', { name: 'Review plan' }).click()
-  await expect(page.getByRole('heading', { name: 'Preview' })).toBeVisible()
-  await expect(page.getByLabel('Plan id')).toHaveValue('hand-made')
-  await importIt(page)
-})
+const QUICK_ADD = [
+  '# Cells',
+  'Read chapter 1 45m',
+  'Watch the cell video https://www.youtube.com/watch?v=abc 20m',
+  'Flashcards https://quizlet.com/123/cells ?',
+  'Practice quiz 1h',
+  '## Genetics',
+  'Read chapter 2 1h30m !',
+  'Punnett squares 40m',
+  'Lab write-up',
+  '# Exam prep',
+  'Mock exam 1h30m',
+  'Final exam tomorrow',
+].join('\n')
 
-test('the builder reports a missing duration', async ({ page }) => {
+test('quick add: 12 lines become a plan that imports', async ({ page }) => {
   await page.goto('/import')
-  await page.getByRole('tab', { name: 'Build by hand' }).click()
-  await page.getByLabel('Plan title').fill('Hand made')
-  await page.getByLabel('Module 1 title').fill('Basics')
-  await page.getByRole('group', { name: 'Task 1.1' }).getByLabel('Title').fill('Read')
-  await page.getByRole('button', { name: 'Review plan' }).click()
-  await expect(page.getByText(/^tasks\[0\] "Read": estimatedMinutes is required$/)).toBeVisible()
+  await page.getByRole('tab', { name: 'Quick add' }).click()
+  const panel = page.getByRole('tabpanel', { name: 'Quick add' })
+  await panel.getByRole('textbox', { name: 'Plan title' }).fill('Biology')
+  await panel.getByRole('textbox', { name: 'Tasks, one per line' }).fill(QUICK_ADD)
+  await expect(panel.getByRole('textbox', { name: /^Task \d+ title$/ })).toHaveCount(9)
+  await expect(panel.getByRole('status').first()).toHaveText('9 tasks in 3 modules')
+  await expect(panel.getByRole('textbox', { name: 'Task 2 links' })).toHaveValue('https://www.youtube.com/watch?v=abc')
+  await expect(panel.getByRole('combobox', { name: 'Task 3 priority' })).toHaveValue('optional')
+  await expect(panel.getByRole('textbox', { name: 'Task 7 minutes' })).toHaveValue('30')
+  // Fix two rows in the preview: the exams become an exam and a milestone.
+  await panel.getByRole('combobox', { name: 'Task 8 type' }).selectOption('assessment')
+  await panel.getByRole('combobox', { name: 'Task 9 type' }).selectOption('milestone')
+  await panel.getByRole('textbox', { name: 'Task 9 minutes' }).fill('0')
+  await panel.getByRole('button', { name: 'Review plan' }).click()
+  await expect(page.getByRole('heading', { name: 'Preview' })).toBeVisible()
+  await expect(page.getByText(/^Fixed dates: a task has a due date/)).toBeVisible()
+  await expect(page.getByLabel('Plan id')).toHaveValue('biology')
+  await importIt(page)
 })
 
 test('a changed study budget persists and offers a reschedule', async ({ page }) => {
   await page.goto('/settings')
+  await expect(page.getByRole('row', { name: /Monday/ })).toContainText('120 min')
+  await page.getByRole('row', { name: /Monday/ }).getByRole('button').click()
   const monday = page.getByRole('textbox', { name: 'Monday' })
   await expect(monday).toHaveValue('120')
   await monday.fill('45')
+  await monday.press('Enter')
   await expect(page.getByTestId('week-total')).toContainText('885 min')
   await page.getByRole('button', { name: 'Save study time' }).click()
   await expect(page.getByRole('button', { name: 'Reschedule now' })).toBeVisible()
   await page.reload()
-  await expect(page.getByRole('textbox', { name: 'Monday' })).toHaveValue('45')
+  await expect(page.getByRole('row', { name: /Monday/ })).toContainText('45 min')
   await expect(page.getByTestId('week-total')).toContainText('885 min')
 })
 
@@ -202,7 +211,9 @@ test('backup export, reset and import round trip', async ({ page }, info) => {
   await paste(page, fixture('system-design'))
   await importIt(page)
   await page.goto('/settings')
+  await page.getByRole('row', { name: /Tuesday/ }).getByRole('button').click()
   await page.getByRole('textbox', { name: 'Tuesday' }).fill('77')
+  await page.keyboard.press('Enter')
   await page.getByRole('button', { name: 'Save study time' }).click()
   await expect(page.getByText('Study time saved')).toBeVisible()
 
@@ -221,17 +232,17 @@ test('backup export, reset and import round trip', async ({ page }, info) => {
   await page.getByLabel('Confirmation').fill('reset')
   await erase.click()
   await expect(page.getByText('Local data erased')).toBeVisible()
-  await expect(page.getByRole('textbox', { name: 'Tuesday' })).toHaveValue('120')
+  await expect(page.getByRole('row', { name: /Tuesday/ })).toContainText('120 min')
 
   await page.locator('input[type=file]').first().setInputFiles(file)
   // Checked first: counts and a confirm step, nothing written yet.
   await expect(page.getByText('backup.json is a valid backup')).toBeVisible()
   await expect(page.getByText(/plans: 1 added, 0 replaced, 0 stale/)).toBeVisible()
-  await expect(page.getByRole('textbox', { name: 'Tuesday' })).toHaveValue('120')
+  await expect(page.getByRole('row', { name: /Tuesday/ })).toContainText('120 min')
   await page.getByRole('button', { name: 'Import this backup' }).click()
   await expect(page.getByText('Backup imported')).toBeVisible()
   await expect(page.getByText(/plans: 1 added/)).toBeVisible()
-  await expect(page.getByRole('textbox', { name: 'Tuesday' })).toHaveValue('77')
+  await expect(page.getByRole('row', { name: /Tuesday/ })).toContainText('77 min')
 })
 
 test('a bad backup file is rejected without writing', async ({ page }, info) => {
@@ -268,10 +279,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await check(page)
     })
 
-    test('/import, build by hand', async ({ page }) => {
+    test('/import, quick add', async ({ page }) => {
       await page.goto('/import')
-      await page.getByRole('tab', { name: 'Build by hand' }).click()
-      await page.getByLabel('Module 1 title').fill('Basics')
+      await page.getByRole('tab', { name: 'Quick add' }).click()
+      await page.getByRole('tabpanel', { name: 'Quick add' }).getByRole('textbox', { name: 'Tasks, one per line' }).fill('Read 45m')
       await page.getByRole('button', { name: 'Review plan' }).click()
       await expect(page.getByText(/errors? blocks?/)).toBeVisible()
       await check(page)
@@ -287,7 +298,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
     test('/settings', async ({ page }) => {
       await page.goto('/settings')
       await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible()
-      await expect(page.getByRole('textbox', { name: 'Monday' })).toBeVisible()
+      await expect(page.getByRole('row', { name: /Monday/ })).toBeVisible()
       await check(page)
     })
   })

@@ -22,7 +22,7 @@ const renderPage = () =>
 describe('Settings', () => {
   it('shows the default budget and a weekly total', async () => {
     renderPage()
-    expect(((await screen.findByRole('textbox', { name: 'Monday' })) as HTMLInputElement).value).toBe('120')
+    expect((await screen.findByRole('row', { name: /Monday/ })).textContent).toContain('120 min')
     expect(screen.getByTestId('week-total').textContent).toContain('960 min')
     expect(screen.getByText('25%')).toBeTruthy()
   })
@@ -30,25 +30,56 @@ describe('Settings', () => {
   it('saves a changed budget, allows 0, and offers to reschedule', async () => {
     const user = userEvent.setup()
     renderPage()
-    const monday = await screen.findByRole('textbox', { name: 'Monday' })
+    await user.click(await screen.findByRole('button', { name: 'Monday' }))
+    const monday = screen.getByRole('textbox', { name: 'Monday' })
     await user.clear(monday)
-    await user.type(monday, '0')
+    await user.type(monday, '0{Enter}')
+    await user.click(screen.getByRole('button', { name: 'Sunday' }))
     const sunday = screen.getByRole('textbox', { name: 'Sunday' })
     await user.clear(sunday)
-    await user.type(sunday, '240')
+    await user.type(sunday, '240{Enter}')
     expect(screen.getByTestId('week-total').textContent).toContain('900 min')
     await user.click(screen.getByRole('button', { name: 'Save study time' }))
     await waitFor(async () => expect((await getSettings(db)).minutesPerWeekday).toEqual([0, 120, 120, 120, 120, 180, 240]))
     expect(await screen.findByRole('button', { name: 'Reschedule now' })).toBeTruthy()
   })
 
-  it('refuses to save a day that is not a number of minutes', async () => {
+  it('refuses to save a day with no minutes', async () => {
     const user = userEvent.setup()
     renderPage()
-    const monday = await screen.findByRole('textbox', { name: 'Monday' })
-    await user.clear(monday)
-    await user.type(monday, '1.5')
+    await user.click(await screen.findByRole('button', { name: 'Monday' }))
+    await user.clear(screen.getByRole('textbox', { name: 'Monday' }))
+    await user.keyboard('{Enter}')
     expect((screen.getByRole('button', { name: 'Save study time' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('rejects minutes that are not whole numbers', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: 'Monday' }))
+    const monday = screen.getByRole('textbox', { name: 'Monday' })
+    await user.clear(monday)
+    await user.type(monday, '1.5{Enter}')
+    expect((screen.getByRole('button', { name: 'Save study time' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('steps by 15 and stops at 0 and 1440', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: 'Monday' }))
+    const monday = screen.getByRole('textbox', { name: 'Monday' }) as HTMLInputElement
+    await user.clear(monday)
+    await user.type(monday, '10')
+    await user.click(screen.getByRole('button', { name: 'Less time on Monday' }))
+    expect(monday.value).toBe('0')
+    await user.click(screen.getByRole('button', { name: 'Less time on Monday' }))
+    expect(monday.value).toBe('0')
+    await user.clear(monday)
+    await user.type(monday, '1435')
+    await user.click(screen.getByRole('button', { name: 'More time on Monday' }))
+    expect(monday.value).toBe('1,440')
+    await user.click(screen.getByRole('button', { name: 'More time on Monday' }))
+    expect(monday.value).toBe('1,440')
   })
 
   it('adds and removes a day off', async () => {

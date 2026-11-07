@@ -20,8 +20,12 @@ export default function ImportPage() {
         <Tabs className="data-focus-visible:outline-none" defaultSelectedKey={params.get('tab') ?? 'import'}>
           <TabList aria-label="How to add a plan">
             <Tab id="import">Import a plan</Tab>
+<<<<<<< HEAD
             <Tab id="build">Build by hand</Tab>
             <Tab id="calendar">From a course calendar</Tab>
+=======
+            <Tab id="build">Quick add</Tab>
+>>>>>>> origin/main
           </TabList>
           <TabPanel id="import" shouldForceMount>
             <div className={keep}>

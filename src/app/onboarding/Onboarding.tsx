@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { Radio, RadioGroup } from 'react-aria-components'
 import { useNavigate } from 'react-router'
 import { db, updateSettings } from '../../data'
 import { canSeed, loadSamplePlans } from '../devSeed'
@@ -9,18 +10,23 @@ import { setMeta } from '../../pwa/meta'
 import { availability, enablePush, readPushEnv } from '../../pwa/push-client'
 import { Button } from '../../ui/button'
 import { TextField } from '../../ui/form'
+import { TimeInput } from '../../ui/time'
 import { toasts } from '../../ui/overlay'
 import { unavailableText } from '../settings/ReminderSection'
-import { formatHours, parseMinutes, WEEKDAYS, weekTotal } from '../settings/budget'
+import { formatHours, parseMinutes } from '../settings/budget'
+import { WeekdayMinutes } from '../settings/WeekdayMinutes'
 
 // "Load sample plan" exists only in development and e2e builds (src/app/devSeed.ts drops the fixtures from production).
 
 /** Weekday minutes (Monday to Friday) and weekend minutes. */
 const PRESETS = [
-  { name: 'Light', weekday: 60, weekend: 90 },
-  { name: 'Steady', weekday: 120, weekend: 180 },
-  { name: 'Heavy', weekday: 180, weekend: 240 },
+  { name: 'Light', weekday: 30, weekend: 60 },
+  { name: 'Steady', weekday: 60, weekend: 90 },
+  { name: 'Focused', weekday: 90, weekend: 120 },
+  { name: 'Intense', weekday: 120, weekend: 180 },
 ]
+const byName = (name: string) => PRESETS.find((p) => p.name === name) ?? (PRESETS[0] as (typeof PRESETS)[number])
+const presetValues = (p: (typeof PRESETS)[number]) => [...Array<string>(5).fill(String(p.weekday)), String(p.weekend), String(p.weekend)]
 const TIME = /^([01][0-9]|2[0-3]):[0-5][0-9]$/
 const STEPS = ['Study time', 'Start date', 'Reminder', 'Your plan'] as const
 
@@ -46,7 +52,7 @@ function Flow({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     void markOnboardingStarted(db)
   }, [])
-  const [values, setValues] = useState(['120', '120', '120', '120', '120', '180', '180'])
+  const [values, setValues] = useState(() => presetValues(byName('Steady')))
   const [start, setStart] = useState(today)
   const [time, setTime] = useState('08:00')
   const [pushOn, setPushOn] = useState(false)
@@ -120,32 +126,27 @@ function Flow({ onClose }: { onClose: () => void }) {
 
         {step === 0 && (
           <div className="grid gap-4">
-            <p className="text-sm text-text-muted">How many minutes can you study on each weekday? Pick a starting point, then adjust.</p>
-            <div className="flex flex-wrap gap-2" role="group" aria-label="Presets">
+            <h3 className="text-base font-medium">How many minutes can you study?</h3>
+            <p className="text-sm text-text-muted">Pick a starting point, then change any day below.</p>
+            <RadioGroup
+              aria-label="Study time presets"
+              value={PRESETS.find((p) => presetValues(p).join() === values.join())?.name ?? ''}
+              onChange={(name) => setValues(presetValues(byName(name)))}
+              className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+            >
               {PRESETS.map((p) => (
-                <Button
+                <Radio
                   key={p.name}
-                  variant="secondary"
-                  onPress={() => setValues([...Array<string>(5).fill(String(p.weekday)), String(p.weekend), String(p.weekend)])}
+                  value={p.name}
+                  className="grid cursor-default content-start gap-1 rounded-lg border border-border-strong bg-surface-raised p-3 text-sm outline-none data-focus-visible:outline-2 data-focus-visible:outline-offset-2 data-focus-visible:outline-focus data-hovered:bg-surface data-selected:border-accent data-selected:ring-1 data-selected:ring-accent"
                 >
-                  {p.name}: {p.weekday} min weekdays, {p.weekend} weekends
-                </Button>
+                  <span className="font-medium">{p.name}</span>
+                  <span>{p.weekday} min weekdays, {p.weekend} min weekends</span>
+                  <span className="text-text-muted">{formatHours(p.weekday * 5 + p.weekend * 2)} per week</span>
+                </Radio>
               ))}
-            </div>
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              {WEEKDAYS.map((day, i) => (
-                <TextField
-                  key={day}
-                  label={day}
-                  inputMode="numeric"
-                  value={values[i]}
-                  onChange={(v) => setValues(values.map((x, j) => (j === i ? v : x)))}
-                  isInvalid={parsed[i] === undefined}
-                  errorMessage="0 to 1440"
-                />
-              ))}
-            </div>
-            <p className="text-sm text-text-muted">Week total: {formatHours(weekTotal(values))}</p>
+            </RadioGroup>
+            <WeekdayMinutes values={values} onChange={setValues} />
           </div>
         )}
 
@@ -160,7 +161,7 @@ function Flow({ onClose }: { onClose: () => void }) {
         {step === 2 && (
           <div className="grid gap-3">
             <p className="text-sm text-text-muted">A daily notification with your task count. Optional: you can turn it on later in Settings.</p>
-            <TextField label="Reminder time" type="time" value={time} onChange={setTime} isInvalid={!timeOk} errorMessage="Enter a time" className="max-w-48" />
+            <TimeInput label="Reminder time" value={time} onChange={setTime} isInvalid={!timeOk} />
             {pushOn ? (
               <p role="status" tabIndex={-1} ref={onNote} className="text-sm text-success outline-none">Reminders are on.</p>
             ) : push === 'ready' ? (
