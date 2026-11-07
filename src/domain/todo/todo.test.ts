@@ -150,9 +150,9 @@ describe('personal to-dos and events', () => {
   const items = buildTodoItems(
     {
       tasks: [task('t1', TODAY)],
+      problems: [],
       cards: [],
       practiceLanguages: new Map(),
-      cards: [],
       personalTodos: [
         { id: 'p1', title: 'Buy a book', done: false },
         { id: 'p2', title: 'Hand in form', date: '2026-11-09', minutes: 15, done: false },
