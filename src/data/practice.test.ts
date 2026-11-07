@@ -96,20 +96,20 @@ describe('completePractice', () => {
     const r = await completePractice(db, item.id, 'good', NOON, NO_FUZZ)
     expect(r.item).toMatchObject({ status: 'done', rating: 3, completedAt: NOON })
     expect(r.card).toMatchObject({ slug: item.slug, planId: item.planId, topics: [item.topic], minutes: { easy: 15, medium: 25, hard: 35 }[item.difficulty] })
-    expect(r.card!.taskId).toBeUndefined()
+    expect(r.card.taskId).toBeUndefined()
     const logRows = (await db.practiceLog.toArray()).filter((l) => !l.deleted)
     expect(logRows).toMatchObject([{ slug: item.slug, date: TODAY, rating: 3, difficulty: item.difficulty }])
     // The brush-up list shows it with the problem's title.
     const due = await dueCards(db, addDaysISO(TODAY, 30))
     expect(due.map((c) => c.slug)).toContain(item.slug)
-    expect((await brushUp(db, r.card!.due + 1)).map((e) => e.title)).toContain(item.title)
+    expect((await brushUp(db, r.card.due + 1)).map((e) => e.title)).toContain(item.title)
 
     // Switching the plan's daily practice off hides its problem cards from dueCards and the brush-up list.
     await updateRecord(db, 'plans', item.planId, { dailyPracticeOn: false })
     expect((await dueCards(db, addDaysISO(TODAY, 30))).map((c) => c.slug)).not.toContain(item.slug)
-    expect(await brushUp(db, r.card!.due + 1)).toEqual([])
+    expect(await brushUp(db, r.card.due + 1)).toEqual([])
     await updateRecord(db, 'plans', item.planId, { dailyPracticeOn: undefined })
-    expect((await brushUp(db, r.card!.due + 1))[0]).toMatchObject({ language: 'Python' })
+    expect((await brushUp(db, r.card.due + 1))[0]).toMatchObject({ language: 'Python' })
 
     await r.undo()
     expect((await db.practiceItems.get(item.id))!).toMatchObject({ status: 'open' })
@@ -118,18 +118,16 @@ describe('completePractice', () => {
     expect((await db.reviewLogs.toArray()).filter((c) => !c.deleted)).toEqual([])
   })
 
-  it('with the plan reviews off it marks done and logs the problem but makes no card', async () => {
-    const { db } = await seeded(false)
+  it('with the plan reviews off the card is still made but hidden, and shows once reviews are on', async () => {
+    const { db, planId } = await seeded(false)
     const item = (await live(db)).find((i) => i.date === TODAY)!
     const r = await completePractice(db, item.id, 'good', NOON, NO_FUZZ)
-    expect(r.card).toBeUndefined()
     expect(r.item.status).toBe('done')
-    expect((await db.practiceLog.toArray()).filter((l) => !l.deleted)).toHaveLength(1)
-    expect(await db.reviewCards.count()).toBe(0)
-    expect(await db.reviewLogs.count()).toBe(0)
-    await r.undo()
-    expect((await db.practiceItems.get(item.id))!.status).toBe('open')
-    expect((await db.practiceLog.toArray()).filter((l) => !l.deleted)).toEqual([])
+    expect(await db.reviewCards.count()).toBe(1)
+    expect(await dueCards(db, addDaysISO(TODAY, 30))).toEqual([])
+    expect(await brushUp(db, r.card.due + 1)).toEqual([])
+    await updateRecord(db, 'plans', planId, { reviewsOn: true })
+    expect((await brushUp(db, r.card.due + 1)).map((e) => e.title)).toContain(item.title)
   })
 
   it('rates the same card again without a second practice log row', async () => {
@@ -137,11 +135,11 @@ describe('completePractice', () => {
     const item = (await live(db)).find((i) => i.date === TODAY)!
     const a = await completePractice(db, item.id, 'good', NOON, NO_FUZZ)
     const b = await completePractice(db, item.id, 'easy', NOON + 1000, NO_FUZZ)
-    expect(b.card!.id).toBe(a.card!.id)
-    expect(b.card!.reps).toBe(2)
+    expect(b.card.id).toBe(a.card.id)
+    expect(b.card.reps).toBe(2)
     expect((await db.practiceLog.toArray()).filter((l) => !l.deleted)).toHaveLength(1)
     await b.undo()
-    expect((await db.reviewCards.get(a.card!.id))!.reps).toBe(1)
+    expect((await db.reviewCards.get(a.card.id))!.reps).toBe(1)
     expect((await db.practiceItems.get(item.id))!.status).toBe('done')
   })
 

@@ -6,7 +6,7 @@ import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { App } from './App'
 import { useCompleter } from './rating'
-import { db, listPlans, listTasks } from '../data'
+import { db, dueCards, listPlans, listTasks } from '../data'
 import { seedFixtures } from '../data/seed'
 
 beforeEach(async () => {
@@ -41,13 +41,15 @@ describe('To Do page with sample plans', () => {
 
     const first = boxes[0]!
     await user.click(first)
-    // No rating step: the lesson is done at once, and with reviews off (the default) it makes no card.
-    expect(screen.queryByRole('dialog')).toBeNull()
+    // No rating step: the lesson is done at once and no dialog appears, before or after the write.
     await waitFor(() => expect((first as HTMLInputElement).checked).toBe(true))
+    expect(screen.queryByRole('dialog')).toBeNull()
 
     const tasks = (await Promise.all((await listPlans(db)).map((p) => listTasks(db, p.id)))).flat()
     expect(tasks.filter((t) => t.status === 'done')).toHaveLength(1)
-    expect(await db.reviewCards.count()).toBe(0)
+    // Reviews are off (the default): the card is kept but hidden from the due list.
+    expect(await db.reviewCards.count()).toBe(1)
+    expect(await dueCards(db, '2099-01-01')).toEqual([])
     await waitFor(() => expect(badge()).toBe(boxes.length - 1))
     // The row stays in place, checked and disabled.
     expect((first as HTMLInputElement).disabled).toBe(true)
@@ -75,13 +77,14 @@ describe('useCompleter', () => {
     return tasks.find((t) => t.type === type)!
   }
 
-  it('completes a lesson straight away with no card while its plan has reviews off', async () => {
+  it('completes a lesson straight away while its plan has reviews off, keeping a hidden card', async () => {
     const t = await oneTask('lesson')
     render(<Harness id={t.id} />)
     await userEvent.setup().click(screen.getByRole('button', { name: 'go' }))
     await waitFor(async () => expect((await db.tasks.get(t.id))!.status).toBe('done'))
     expect(screen.queryByRole('dialog')).toBeNull()
-    expect(await db.reviewCards.count()).toBe(0)
+    expect(await db.reviewCards.count()).toBe(1)
+    expect(await dueCards(db, '2099-01-01')).toEqual([])
   })
 
   it('makes a card, rated good, when the plan has reviews on', async () => {

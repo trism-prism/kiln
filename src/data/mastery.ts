@@ -45,8 +45,8 @@ export interface CompleteResult {
  * Marks the task done and records how well it went. First completion of a task that gets a card
  * (cardMinutes) creates the card and rates it; completing again rates the existing card. Tasks
  * without a card (reviews, projects, milestones) are only marked done and the rating is ignored.
- * Cards exist only for plans with reviews on: with them off the task is only marked done and no card
- * is made or touched (an older card stays as it is).
+ * Cards are made whatever the plan's reviews setting: with reviews off they stay hidden (liveCards)
+ * and appear when reviews are switched on, so finished lessons are never lost.
  * Everything runs in one transaction, so it is all-or-nothing and two overlapping calls for one new
  * task produce exactly one card. A suspended card (skipped task) is resumed.
  */
@@ -59,14 +59,13 @@ export async function completeTask(
 ): Promise<CompleteResult> {
   await getDeviceId(db) // resolve before the transaction opens; the writes below reuse it
   // The callback must be an async function: Dexie keeps the transaction open across native awaits only then.
-  return db.transaction('rw', db.tasks, db.plans, db.reviewCards, db.reviewLogs, async () => {
+  return db.transaction('rw', db.tasks, db.reviewCards, db.reviewLogs, async () => {
     const before = await db.tasks.get(taskId)
     const task = await setTaskStatus(db, taskId, 'done')
     if (!task || !before) throw new Error(`Task ${taskId} not found`)
     const restoreTask: ['tasks', TaskRecord, number] = ['tasks', before, task.updatedAt]
     const minutes = cardMinutes(task)
-    const plan = await db.plans.get(task.planId)
-    if (minutes === undefined || !plan || plan.deleted || !reviewsOn(plan)) return { task, undo: () => revertWrite(db, { restore: [restoreTask] }) }
+    if (minutes === undefined) return { task, undo: () => revertWrite(db, { restore: [restoreTask] }) }
 
     const existing = await liveCardForTask(db, taskId)
     const { card, log } = rate(existing ?? newCard(now), rating, now, opts)
@@ -102,9 +101,12 @@ export async function reviewCard(
   opts: SchedulerOptions = APP_OPTS,
 ): Promise<{ card: ReviewCardRecord; log: ReviewLogRecord; undo: () => Promise<boolean> }> {
   await getDeviceId(db)
-  return db.transaction('rw', db.reviewCards, db.reviewLogs, async () => {
+  return db.transaction('rw', db.plans, db.reviewCards, db.reviewLogs, async () => {
     const old = await db.reviewCards.get(cardId)
     if (!old || old.deleted) throw new Error(`Review card ${cardId} not found`)
+    // A list drawn before reviews were switched off can still offer this card.
+    const plan = await db.plans.get(old.planId)
+    if (!plan || plan.deleted || !reviewsOn(plan)) throw new Error('Reviews are off for this plan')
     const { card, log } = rate(old, rating, now, opts)
     const rec = (await updateRecord(db, 'reviewCards', cardId, card))!
     const logRec = await logReview(db, cardId, log)
