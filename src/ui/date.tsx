@@ -22,7 +22,7 @@ import {
 import { formatDay, isRealISODate, toLocalISODate } from '../lib/date'
 import { parseDateText } from '../lib/date-parse'
 import { IconButton } from './button'
-import { controlClass, popoverClass } from './form'
+import { controlClass, popoverClass } from './classes'
 
 export interface DateFieldProps {
   /** Visible label. Without one, pass `aria-label`. */

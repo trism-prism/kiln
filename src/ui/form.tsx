@@ -22,13 +22,12 @@ import {
   type SwitchProps,
   type TextFieldProps,
 } from 'react-aria-components'
+import { controlClass as control, popoverClass as popover } from './classes'
 import { DateField, type DateFieldProps } from './date'
 
 const field = 'grid gap-1.5 text-sm'
 const help = 'text-sm text-text-muted'
 const error = 'text-sm text-danger'
-const control =
-  'h-10 rounded-md border border-border-strong bg-surface-raised px-3 text-sm text-text transition-colors data-focused:border-focus data-hovered:bg-surface data-invalid:border-danger data-disabled:cursor-not-allowed data-disabled:opacity-50'
 
 /** Task completion. The box fills with the accent when done. */
 export function Checkbox({ children, className = '', ...props }: Omit<CheckboxProps, 'className' | 'children'> & { children: ReactNode; className?: string }) {
@@ -90,9 +89,6 @@ export function TextAreaField({
     </AriaTextField>
   )
 }
-
-const popover =
-  'min-w-(--trigger-width) rounded-lg border border-border bg-surface-raised p-1 text-text shadow-lg outline-none data-entering:animate-rise'
 
 export function ListBox<T extends object>({ className = '', ...props }: Omit<ListBoxProps<T>, 'className'> & { className?: string }) {
   return <AriaListBox {...props} className={`outline-none ${className}`} />
@@ -157,4 +153,4 @@ export function Switch({ children, className = '', ...props }: Omit<SwitchProps,
   )
 }
 
-export { popover as popoverClass, control as controlClass }
+export { controlClass, popoverClass } from './classes'
