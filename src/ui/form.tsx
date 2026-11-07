@@ -22,6 +22,7 @@ import {
   type SwitchProps,
   type TextFieldProps,
 } from 'react-aria-components'
+import { DateField, type DateFieldProps } from './date'
 
 const field = 'grid gap-1.5 text-sm'
 const help = 'text-sm text-text-muted'
@@ -48,6 +49,21 @@ export function TextField({
   className = '',
   ...props
 }: Omit<TextFieldProps, 'className'> & { label: string; description?: string; errorMessage?: string; className?: string }) {
+  if (props.type === 'date') {
+    return (
+      <DateField
+        label={label}
+        value={props.value ?? ''}
+        onChange={props.onChange ?? (() => {})}
+        // A date field calls it after each commit, without an event; no date caller reads the event.
+        onBlur={props.onBlur as DateFieldProps['onBlur']}
+        isInvalid={props.isInvalid}
+        errorMessage={errorMessage}
+        description={description}
+        className={className}
+      />
+    )
+  }
   return (
     <AriaTextField {...props} className={`${field} ${className}`}>
       <Label className="font-medium">{label}</Label>
