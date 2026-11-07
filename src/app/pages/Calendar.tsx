@@ -51,7 +51,7 @@ export default function CalendarPage() {
       </Page>
     )
   }
-  if (!data.hasPlans) {
+  if (!data.hasPlans && data.items.length === 0) {
     return (
       <Page title="Calendar">
         <EmptyState title="Your calendar is empty" action={<Link href="/import" variant="primary">Import a plan</Link>}>
