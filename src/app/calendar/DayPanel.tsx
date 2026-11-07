@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from 'react'
 import { Badge } from '../../ui/surface'
 import { Button } from '../../ui/button'
+import { DateField } from '../../ui/date'
 import { Checkbox } from '../../ui/form'
 import { Sheet } from '../../ui/overlay'
 import { formatDay } from '../../lib/date'
@@ -15,8 +16,9 @@ import type { DragPayload } from './CalendarView'
 
 function MoveField({ item, date, today, onMove, onDone }: { item: TodoItem; date: string; today: string; onMove: (p: DragPayload, to: string) => void; onDone: () => void }) {
   const [to, setTo] = useState(date < today ? today : date)
-  const valid = to >= today && to !== date
-  const hint = `move-hint-${item.key}`
+  // The field itself keeps the day from today on and shows its own error for text it can't read.
+  const [bad, setBad] = useState(false)
+  const valid = !bad && to >= today && to !== date
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (!valid) return
@@ -26,16 +28,15 @@ function MoveField({ item, date, today, onMove, onDone }: { item: TodoItem; date
     requestAnimationFrame(() => document.querySelector<HTMLElement>('[role="dialog"]')?.focus())
   }
   return (
-    <form onSubmit={submit} className="mt-2 flex flex-wrap items-center gap-2">
-      <input
-        type="date"
+    <form onSubmit={submit} className="mt-2 flex flex-wrap items-start gap-2">
+      <DateField
         aria-label={`Move ${item.title} to`}
         min={today}
         value={to}
-        onChange={(e) => setTo(e.target.value)}
-        aria-invalid={!valid}
-        aria-describedby={valid ? undefined : hint}
-        className="h-10 rounded-md border border-border-strong bg-surface-raised px-3 text-sm text-text"
+        onChange={setTo}
+        onInvalidChange={setBad}
+        description={to === date && !bad ? 'Pick a day from today on, other than this one.' : undefined}
+        className="w-56"
       />
       <Button type="submit" variant="secondary" isDisabled={!valid}>
         Move
@@ -43,11 +44,6 @@ function MoveField({ item, date, today, onMove, onDone }: { item: TodoItem; date
       <Button variant="quiet" onPress={onDone}>
         Cancel
       </Button>
-      {!valid && (
-        <p id={hint} className="basis-full text-xs text-text-muted">
-          Pick a day from today on, other than this one.
-        </p>
-      )}
     </form>
   )
 }
