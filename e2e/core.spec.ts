@@ -27,7 +27,7 @@ test('seed, To Do matches the badge, complete a lesson, review comes back and sh
   const lesson = today.getByRole('listitem').filter({ hasText: '· Lesson ·' }).first()
   const title = (await lesson.getByRole('link').first().innerText()).trim()
   await lesson.getByRole('checkbox').click({ force: true })
-  await expect(page.getByText(`Done: ${title}`)).toBeVisible()
+  await expect(page.getByText(`Done: ${title}`, { exact: true })).toBeVisible()
   await expect(page.getByRole('dialog', { name: 'How did it go?' })).toHaveCount(0)
   await expect(lesson.getByRole('checkbox')).toBeChecked()
   await expect(lesson.getByText('Done', { exact: true })).toBeVisible()
