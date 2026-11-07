@@ -150,18 +150,28 @@ async function currentPlan(db: KilnDB, planId: string): Promise<{ plan: PlanReco
   return { plan, content: planFromRecords(plan, await listModules(db, planId), await listTasks(db, planId)) }
 }
 
-/** What the editor opened with: the plan's text fields and each live module's and task's updatedAt, by key. */
+/**
+ * What the editor opened with: the plan's text fields and a fingerprint of each live module's and
+ * task's content (what the editor writes: title, minutes, priority, links, dates, pin, dependencies,
+ * module and position), by key. Progress (status, completion, reviews) is not in it.
+ */
 export interface EditBase {
   plan: { title: string; goal?: string; description?: string }
-  modules: Record<string, number>
-  tasks: Record<string, number>
+  modules: Record<string, string>
+  tasks: Record<string, string>
 }
 
-export const editBase = (plan: PlanRecord, modules: ModuleRecord[], tasks: TaskRecord[]): EditBase => ({
-  plan: { title: plan.title, goal: plan.goal, description: plan.description },
-  modules: Object.fromEntries(modules.filter((m) => !m.deleted).map((m) => [m.key, m.updatedAt])),
-  tasks: Object.fromEntries(tasks.filter((t) => !t.deleted).map((t) => [t.key, t.updatedAt])),
-})
+export function editBase(plan: PlanRecord, modules: ModuleRecord[], tasks: TaskRecord[]): EditBase {
+  const liveModules = modules.filter((m) => !m.deleted)
+  const liveTasks = tasks.filter((t) => !t.deleted)
+  const content = planFromRecords(plan, liveModules, liveTasks)
+  const pin = new Map(liveTasks.map((t) => [t.key, t.pinnedDate]))
+  return {
+    plan: { title: plan.title, goal: plan.goal, description: plan.description },
+    modules: Object.fromEntries(content.modules.map((m) => [m.id, json(m)])),
+    tasks: Object.fromEntries(content.tasks.map((t) => [t.id, json({ ...t, pin: pin.get(t.id) })])),
+  }
+}
 
 export const PLAN_CHANGED = 'This plan changed on another device. Reopen the editor.'
 
@@ -169,7 +179,7 @@ export const PLAN_CHANGED = 'This plan changed on another device. Reopen the edi
  * Saves an edit of the plan's content (a whole plan file with the plan's key as its id). Applied by
  * key with importPlan, so progress is kept. With `base` (what the editor opened with) only keys that
  * were in the base and are missing from the edit are deleted, so records added elsewhere survive, and
- * the save is refused (PLAN_CHANGED) if a base record or the plan's text changed since. `pins` sets or
+ * the save is refused (PLAN_CHANGED) if the content of a base record or the plan's text changed since (progress changes do not count). `pins` sets or
  * clears (undefined) the pinned day of tasks by key. Snapshots the plan before its first edit and
  * after every edit.
  */
@@ -185,7 +195,7 @@ export async function savePlanEdit(
   if (base) {
     const [modules, tasks] = [await listModules(db, planId), await listTasks(db, planId)]
     const now = editBase(plan, modules, tasks)
-    const same = (a: Record<string, number>, b: Record<string, number>) => Object.keys(a).every((k) => k in b && a[k] === b[k])
+    const same = (a: Record<string, string>, b: Record<string, string>) => Object.keys(a).every((k) => k in b && a[k] === b[k])
     const textChanged = (['title', 'goal', 'description'] as const).some((k) => base.plan[k] !== now.plan[k])
     const removedModules = new Set(Object.keys(base.modules).filter((k) => !edited.modules.some((m) => m.id === k)))
     const moduleKey = new Map(modules.map((m) => [m.id, m.key]))

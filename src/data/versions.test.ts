@@ -125,6 +125,16 @@ describe('review fixes', () => {
     expect((await listTasks(db, planId)).find((t) => t.id === target.id)!.title).toBe('Changed elsewhere')
   })
 
+  it('progress made on another device while the editor is open does not block the save and is kept', async () => {
+    const { db, planId, content } = await setup()
+    const before = await content()
+    const base = await baseOf(db, planId)
+    const target = (await listTasks(db, planId)).sort((a, b) => a.order - b.order)[0]!
+    await setTaskStatus(db, target.id, 'done')
+    await savePlanEdit(db, planId, { ...before, tasks: before.tasks.map((t) => (t.id === target.key ? { ...t, title: 'Edited while done elsewhere' } : t)) }, {}, base)
+    expect((await listTasks(db, planId)).find((t) => t.id === target.id)).toMatchObject({ title: 'Edited while done elsewhere', status: 'done' })
+  })
+
   it('a version made with the clock behind is still the newest, and only 20 are kept', async () => {
     const { db, planId } = await setup()
     const first = await snapshotPlan(db, planId, { summary: 'first' })
