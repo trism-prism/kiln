@@ -28,15 +28,16 @@ const problem = (id: string, date: string, over: Partial<TodoProblem> = {}): Tod
 })
 const card = (id: string, due: number, over: Partial<TodoCard> = {}): TodoCard => ({ id, planId: 'p1', taskId: 't1', due, minutes: 10, ...over })
 
-const build = (tasks: TodoSource['tasks'], problems: TodoProblem[] = [], cards: TodoCard[] = [], practiceLanguages: TodoSource['practiceLanguages'] = new Map([['p1', 'Python']])) =>
-  buildTodoItems({ tasks, problems, cards, planTitles: new Map([['p1', 'DSA']]), practiceLanguages, cardTitle: (c) => (c.taskId ? `Task ${c.taskId}` : (c.slug ?? '')) }, TODAY)
+const build = (tasks: TodoSource['tasks'], problems: TodoProblem[] = [], cards: TodoCard[] = [], practiceLanguages: TodoSource['practiceLanguages'] = new Map([['p1', 'Python']]), planLanguages: TodoSource['planLanguages'] = new Map([['p1', 'Python']])) =>
+  buildTodoItems({ tasks, problems, cards, planTitles: new Map([['p1', 'DSA']]), practiceLanguages, planLanguages, cardTitle: (c) => (c.taskId ? `Task ${c.taskId}` : (c.slug ?? '')) }, TODAY)
 
 describe('buildTodoItems', () => {
   it('lists generated daily problems only for plans with daily practice on, in the language of that plan', () => {
     const lcTask = task('t1', TODAY, { practice: { provider: 'leetcode', slug: 'two-sum', difficulty: 'easy' } })
-    const off = build([lcTask], [problem('a', TODAY)], [], new Map())
+    const off = build([lcTask], [problem('a', TODAY)], [], new Map(), new Map([['p1', 'Go']]))
     expect(off.map((i) => i.kind)).toEqual(['task'])
-    expect(off[0]?.leetcode).toBeDefined() // a LeetCode task written into the plan keeps its Solve link
+    // a LeetCode task written into the plan keeps its Solve link, in the plan's language even with the setting off
+    expect(off[0]?.leetcode).toMatchObject({ language: 'Go' })
     const on = build([], [problem('a', TODAY)], [], new Map([['p1', 'Go']]))
     expect(on[0]).toMatchObject({ kind: 'practice', leetcode: { language: 'Go' } })
   })
@@ -153,6 +154,7 @@ describe('personal to-dos and events', () => {
       problems: [],
       cards: [],
       practiceLanguages: new Map(),
+      planLanguages: new Map(),
       personalTodos: [
         { id: 'p1', title: 'Buy a book', done: false },
         { id: 'p2', title: 'Hand in form', date: '2026-11-09', minutes: 15, done: false },

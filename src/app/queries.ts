@@ -72,6 +72,7 @@ async function loadTodo(today: string, horizonDays: number) {
   const plans = await listPlans(db)
   const allTasks = alive(await db.tasks.toArray())
   const problems = alive(await db.practiceItems.toArray())
+  const planLanguages = new Map(plans.map((p) => [p.id, practiceLanguage(p)]))
   const practiceLanguages = new Map(plans.filter((p) => practiceConfig(p)).map((p) => [p.id, practiceLanguage(p)]))
   const cards = await dueCards(db, addDaysISO(today, horizonDays))
   const taskTitle = new Map(allTasks.map((t) => [t.id, t.title]))
@@ -85,6 +86,7 @@ async function loadTodo(today: string, horizonDays: number) {
       events: await eventsBetween(db, addDaysISO(today, -horizonDays), addDaysISO(today, horizonDays)),
       planTitles: new Map(plans.map((p) => [p.id, p.title])),
       practiceLanguages,
+      planLanguages,
       cardTitle: (c) => (c.taskId && taskTitle.get(c.taskId)) || (c.slug && (problemTitle.get(c.slug) ?? c.slug)) || '',
     },
     today,

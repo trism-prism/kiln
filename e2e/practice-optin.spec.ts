@@ -7,6 +7,7 @@ const plan = {
   id: 'music-theory',
   title: 'Music theory basics',
   schedulingMode: 'auto',
+  sources: [{ id: 'course', title: 'Theory course', kind: 'course', url: 'https://example.com/course' }],
   modules: [{ id: 'm1', title: 'Scales', order: 1 }],
   tasks: [
     {
@@ -23,6 +24,7 @@ const plan = {
       resources: [
         { title: 'Major scale explained', kind: 'video', minutes: 15, url: 'https://example.com/scale' },
         { title: 'Scale drills', kind: 'video', minutes: 10 },
+        { title: 'Course lecture', kind: 'video', minutes: 10, sourceId: 'course' },
         { title: 'Interval flashcards', kind: 'other', minutes: 10, url: 'https://quizlet.com/example' },
       ],
     },
@@ -54,6 +56,8 @@ test('a plan without daily practice shows no LeetCode UI, links its resources, a
   const link = page.getByRole('link', { name: 'Major scale explained (Video, opens in a new tab)' })
   await expect(link).toHaveAttribute('href', 'https://example.com/scale')
   await expect(page.getByRole('link', { name: /^Interval flashcards/ })).toHaveAttribute('href', 'https://quizlet.com/example')
+  // A video with no url of its own takes the link of its source.
+  await expect(page.getByRole('link', { name: /^Course lecture/ })).toHaveAttribute('href', 'https://example.com/course')
   await expect(page.getByText('Scale drills')).toBeVisible() // no link: plain text
   await expect(page.getByRole('link', { name: /^Scale drills/ })).toHaveCount(0)
   await expect(page.getByRole('heading', { name: 'Practice' })).toHaveCount(0)

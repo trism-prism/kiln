@@ -158,11 +158,12 @@ export default function TaskPage() {
               <ul className="grid gap-2 text-sm">
                 {task.resources.map((r, i) => {
                   const Icon = KIND_ICON[r.kind] ?? LinkIcon
+                  const url = r.url ?? plan?.sources.find((s) => s.id === r.sourceId)?.url // a resource may take its link from its source
                   const detail = [cap(r.kind), r.section, r.minutes ? minutesText(r.minutes) : undefined, r.required ? undefined : 'Optional'].filter(Boolean).join(' · ')
                   return (
                     <li key={i} className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                      {r.url ? (
-                        <Link href={r.url} target="_blank" rel="noopener noreferrer" aria-label={`${r.title} (${cap(r.kind)}, opens in a new tab)`} variant="secondary">
+                      {url ? (
+                        <Link href={url} target="_blank" rel="noopener noreferrer" aria-label={`${r.title} (${cap(r.kind)}, opens in a new tab)`} variant="secondary">
                           <Icon size={16} aria-hidden="true" />
                           {r.title}
                           <ExternalLink size={14} aria-hidden="true" />

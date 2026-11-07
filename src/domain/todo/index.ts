@@ -4,6 +4,7 @@
 import { addDaysISO, isRealISODate } from '../../lib/date'
 import { weekStartOf, type WeekStart } from '../calendar'
 import { cardMinutes, localDate, type ReviewableTask } from '../mastery'
+import { DEFAULT_PRACTICE_LANGUAGE } from '../plan-format'
 
 export type FromAnchor = 'weeks4' | 'weeks3' | 'weeks2' | 'lastWeek' | 'thisWeek' | 'today'
 export type UntilAnchor = 'today' | 'thisWeek' | 'nextWeek' | 'weeks2' | 'weeks3' | 'weeks4'
@@ -185,8 +186,6 @@ export interface TodoItem {
   todo?: { date?: string; minutes?: number }
 }
 
-const DEFAULT_LANGUAGE = 'Python'
-
 const KIND_RANK = { event: 0, review: 1, task: 2, personal: 3, practice: 4 }
 
 export interface TodoSource {
@@ -200,9 +199,11 @@ export interface TodoSource {
   /**
    * Plans whose daily practice setting is on, with the language for "Solve in <language>". Generated daily
    * problems of any other plan are left out (switching the setting off hides them); LeetCode tasks written
-   * into a plan always show.
+   * into a plan always show, in `planLanguages`' language.
    */
   practiceLanguages: ReadonlyMap<string, string>
+  /** The language of every plan, on or off, for the Solve link of a LeetCode task written into the plan. */
+  planLanguages: ReadonlyMap<string, string>
   /** Title shown after "Review:" for a card. */
   cardTitle: (c: TodoCard) => string
 }
@@ -218,7 +219,7 @@ export function buildTodoItems(src: TodoSource, today: string): TodoItem[] {
   const items: (TodoItem & { sort: number })[] = []
   for (const t of src.tasks) {
     if (t.status === 'skipped' || !t.scheduledDate) continue
-    const lc = t.practice?.provider === 'leetcode' && t.practice.slug ? { slug: t.practice.slug, difficulty: t.practice.difficulty, language: src.practiceLanguages.get(t.planId) ?? DEFAULT_LANGUAGE } : undefined
+    const lc = t.practice?.provider === 'leetcode' && t.practice.slug ? { slug: t.practice.slug, difficulty: t.practice.difficulty, language: src.planLanguages.get(t.planId) ?? DEFAULT_PRACTICE_LANGUAGE } : undefined
     items.push({
       key: `task:${t.id}`,
       kind: 'task',

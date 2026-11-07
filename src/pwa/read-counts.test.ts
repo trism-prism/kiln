@@ -25,7 +25,7 @@ async function seeded() {
   await at(2, TODAY)
   await at(3, '2026-11-08')
   await at(4, '2026-11-10')
-  return { db, tasks }
+  return { db, tasks, planId }
 }
 
 describe('readBreakdown (what the service worker counts)', () => {
@@ -50,14 +50,35 @@ describe('readBreakdown (what the service worker counts)', () => {
     expect(app).toBeGreaterThan(0)
   })
 
+  const problemRow = (planId: string, id: string, date: string, status: 'open' | 'done', deleted = false) =>
+    ({ id, planId, date, slug: id, title: id, difficulty: 'easy', minutes: 15, status, deleted, updatedAt: 1, deviceId: 'd' }) as const
+
   it('counts stored daily problems like the app badge does', async () => {
-    const { db } = await seeded()
+    const { db, planId } = await seeded()
+    await db.plans.update(planId, { dailyPracticeOn: true })
     const row = (id: string, date: string, status: 'open' | 'done', deleted = false) =>
-      ({ id, planId: 'p', date, slug: id, title: id, difficulty: 'easy', minutes: 15, status, deleted, updatedAt: 1, deviceId: 'd' }) as const
+      ({ id, planId, date, slug: id, title: id, difficulty: 'easy', minutes: 15, status, deleted, updatedAt: 1, deviceId: 'd' }) as const
     await db.practiceItems.bulkPut([row('a', TODAY, 'open'), row('b', '2026-11-08', 'open'), row('c', TODAY, 'done'), row('d', TODAY, 'open', true), row('e', '2026-11-10', 'open')])
     const r = await readBreakdown(indexedDB, NOW, db.name)
     expect(r.today).toBe(4) // 3 tasks + problem a
     expect(r.overdue).toBe(2) // 1 task + problem b
+  })
+
+  it('leaves out daily problems and their review cards of a plan with daily practice switched off', async () => {
+    const { db, planId } = await seeded()
+    const before = await readBreakdown(indexedDB, NOW, db.name)
+    await db.practiceItems.bulkPut([problemRow(planId, 'a', TODAY, 'open'), problemRow(planId, 'b', '2026-11-08', 'open')])
+    const card = { id: 'c1', planId, slug: 'a', topics: [], due: NOW.getTime() - 1000, stability: 1, difficulty: 1, scheduledDays: 1, learningSteps: 0, reps: 1, lapses: 0, state: 2, minutes: 10, suspended: false, deleted: false, updatedAt: 1, deviceId: 'd' }
+    await db.reviewCards.put(card as never)
+    const on = async (value: boolean | undefined) => {
+      await db.plans.update(planId, { dailyPracticeOn: value })
+      return readBreakdown(indexedDB, NOW, db.name)
+    }
+    const off = await on(false)
+    expect([off.today, off.overdue, off.reviews]).toEqual([before.today, before.overdue, before.reviews])
+    const enabled = await on(true)
+    expect([enabled.today, enabled.overdue, enabled.reviews]).toEqual([before.today + 1, before.overdue + 1, before.reviews + 1])
+    expect(enabled.total).toBe((await on(true)).total)
   })
 
   it('counts open personal to-dos due today or earlier like the app badge does', async () => {

@@ -1,4 +1,5 @@
 // Per-plan settings added in schema 4 that the scheduler reads: share of study time and the daily problem toggle. Pure.
+import { DEFAULT_PRACTICE_LANGUAGE } from '../domain/plan-format/language'
 import type { DailyPractice } from '../domain/plan-format'
 import type { PlanRecord, Share } from './types'
 
@@ -30,7 +31,7 @@ const LANGUAGE_NAMES: Record<string, string> = { javascript: 'JavaScript', types
 /** The language shown in "Solve in <language>": the plan's `dailyPractice.language` (Python when the file names none). */
 export function practiceLanguage(p: Pick<PlanRecord, 'dailyPractice'>): string {
   const raw = p.dailyPractice?.language?.trim()
-  if (!raw) return 'Python'
+  if (!raw) return DEFAULT_PRACTICE_LANGUAGE
   return LANGUAGE_NAMES[raw.toLowerCase()] ?? raw[0]!.toUpperCase() + raw.slice(1)
 }
 
