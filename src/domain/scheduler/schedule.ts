@@ -136,6 +136,13 @@ function place(ctx: Ctx, deferred: ReadonlySet<string>): Result {
       if (d) preload(t, d)
     } else if (t.status === 'done' && t.scheduledDate) preload(t, t.scheduledDate)
   }
+  // Personal to-dos with a date and minutes: fixed load, like a pinned task.
+  for (const [d, minutes] of Object.entries(input.fixedMinutes ?? {})) {
+    if (d < input.today || minutes <= 0) continue
+    const a = getAcc(d)
+    a.tasks += minutes
+    a.taskCount++
+  }
 
   const openDeps = (t: SchedTask) =>
     t.dependsOn.map((k) => ctx.byKey.get(keyOf(t.planId, k))).filter((d): d is SchedTask => d !== undefined && d.status === 'open')

@@ -13,6 +13,7 @@ export interface Base {
 }
 
 export type TaskStatus = 'open' | 'done' | 'skipped'
+export type Share = 'less' | 'even' | 'more'
 
 export interface PlanRecord extends Base {
   /** The plan's own id from the file (a slug). */
@@ -27,8 +28,20 @@ export interface PlanRecord extends Base {
   sources: Source[]
   dailyPractice?: DailyPractice
   // App settings for this plan
-  /** Share of daily capacity against other plans, 1-5. */
+  /**
+   * Scheduler weight against other plans, 1-5. Kept in step with `share` (SHARE_WEIGHT) by setPlanShare
+   * so older devices still read it; the scheduler uses `share` when it is set (planWeight in plan-settings.ts).
+   */
   weight: number
+  /** "Share of study time" (schema 4). Less, Even, More = scheduler weight 2, 3, 5. */
+  share?: Share
+  /** Starred in the plan list (schema 4). */
+  favorite?: boolean
+  /**
+   * Daily practice problem setting (schema 4). Unset: on when the plan file has `dailyPractice`. False:
+   * off. True without a `dailyPractice` config: NeetCode, one a day (practiceConfig in plan-settings.ts).
+   */
+  dailyPracticeOn?: boolean
   /** Day 1 of the plan. */
   startDate: string
   deadline?: string
@@ -159,6 +172,85 @@ export interface SettingsRecord extends Base {
   blackoutDates: string[]
 }
 
+/** A one-off to-do outside any plan (schema 4). With a date and minutes it takes that time from the day's budget. */
+export interface PersonalTodoRecord extends Base {
+  title: string
+  /** Day it is due; none = undated (shown in the list, never overdue). */
+  date?: string
+  /** Estimated minutes; counted as fixed load on `date` by the scheduler. */
+  minutes?: number
+  done: boolean
+  completedAt?: number
+  notes?: string
+}
+
+/**
+ * A dated item that takes no study time (schema 4), e.g. a class or an exam from an LMS calendar.
+ * All-day events have `date` (and `endDate` for several days); timed ones also have `start`/`end`.
+ */
+export interface EventRecord extends Base {
+  title: string
+  /** Local day the event is shown on (its first day). Indexed. */
+  date: string
+  /** Last day of a multi-day all-day event, inclusive. */
+  endDate?: string
+  allDay: boolean
+  /** Start, ms epoch (timed events). */
+  start?: number
+  /** End, ms epoch (timed events). */
+  end?: number
+  /** Course code or name, e.g. "BIO 101". */
+  course?: string
+  url?: string
+  notes?: string
+  /** Plan the event belongs to (the course's plan); tombstoned with it. */
+  planId?: string
+  /** Feed it came from (feeds table); none for a one-off .ics upload. */
+  feedId?: string
+  /** The calendar UID, used to match on re-import. */
+  uid?: string
+}
+
+/**
+ * A saved version of a plan's content (schema 4); the plan edit screen calls snapshotPlan after each save. At most 20 live per plan
+ * (snapshotPlan prunes). `snapshot` is a plan file (domain/plan-format Plan) as gzip + base64url; read it with readSnapshot.
+ */
+export interface PlanVersionRecord extends Base {
+  planId: string
+  createdAt: number
+  /** Optional name, e.g. "Before restore". */
+  label?: string
+  /** What changed, e.g. "Renamed 2 tasks, added 1". */
+  summary: string
+  /** Empty on pruned (tombstoned) versions. */
+  snapshot: string
+}
+
+export type Lms = 'canvas' | 'blackboard' | 'moodle' | 'brightspace' | 'schoology' | 'google' | 'other'
+
+export interface FeedResult {
+  ok: boolean
+  /** Counts from the last fetch, for "3 new assignments, 1 due date changed". */
+  added?: number
+  changed?: number
+  removed?: number
+  /** Short reason when `ok` is false. */
+  error?: string
+}
+
+/** A calendar link kept in sync (schema 4). The URL is a secret: sync carries it end-to-end encrypted; the JSON backup (the user's own file) holds it in plain text. */
+export interface FeedRecord extends Base {
+  lms: Lms
+  /** https URL of the .ics feed. */
+  url: string
+  /** Display name, e.g. "Canvas (Fall 2026)". */
+  name?: string
+  /** Plans created from this feed (one per course). */
+  planIds: string[]
+  lastFetchedAt?: number
+  lastResult?: FeedResult
+}
+
 /** Local to this device, never exported or synced. */
 export interface MetaRecord {
   key: string
@@ -175,6 +267,23 @@ export interface Records {
   practiceLog: PracticeLogRecord
   practiceItems: PracticeItemRecord
   settings: SettingsRecord
+  personalTodos: PersonalTodoRecord
+  events: EventRecord
+  planVersions: PlanVersionRecord
+  feeds: FeedRecord
 }
 export type TableName = keyof Records
-export const TABLE_NAMES: TableName[] = ['plans', 'modules', 'tasks', 'reviewCards', 'reviewLogs', 'practiceLog', 'practiceItems', 'settings']
+export const TABLE_NAMES: TableName[] = [
+  'plans',
+  'modules',
+  'tasks',
+  'reviewCards',
+  'reviewLogs',
+  'practiceLog',
+  'practiceItems',
+  'settings',
+  'personalTodos',
+  'events',
+  'planVersions',
+  'feeds',
+]
