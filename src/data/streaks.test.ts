@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { buildStudyDays } from '../domain/streaks'
+import { buildStudyDays, heatLevel, streakStats } from '../domain/streaks'
 import { fixtureTexts, validateParts } from './fixtures'
 import { completeTask, reviewCard } from './mastery'
 import { completePractice } from './practice'
-import { importPlan, listTasks, softDelete } from './repo'
+import { importPlan, insertRecord, listTasks, softDelete } from './repo'
 import { scheduleAll } from './schedule'
 import { studyEvents } from './streaks'
 import { newDb } from './test-db'
@@ -48,6 +48,18 @@ describe('studyEvents', () => {
     expect(days.get('2026-11-09')!.count).toBe(2)
     expect(days.get('2026-11-11')!.count).toBe(1)
     expect(days.get('2026-11-11')!.minutes).toBe(done.card!.minutes)
+  })
+
+  it('counts a done personal to-do with its minutes (logged study time), on its completion day', async () => {
+    const db = newDb()
+    await insertRecord(db, 'personalTodos', { title: 'Psychology', date: '2026-11-08', minutes: 30, done: true, completedAt: at(8) })
+    await insertRecord(db, 'personalTodos', { title: 'Open one', date: TODAY, minutes: 45, done: false })
+    const gone = await insertRecord(db, 'personalTodos', { title: 'Deleted', date: TODAY, minutes: 20, done: true, completedAt: at(9) })
+    await softDelete(db, 'personalTodos', gone.id)
+    const days = buildStudyDays(await studyEvents(db))
+    expect([...days.entries()]).toEqual([['2026-11-08', { count: 1, minutes: 30 }]])
+    expect(heatLevel(days.get('2026-11-08'), 120)).toBe(2)
+    expect(streakStats(days, TODAY).current).toBe(1)
   })
 
   it('drops a completion that was undone or deleted', async () => {
