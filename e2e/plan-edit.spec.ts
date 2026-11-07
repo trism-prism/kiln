@@ -3,12 +3,13 @@ import { expect, test, type Locator } from '@playwright/test'
 import { openSeeded } from './seed'
 
 // The header used to wrap its buttons into three rows on a phone, two of them outside the 64px bar.
-for (const width of [360, 390, 1280]) {
+for (const width of [320, 360, 390, 1280]) {
   test(`plan header at ${width}: title and star in the bar, the three actions in one row on screen`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 })
     await openSeeded(page, '/plans')
     await page.getByRole('main').getByRole('heading', { level: 2 }).first().getByRole('link').click()
     await expect(page.getByRole('heading', { level: 2, name: 'Modules' })).toBeVisible()
+    await page.evaluate(() => document.fonts.ready) // measure in Instrument Sans, not the wider fallback
     const box = async (loc: Locator) => {
       await expect(loc).toBeVisible()
       return (await loc.boundingBox())!

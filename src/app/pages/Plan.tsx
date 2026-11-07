@@ -255,8 +255,9 @@ export default function PlanPage() {
         </div>
       }
     >
-      {/* Never wraps; scrolls sideways if a narrow phone can't fit it. p-1 keeps focus rings unclipped. */}
-      <PlanActions className="-m-1 mb-5 flex overflow-x-auto p-1 md:hidden" editRef={rowEdit} {...actions} />
+      {/* Never wraps: tight padding fits 320px, then the buttons grow to share the row. It scrolls sideways
+          only if a longer label can't fit. p-1 keeps focus rings unclipped. */}
+      <PlanActions className="-m-1 mb-5 flex overflow-x-auto p-1 *:grow *:px-2 md:hidden" editRef={rowEdit} {...actions} />
       <div className="grid gap-8 lg:grid-cols-[1fr_20rem]">
         {editing ? (
           <div className="min-w-0">
