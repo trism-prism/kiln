@@ -3,10 +3,10 @@ import type { StudyEvent } from '../domain/streaks'
 import type { KilnDB } from './db'
 
 /**
- * Every completion: tasks marked done, daily problems marked done, personal to-dos marked done (which is
- * also how "Log study time" records a session), and reviews logged. A card's first rating (state New) is
+ * Every completion: tasks marked done, daily problems marked done, personal to-dos with minutes marked done
+ * (which is also how "Log study time" records a session), and reviews logged. A card's first rating (state New) is
  * the completion of its task or problem, which is counted above, so only later ratings count as reviews.
- * Minutes: the task's estimate, the problem's minutes, the to-do's minutes (0 without), the card's review
+ * Minutes: the task's estimate, the problem's minutes, the to-do's minutes, the card's review
  * minutes. Imported past tasks are done without `completedAt`, so they never count.
  */
 export async function studyEvents(db: KilnDB): Promise<StudyEvent[]> {
@@ -27,7 +27,8 @@ export async function studyEvents(db: KilnDB): Promise<StudyEvent[]> {
     if (!p.deleted && p.status === 'done' && p.completedAt) out.push({ at: p.completedAt, minutes: p.minutes })
   }
   for (const t of todos) {
-    if (!t.deleted && t.done && t.completedAt) out.push({ at: t.completedAt, minutes: t.minutes ?? 0 })
+    // Only study time counts: ticking off an errand with no minutes leaves the streak and heatmap alone.
+    if (!t.deleted && t.done && t.completedAt && (t.minutes ?? 0) > 0) out.push({ at: t.completedAt, minutes: t.minutes! })
   }
   const cardMinutes = new Map(cards.map((c) => [c.id, c.minutes ?? 10]))
   for (const l of logs) {

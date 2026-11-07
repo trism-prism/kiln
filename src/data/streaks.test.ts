@@ -54,6 +54,8 @@ describe('studyEvents', () => {
     const db = newDb()
     await insertRecord(db, 'personalTodos', { title: 'Psychology', date: '2026-11-08', minutes: 30, done: true, completedAt: at(8) })
     await insertRecord(db, 'personalTodos', { title: 'Open one', date: TODAY, minutes: 45, done: false })
+    await insertRecord(db, 'personalTodos', { title: 'Renew library card', date: TODAY, done: true, completedAt: at(9) })
+    await insertRecord(db, 'personalTodos', { title: 'Zero minutes', date: TODAY, minutes: 0, done: true, completedAt: at(9) })
     const gone = await insertRecord(db, 'personalTodos', { title: 'Deleted', date: TODAY, minutes: 20, done: true, completedAt: at(9) })
     await softDelete(db, 'personalTodos', gone.id)
     const days = buildStudyDays(await studyEvents(db))
