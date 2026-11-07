@@ -10,6 +10,8 @@ import { describeChanges, editBase, listPlanVersions, MAX_VERSIONS, PLAN_CHANGED
 const TODAY = '2026-11-09'
 const sd = () => validateParts([fixtureTexts.sd]).plans[0]!
 
+const baseOf = async (db: ReturnType<typeof newDb>, planId: string) => editBase((await getPlan(db, planId))!, await listModules(db, planId), await listTasks(db, planId))
+
 async function setup() {
   const db = newDb()
   const { planId } = await importPlan(db, sd(), { startDate: TODAY })
@@ -46,12 +48,13 @@ describe('savePlanEdit and restoreVersion', () => {
     await setTaskStatus(db, done!.id, 'done')
     await setTaskStatus(db, removed!.id, 'done')
 
+    const base = await baseOf(db, planId)
     const edited: Plan = {
       ...before,
       tasks: [...before.tasks.filter((t) => t.id !== removed!.key).map((t) => (t.id === done!.key ? { ...t, title: 'Renamed' } : t)), { ...before.tasks[0]!, id: 'added-task', title: 'Added', order: 500 }],
     }
     const pin = '2026-11-20'
-    const v = await savePlanEdit(db, planId, edited, { 'added-task': pin })
+    const v = await savePlanEdit(db, planId, edited, { 'added-task': pin }, base)
     expect(v.summary).toBe('Renamed 1 task, added 1, removed 1')
 
     const live = await listTasks(db, planId)
@@ -77,7 +80,7 @@ describe('savePlanEdit and restoreVersion', () => {
     const { db, planId, content } = await setup()
     const before = await content()
     const gone = before.modules[0]!.id
-    await savePlanEdit(db, planId, { ...before, modules: before.modules.slice(1), tasks: before.tasks.filter((t) => t.moduleId !== gone) })
+    await savePlanEdit(db, planId, { ...before, modules: before.modules.slice(1), tasks: before.tasks.filter((t) => t.moduleId !== gone) }, {}, await baseOf(db, planId))
     expect((await listModules(db, planId)).some((m) => m.key === gone)).toBe(false)
     const [, original] = await listPlanVersions(db, planId)
     await restoreVersion(db, planId, original!)
@@ -87,8 +90,6 @@ describe('savePlanEdit and restoreVersion', () => {
 })
 
 describe('review fixes', () => {
-  const baseOf = async (db: ReturnType<typeof newDb>, planId: string) => editBase((await getPlan(db, planId))!, await listModules(db, planId), await listTasks(db, planId))
-
   it('editing a split plan keeps its parts, so it stays incomplete', async () => {
     const db = newDb()
     const [p1, p2] = validateParts([fixtureTexts.dsa1, fixtureTexts.dsa2, fixtureTexts.dsa3]).plans
@@ -96,7 +97,7 @@ describe('review fixes', () => {
     await importPlan(db, p2!, { startDate: TODAY })
     expect(await getPlan(db, planId)).toMatchObject({ partTotal: 3, partsIn: [1, 2] })
     const content = planFromRecords((await getPlan(db, planId))!, await listModules(db, planId), await listTasks(db, planId))
-    await savePlanEdit(db, planId, { ...content, title: 'Edited' })
+    await savePlanEdit(db, planId, { ...content, title: 'Edited' }, {}, await baseOf(db, planId))
     expect(await getPlan(db, planId)).toMatchObject({ title: 'Edited', partTotal: 3, partsIn: [1, 2] })
     await restoreVersion(db, planId, (await listPlanVersions(db, planId))[1]!)
     expect(await getPlan(db, planId)).toMatchObject({ partTotal: 3, partsIn: [1, 2] })
@@ -135,6 +136,43 @@ describe('review fixes', () => {
     expect((await listTasks(db, planId)).find((t) => t.id === target.id)).toMatchObject({ title: 'Edited while done elsewhere', status: 'done' })
   })
 
+  it('plan fields the editor does not edit come from the plan at save time', async () => {
+    const { db, planId, content } = await setup()
+    const stale = await content()
+    const base = await baseOf(db, planId)
+    await importPlan(db, { ...stale, subject: 'Changed elsewhere', level: 'advanced', audience: 'Someone else' }, { startDate: TODAY, replace: true })
+    await savePlanEdit(db, planId, { ...stale, title: 'Mine' }, {}, base)
+    expect(await getPlan(db, planId)).toMatchObject({ title: 'Mine', subject: 'Changed elsewhere', level: 'advanced', audience: 'Someone else' })
+  })
+
+  it('refuses a save that removes a task another device made a task depend on', async () => {
+    const { db, planId, content } = await setup()
+    const before = await content()
+    const base = await baseOf(db, planId)
+    const gone = before.tasks[2]!
+    await importPlan(db, { ...before, tasks: [...before.tasks, { ...before.tasks[0]!, id: 'late', title: 'Late', order: 900, dependsOn: [gone.id] }] }, { startDate: TODAY })
+    await expect(savePlanEdit(db, planId, { ...before, tasks: before.tasks.filter((t) => t.id !== gone.id) }, {}, base)).rejects.toThrow(PLAN_CHANGED)
+    expect((await listTasks(db, planId)).some((t) => t.key === gone.id)).toBe(true)
+  })
+
+  it('a failed save writes nothing (one transaction), and duplicate plan keys target the plan asked for', async () => {
+    const { db, planId, content } = await setup()
+    const before = await content()
+    const base = await baseOf(db, planId)
+    // A duplicate of the plan with a smaller id would win a by-key lookup.
+    const original = (await getPlan(db, planId))!
+    await db.plans.put({ ...original, id: '0-duplicate', title: 'Duplicate' })
+    await savePlanEdit(db, planId, { ...before, title: 'Edited the right one' }, {}, base)
+    expect((await db.plans.get(planId))!.title).toBe('Edited the right one')
+    expect((await db.plans.get('0-duplicate'))!.title).toBe('Duplicate')
+    expect((await listPlanVersions(db, planId)).length).toBe(2)
+    expect(await listPlanVersions(db, '0-duplicate')).toHaveLength(0)
+    // A refused save leaves no version behind.
+    await db.tasks.update((await listTasks(db, planId))[0]!.id, { title: 'Moved on' })
+    await expect(savePlanEdit(db, planId, { ...before, title: 'Nope' }, {}, base)).rejects.toThrow(PLAN_CHANGED)
+    expect((await listPlanVersions(db, planId)).length).toBe(2)
+  })
+
   it('a version made with the clock behind is still the newest, and only 20 are kept', async () => {
     const { db, planId } = await setup()
     const first = await snapshotPlan(db, planId, { summary: 'first' })
@@ -153,7 +191,7 @@ describe('review fixes', () => {
   it('the daily practice setting survives an edit', async () => {
     const { db, planId, content } = await setup()
     await updateRecord(db, 'plans', planId, { dailyPracticeOn: false })
-    await savePlanEdit(db, planId, { ...(await content()), title: 'Edited' })
+    await savePlanEdit(db, planId, { ...(await content()), title: 'Edited' }, {}, await baseOf(db, planId))
     expect((await getPlan(db, planId))!.dailyPracticeOn).toBe(false)
   })
 })

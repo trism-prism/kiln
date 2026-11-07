@@ -3,8 +3,9 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { Star } from 'lucide-react'
 import { ToggleButton } from 'react-aria-components'
 import { db, listPlanVersions, restoreVersion, updateRecord, type PlanRecord, type PlanVersionRecord } from '../../data'
+import { useState } from 'react'
 import { Button } from '../../ui/button'
-import { toasts } from '../../ui/overlay'
+import { Sheet, toasts } from '../../ui/overlay'
 import { Badge, Card } from '../../ui/surface'
 import { rescheduleOverdue, safely } from '../actions'
 
@@ -27,6 +28,7 @@ const when = (ms: number) => new Date(ms).toLocaleString(undefined, { dateStyle:
 /** Saved versions of the plan, newest first. Restore applies one as a new version, keeping progress. */
 export function History({ planId }: { planId: string }) {
   const versions = useLiveQuery(() => listPlanVersions(db, planId), [planId])
+  const [pending, setPending] = useState<PlanVersionRecord>()
   const restore = (v: PlanVersionRecord) =>
     void safely(async () => {
       await restoreVersion(db, planId, v)
@@ -55,7 +57,7 @@ export function History({ planId }: { planId: string }) {
               </div>
               <p className="text-text-muted">{v.summary}</p>
               {i > 0 && (
-                <Button variant="secondary" className="w-fit" onPress={() => restore(v)}>
+                <Button variant="secondary" className="w-fit" onPress={() => setPending(v)}>
                   Restore
                 </Button>
               )}
@@ -63,6 +65,26 @@ export function History({ planId }: { planId: string }) {
           ))}
         </ul>
       )}
+      <Sheet title="Restore this version?" isOpen={!!pending} onOpenChange={(o) => !o && setPending(undefined)}>
+        {({ close }) => (
+          <div className="grid gap-4">
+            <p className="text-sm">Restoring replaces the current plan content, including changes made on other devices. Progress is kept.</p>
+            <div className="flex justify-end gap-2">
+              <Button variant="quiet" onPress={close}>
+                Cancel
+              </Button>
+              <Button
+                onPress={() => {
+                  if (pending) restore(pending)
+                  close()
+                }}
+              >
+                Restore
+              </Button>
+            </div>
+          </div>
+        )}
+      </Sheet>
     </Card>
   )
 }

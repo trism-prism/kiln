@@ -34,6 +34,9 @@ test('favorite a plan, edit it, then restore the older version', async ({ page }
 
   // Restore the version from before the edit: the old name is back, as a new version.
   await versions.nth(1).getByRole('button', { name: 'Restore' }).click()
+  const confirm = page.getByRole('dialog', { name: 'Restore this version?' })
+  await expect(confirm).toContainText('including changes made on other devices. Progress is kept.')
+  await confirm.getByRole('button', { name: 'Restore' }).click()
   await expect(page.getByText(/^Restored the version from /)).toBeVisible()
   await expect(page.getByRole('main').getByRole('link', { name: original, exact: true })).toBeVisible()
   await expect(versions).toHaveCount(3)

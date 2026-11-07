@@ -254,6 +254,8 @@ export interface ImportOptions {
   replace?: boolean
   /** With replace: delete only these keys (modules and tasks) when the file leaves them out; others left out stay. */
   onlyRemove?: ReadonlySet<string>
+  /** Apply to this plan (by record id) instead of the live plan with the file's key; two devices can create duplicates of a key. */
+  planId?: string
 }
 
 export interface ImportResult {
@@ -280,7 +282,8 @@ export async function importPlan(db: KilnDB, plan: Plan, opts: ImportOptions): P
   const stamp = (prev?: number) => ({ updatedAt: stampAfter(prev), deviceId })
 
   return db.transaction('rw', db.plans, db.modules, db.tasks, async () => {
-    const existing = await getPlanByKey(db, plan.id)
+    const existing = opts.planId ? await getPlan(db, opts.planId) : await getPlanByKey(db, plan.id)
+    if (opts.planId && !existing) throw new Error('The plan is missing or deleted')
     if (!existing && part.index !== 1) throw new Error(`Part ${part.index} of "${plan.id}" needs part 1 imported first`)
 
     const content = {
