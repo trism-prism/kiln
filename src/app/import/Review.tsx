@@ -195,7 +195,8 @@ export function Review({ input }: { input: Input }) {
               description={plan?.deadline ? 'Empty uses the deadline in the plan file.' : undefined}
             />
           </div>
-          {plan?.tasks.some((t) => cardMinutes(t) !== undefined) && (
+          {/* Only a new plan takes the setting; an update or a part keeps the plan's own. */}
+          {match?.kind !== 'update' && match?.kind !== 'part' && plan?.tasks.some((t) => cardMinutes(t) !== undefined) && (
             <div className="grid gap-1">
               <Checkbox isSelected={reviews} onChange={setReviews} aria-describedby={reviewsHelp}>
                 Schedule reviews
