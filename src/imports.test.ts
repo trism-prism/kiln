@@ -6,6 +6,9 @@ import { expect, it } from 'vitest'
 
 const root = resolve(__dirname)
 
+/** Relative paths a module imports at run time, in either quote style, including side-effect imports (`import './x'`). */
+const imported = (src: string) => [...src.matchAll(/^(?:import|export)\s+(?!type\b)(?:[^'"]*?from\s+)?(['"])(\.[^'"]+)\1/gm)].map((m) => m[2]!)
+
 function graph(): Map<string, string[]> {
   const files = readdirSync(root, { recursive: true, encoding: 'utf8' })
     .filter((f) => /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f))
@@ -13,8 +16,8 @@ function graph(): Map<string, string[]> {
   const out = new Map<string, string[]>()
   for (const f of files) {
     const deps: string[] = []
-    for (const m of readFileSync(f, 'utf8').matchAll(/^(?:import|export)\s+(?!type\b)[^'"]*?from\s+'(\.[^']+)'/gm)) {
-      const base = resolve(dirname(f), m[1]!)
+    for (const path of imported(readFileSync(f, 'utf8'))) {
+      const base = resolve(dirname(f), path)
       const hit = ['.ts', '.tsx', '/index.ts', '/index.tsx', ''].map((e) => base + e).find((p) => /\.tsx?$/.test(p) && existsSync(p))
       if (hit) deps.push(hit)
     }
@@ -22,6 +25,19 @@ function graph(): Map<string, string[]> {
   }
   return out
 }
+
+it('reads every kind of run-time import', () => {
+  const src = [
+    `import a from './a'`,
+    `import { b } from "./b"`,
+    `import './c'`,
+    `import "./d"`,
+    `export * from './e'`,
+    `import type { F } from './f'`,
+    `import x from 'react'`,
+  ].join('\n')
+  expect(imported(src)).toEqual(['./a', './b', './c', './d', './e'])
+})
 
 it('has no import cycles', () => {
   const g = graph()
