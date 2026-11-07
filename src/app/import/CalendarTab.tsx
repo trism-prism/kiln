@@ -6,7 +6,7 @@ import { useNavigate, useSearchParams } from 'react-router'
 import { CalendarDays, FileUp, Link2 } from 'lucide-react'
 import { FileTrigger } from 'react-aria-components'
 import { db, scheduleAll, type Lms } from '../../data'
-import { feedCourses, importCalendar, readCalendar, rowStates } from '../../data/calendar'
+import { feedCourses, importCalendar, listFeeds, readCalendar, rowStates } from '../../data/calendar'
 import { courseKey, courses, type TaskRow } from '../../domain/ics'
 import { formatDay, isRealISODate, toLocalISODate } from '../../lib/date'
 import { API_URL } from '../../pwa/env'
@@ -40,6 +40,7 @@ export function CalendarTab() {
   const [error, setError] = useState<string>()
   const guide = LMS_GUIDES.find((g) => g.id === lms) ?? LMS_GUIDES[0]!
   const seq = useRef(0)
+  const feeds = useLiveQuery(() => listFeeds(db), [])
 
   const show = (next: Loaded) => {
     setLoaded(next)
@@ -139,6 +140,23 @@ export function CalendarTab() {
         </div>
       </div>
 
+      {feeds?.map((f) => {
+        const name = LMS_GUIDES.find((g) => g.id === f.lms)?.name ?? 'Calendar'
+        if (f.needsLink)
+          return (
+            <p key={f.id} role="status" className="rounded-md border border-border-strong p-3 text-sm">
+              Your {name} calendar link was not in the backup, because it works like a password. Paste it again above to keep that calendar in sync.
+            </p>
+          )
+        if (f.lastResult && !f.lastResult.ok)
+          return (
+            <p key={f.id} role="alert" className="rounded-md border border-danger p-3 text-sm text-danger">
+              Your {name} calendar link stopped working: {f.lastResult.error ?? 'the last check failed'} Paste a new link above, or upload a file.
+            </p>
+          )
+        return null
+      })}
+
       {error && (
         <p role="alert" className="text-sm text-danger">
           {error}
@@ -151,15 +169,19 @@ export function CalendarTab() {
 
 type Edit = { include?: boolean; title?: string; minutes?: string; due?: string }
 
-function rowProblem(r: TaskRow, e: Edit, today: string): string | undefined {
+type Problems = { title?: string; minutes?: string; due?: string }
+
+function rowProblems(r: TaskRow, e: Edit, today: string): Problems {
   const title = (e.title ?? r.title).trim()
   const minutes = Number(e.minutes ?? r.minutes)
   const due = e.due ?? r.due
-  if (title === '' || title.length > 120) return 'Give it a title of up to 120 characters.'
-  if (!Number.isInteger(minutes) || minutes < 5 || minutes > 600) return 'Minutes must be a whole number from 5 to 600.'
-  if (!isRealISODate(due) || due < today) return 'The due date must be today or later.'
-  return undefined
+  const out: Problems = {}
+  if (title === '' || title.length > 120) out.title = 'Give it a title of up to 120 characters.'
+  if (!Number.isInteger(minutes) || minutes < 5 || minutes > 600) out.minutes = 'Minutes must be a whole number from 5 to 600.'
+  if (!isRealISODate(due) || due < today) out.due = 'The due date must be today or later.'
+  return out
 }
+const hasProblem = (p: Problems) => Object.keys(p).length > 0
 
 function CalendarReview({ loaded }: { loaded: Loaded }) {
   const navigate = useNavigate()
@@ -180,8 +202,16 @@ function CalendarReview({ loaded }: { loaded: Loaded }) {
 
   const actionable = upcoming.filter((r) => ticked.has(r.course) && ['new', 'changed'].includes(states?.get(r.key)?.status ?? ''))
   const chosen = actionable.filter((r) => edits[r.key]?.include !== false)
-  const problems = chosen.map((r) => rowProblem(r, edits[r.key] ?? {}, today)).filter(Boolean)
+  const problems = chosen.filter((r) => hasProblem(rowProblems(r, edits[r.key] ?? {}, today)))
   const past = rows.length - upcoming.length
+  // Why the Import button is off, in words.
+  const reason = !states
+    ? 'Checking what is already in Kiln...'
+    : ticked.size === 0
+      ? 'Tick at least one course to import.'
+      : problems.length > 0
+        ? `Fix the ${problems.length} row${problems.length === 1 ? '' : 's'} marked in red first, or untick ${problems.length === 1 ? 'it' : 'them'}.`
+        : undefined
 
   async function run() {
     setBusy(true)
@@ -254,7 +284,8 @@ function CalendarReview({ loaded }: { loaded: Loaded }) {
                       {shown.map((r) => {
                         const e = edits[r.key] ?? {}
                         const st = states?.get(r.key)
-                        const problem = e.include !== false ? rowProblem(r, e, today) : undefined
+                        const problem = e.include !== false ? rowProblems(r, e, today) : {}
+                        const fieldProps = (f: keyof Problems) => ({ 'aria-invalid': problem[f] ? true : undefined, 'aria-describedby': problem[f] ? `${r.key}-${f}-error` : undefined })
                         const input = 'h-9 w-full rounded-md border border-border-strong bg-surface-raised px-2 text-sm text-text'
                         return (
                           <tr key={r.key} className="align-top" data-testid="calendar-row">
@@ -268,14 +299,16 @@ function CalendarReview({ loaded }: { loaded: Loaded }) {
                             ) : (
                               <>
                                 <td className="min-w-48 p-1">
-                                  <input aria-label={`Title of ${r.title}`} className={input} value={e.title ?? r.title} onChange={(ev) => edit(r.key, { title: ev.target.value })} />
-                                  {problem && <p className="pt-1 text-danger">{problem}</p>}
+                                  <input aria-label={`Title of ${r.title}`} className={input} value={e.title ?? r.title} onChange={(ev) => edit(r.key, { title: ev.target.value })} {...fieldProps('title')} />
+                                  {problem.title && <p id={`${r.key}-title-error`} className="pt-1 text-danger">{problem.title}</p>}
                                 </td>
                                 <td className="w-24 p-1">
-                                  <input aria-label={`Minutes for ${r.title}`} className={input} inputMode="numeric" value={e.minutes ?? String(r.minutes)} onChange={(ev) => edit(r.key, { minutes: ev.target.value })} />
+                                  <input aria-label={`Minutes for ${r.title}`} className={input} inputMode="numeric" value={e.minutes ?? String(r.minutes)} onChange={(ev) => edit(r.key, { minutes: ev.target.value })} {...fieldProps('minutes')} />
+                                  {problem.minutes && <p id={`${r.key}-minutes-error`} className="pt-1 text-danger">{problem.minutes}</p>}
                                 </td>
                                 <td className="w-40 p-1">
-                                  <input aria-label={`Due date of ${r.title}`} type="date" className={input} value={e.due ?? r.due} min={today} onChange={(ev) => edit(r.key, { due: ev.target.value })} />
+                                  <input aria-label={`Due date of ${r.title}`} type="date" className={input} value={e.due ?? r.due} min={today} onChange={(ev) => edit(r.key, { due: ev.target.value })} {...fieldProps('due')} />
+                                  {problem.due && <p id={`${r.key}-due-error`} className="pt-1 text-danger">{problem.due}</p>}
                                 </td>
                               </>
                             )}
@@ -297,9 +330,14 @@ function CalendarReview({ loaded }: { loaded: Loaded }) {
         </p>
       )}
       <div className="flex flex-wrap items-center gap-3">
-        <Button onPress={run} isDisabled={busy || !states || ticked.size === 0 || problems.length > 0}>
+        <Button onPress={run} isDisabled={busy || !states || ticked.size === 0 || problems.length > 0} aria-describedby={reason ? 'calendar-import-reason' : undefined}>
           <CalendarDays /> {busy ? 'Importing...' : `Import ${chosen.length} assignment${chosen.length === 1 ? '' : 's'}`}
         </Button>
+        {reason && (
+          <span id="calendar-import-reason" className="text-sm text-text-muted">
+            {reason}
+          </span>
+        )}
         {loaded.feed && <span className="text-sm text-text-muted">Kiln will check this link for changes when it opens (at most every 6 hours).</span>}
       </div>
     </div>

@@ -63,3 +63,44 @@ test('imports a Canvas calendar file: a plan per ticked course, tasks scheduled 
   await expect(panel.getByText('3 already in Kiln (re-importing keeps your progress).')).toBeVisible()
   await expect(panel.getByRole('button', { name: 'Import 1 assignment' })).toBeVisible() // CS-150 is ticked again by default
 })
+
+test('a bad value is tied to its input and the disabled Import button says why', async ({ page }) => {
+  await page.goto('/import?tab=calendar')
+  const panel = page.getByRole('tabpanel', { name: 'From a course calendar' })
+  await panel.locator('input[type=file]').setInputFiles(canvas)
+  const minutes = panel.getByLabel('Minutes for Quiz 2')
+  await minutes.fill('2')
+  await expect(minutes).toHaveAttribute('aria-invalid', 'true')
+  const id = await minutes.getAttribute('aria-describedby')
+  expect(id).toBeTruthy()
+  await expect(page.locator(`[id="${id}"]`)).toHaveText('Minutes must be a whole number from 5 to 600.')
+  const button = panel.getByRole('button', { name: /^Import \d+ assignments?$/ })
+  await expect(button).toBeDisabled()
+  await expect(panel.getByText(/^Fix the 1 row marked in red first/)).toBeVisible()
+  await expect(button).toHaveAttribute('aria-describedby', 'calendar-import-reason')
+  await minutes.fill('30')
+  await expect(button).toBeEnabled()
+})
+
+test('a calendar link that stopped working, or came back without its link, is explained on the tab', async ({ page }) => {
+  await page.goto('/import?tab=calendar')
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const open = indexedDB.open('kiln')
+        open.onerror = () => reject(open.error)
+        open.onsuccess = () => {
+          const tx = open.result.transaction('feeds', 'readwrite')
+          const base = { updatedAt: Date.now(), deleted: false, deviceId: 'e2e', planIds: [] }
+          tx.objectStore('feeds').put({ ...base, id: 'f1', lms: 'canvas', url: 'https://canvas.example.edu/feeds/a.ics', lastFetchedAt: Date.now(), lastResult: { ok: false, error: 'Could not read the calendar: the calendar server answered 403.' } })
+          tx.objectStore('feeds').put({ ...base, id: 'f2', lms: 'moodle', url: '', needsLink: true })
+          tx.oncomplete = () => resolve()
+          tx.onerror = () => reject(tx.error)
+        }
+      }),
+  )
+  await page.reload()
+  const panel = page.getByRole('tabpanel', { name: 'From a course calendar' })
+  await expect(panel.getByRole('alert').filter({ hasText: 'Your Canvas calendar link stopped working' })).toContainText('the calendar server answered 403')
+  await expect(panel.getByRole('status').filter({ hasText: 'Your Moodle calendar link was not in the backup' })).toBeVisible()
+})
