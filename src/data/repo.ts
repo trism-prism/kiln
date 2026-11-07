@@ -123,11 +123,12 @@ export async function softDeletePlan(db: KilnDB, planId: string): Promise<void> 
  * Undo for a multi-record write: puts the earlier copies back (with a fresh updatedAt, so the undo
  * also wins a sync) and tombstones the records the write created. All or nothing. Each restore names
  * the `updatedAt` the write left on the record; if the record changed since (another rating, a pin,
- * a sync), nothing is undone and this returns false, so an old undo cannot overwrite newer work.
+ * a sync), nothing is undone and this returns false, so an old undo cannot overwrite newer work. A removal
+ * may name an `updatedAt` too, with the same check.
  */
 export async function revertWrite(
   db: KilnDB,
-  change: { restore?: [Exclude<TableName, 'settings'>, Base, number][]; remove?: [Exclude<TableName, 'settings'>, string][] },
+  change: { restore?: [Exclude<TableName, 'settings'>, Base, number][]; remove?: [Exclude<TableName, 'settings'>, string, number?][] },
 ): Promise<boolean> {
   const restore = change.restore ?? []
   const remove = change.remove ?? []
@@ -136,6 +137,12 @@ export async function revertWrite(
   return db.transaction('rw', names.map((n) => db.table(n)), async () => {
     for (const [n, rec, after] of restore) {
       const cur = (await db.table(n).get(rec.id)) as Base | undefined
+      if (!cur || cur.updatedAt !== after) return false
+    }
+    // A removal that names the updatedAt its write left is guarded the same way.
+    for (const [n, id, after] of remove) {
+      if (after === undefined) continue
+      const cur = (await db.table(n).get(id)) as Base | undefined
       if (!cur || cur.updatedAt !== after) return false
     }
     for (const [n, rec, after] of restore) await db.table(n).put({ ...rec, updatedAt: stampAfter(after), deviceId })
