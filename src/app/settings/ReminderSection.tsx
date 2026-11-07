@@ -16,8 +16,7 @@ export const unavailableText: Record<Exclude<PushAvailability, 'ready'>, string>
   unsupported: 'This browser cannot show reminders. Try Chrome, Edge or Firefox, or Safari on iOS 16.4 or later with Kiln added to your Home Screen.',
   'needs-install':
     'On iPhone and iPad, reminders only work from the installed app. Tap the Share button in Safari, choose Add to Home Screen, open Kiln from your Home Screen, then come back here.',
-  'not-configured':
-    'This build is not connected to the Kiln server (VITE_API_URL and VITE_VAPID_PUBLIC_KEY are not set), so reminders are off. They work in the deployed app.',
+  'not-configured': "Reminders aren't available here.",
   denied: "Notifications are blocked for Kiln. Allow them in your browser's site settings (or your device's settings), then come back and turn reminders on.",
 }
 

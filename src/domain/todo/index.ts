@@ -1,17 +1,13 @@
 // The To Do list: turns tasks, generated daily problems, due reviews, personal to-dos and events into
 // dated items, then filters them by the list preferences, cuts them into a range and groups them by
 // day. Pure; the data layer feeds it.
-import { addDaysISO, isRealISODate } from '../../lib/date'
+import { addDaysISO } from '../../lib/date'
 import { weekStartOf, type WeekStart } from '../calendar'
 import { cardMinutes, localDate, type ReviewableTask } from '../mastery'
 import { DEFAULT_PRACTICE_LANGUAGE } from '../plan-format'
 
 export type FromAnchor = 'weeks4' | 'weeks3' | 'weeks2' | 'lastWeek' | 'thisWeek' | 'today'
 export type UntilAnchor = 'today' | 'thisWeek' | 'nextWeek' | 'weeks2' | 'weeks3' | 'weeks4'
-export interface MonthDay {
-  month: number
-  day: number
-}
 /** Per-device choices for the To Do list (kept in meta). */
 export interface TodoPrefs {
   personal: boolean
@@ -20,31 +16,28 @@ export interface TodoPrefs {
   favoriteOnly: boolean
   from: FromAnchor
   until: UntilAnchor
-  /** When set, replaces the radio choice. */
-  customFrom?: MonthDay
-  customUntil?: MonthDay
 }
 export const DEFAULT_TODO_PREFS: TodoPrefs = { personal: true, events: true, completed: true, favoriteOnly: false, from: 'today', until: 'today' }
 export const FROM_OPTIONS: { id: FromAnchor; label: string }[] = [
-  { id: 'weeks4', label: '4 weeks ago' },
-  { id: 'weeks3', label: '3 weeks ago' },
-  { id: 'weeks2', label: '2 weeks ago' },
-  { id: 'lastWeek', label: 'Last week' },
-  { id: 'thisWeek', label: 'This week' },
+  { id: 'weeks4', label: '4 Weeks Ago' },
+  { id: 'weeks3', label: '3 Weeks Ago' },
+  { id: 'weeks2', label: '2 Weeks Ago' },
+  { id: 'lastWeek', label: 'Last Week' },
+  { id: 'thisWeek', label: 'This Week' },
   { id: 'today', label: 'Today' },
 ]
 export const UNTIL_OPTIONS: { id: UntilAnchor; label: string }[] = [
   { id: 'today', label: 'Today' },
-  { id: 'thisWeek', label: 'This week' },
-  { id: 'nextWeek', label: 'Next week' },
-  { id: 'weeks2', label: 'In 2 weeks' },
-  { id: 'weeks3', label: 'In 3 weeks' },
-  { id: 'weeks4', label: 'In 4 weeks' },
+  { id: 'thisWeek', label: 'This Week' },
+  { id: 'nextWeek', label: 'Next Week' },
+  { id: 'weeks2', label: 'In 2 Weeks' },
+  { id: 'weeks3', label: 'In 3 Weeks' },
+  { id: 'weeks4', label: 'In 4 Weeks' },
 ]
 const FROM_WEEKS: Record<FromAnchor, number | 'today'> = { weeks4: 4, weeks3: 3, weeks2: 2, lastWeek: 1, thisWeek: 0, today: 'today' }
 const UNTIL_WEEKS: Record<UntilAnchor, number | 'today'> = { today: 'today', thisWeek: 0, nextWeek: 1, weeks2: 2, weeks3: 3, weeks4: 4 }
 
-/** Reads stored preferences, falling back to the default for anything missing or malformed. */
+/** Reads stored preferences, falling back to the default for anything missing or malformed. Custom dates saved by older versions are ignored. */
 export function parseTodoPrefs(raw: string | undefined): TodoPrefs {
   let o: Record<string, unknown> = {}
   try {
@@ -55,10 +48,6 @@ export function parseTodoPrefs(raw: string | undefined): TodoPrefs {
   }
   const d = DEFAULT_TODO_PREFS
   const bool = (k: 'personal' | 'events' | 'completed' | 'favoriteOnly') => (typeof o[k] === 'boolean' ? (o[k] as boolean) : d[k])
-  const md = (v: unknown): MonthDay | undefined => {
-    const m = v as MonthDay | null | undefined
-    return m && Number.isInteger(m.month) && Number.isInteger(m.day) && m.month >= 1 && m.month <= 12 && m.day >= 1 && m.day <= 31 ? { month: m.month, day: m.day } : undefined
-  }
   return {
     personal: bool('personal'),
     events: bool('events'),
@@ -66,55 +55,26 @@ export function parseTodoPrefs(raw: string | undefined): TodoPrefs {
     favoriteOnly: bool('favoriteOnly'),
     from: FROM_OPTIONS.some((x) => x.id === o.from) ? (o.from as FromAnchor) : d.from,
     until: UNTIL_OPTIONS.some((x) => x.id === o.until) ? (o.until as UntilAnchor) : d.until,
-    customFrom: md(o.customFrom),
-    customUntil: md(o.customUntil),
   }
 }
-
-const monthDayISO = (year: number, md: MonthDay) => {
-  const s = `${year}-${String(md.month).padStart(2, '0')}-${String(md.day).padStart(2, '0')}`
-  return isRealISODate(s) ? s : undefined
-}
-
-/** The latest occurrence of a month and day on or before `day`; undefined when it never exists (30 Feb). A 29 Feb looks back to the last leap year. */
-export function lastMonthDayOnOrBefore(md: MonthDay, day: string): string | undefined {
-  const year = Number(day.slice(0, 4))
-  for (let y = year; y >= year - 8; y--) {
-    const d = monthDayISO(y, md)
-    if (d && d <= day) return d
-  }
-  return undefined
-}
-
-/** The first occurrence of a month and day on or after `day`; undefined when it never exists. A 29 Feb looks ahead to the next leap year. */
-export function firstMonthDayOnOrAfter(md: MonthDay, day: string): string | undefined {
-  const year = Number(day.slice(0, 4))
-  for (let y = year; y <= year + 8; y++) {
-    const d = monthDayISO(y, md)
-    if (d && d >= day) return d
-  }
-  return undefined
-}
-
-/** True when a custom date is a real day of the calendar (31 Apr and 30 Feb are not; 29 Feb is). */
-export const isRealMonthDay = (md: MonthDay) => firstMonthDayOnOrAfter(md, '2024-01-01') !== undefined
 
 /**
  * First and last day (inclusive) the list shows. Week anchors count from the first day of the week
- * (per the week-start setting): "4 weeks ago" is the first day of the week 4 weeks back, "Next week"
- * the last day of next week. A custom From is its most recent occurrence on or before today. A custom
- * Until is its first occurrence on or after the From (the custom one, or the preset's first day), so
- * the range never inverts: Jan 1 to Dec 31 is this year, Sep 1 to Aug 31 runs into next year, and
- * Dec 1 to Jan 20 seen in early January is last December to this January. A date that does not exist
- * (30 Feb) is ignored.
+ * (per the week-start setting): "4 Weeks Ago" is the first day of the week 4 weeks back, "Next Week"
+ * the last day of next week.
  */
 export function rangeBounds(prefs: TodoPrefs, today: string, weekStartsOn: WeekStart = 'monday'): { from: string; to: string } {
   const ws = weekStartOf(today, weekStartsOn)
   const f = FROM_WEEKS[prefs.from]
   const u = UNTIL_WEEKS[prefs.until]
-  const from = (prefs.customFrom && lastMonthDayOnOrBefore(prefs.customFrom, today)) || (f === 'today' ? today : addDaysISO(ws, -7 * f))
-  const to = (prefs.customUntil && firstMonthDayOnOrAfter(prefs.customUntil, from)) || (u === 'today' ? today : addDaysISO(ws, 7 * u + 6))
-  return { from, to }
+  return { from: f === 'today' ? today : addDaysISO(ws, -7 * f), to: u === 'today' ? today : addDaysISO(ws, 7 * u + 6) }
+}
+
+/** The first day each From option would give and the last day each Until option would give, for the preferences sheet. */
+export function optionBounds(prefs: TodoPrefs, today: string, weekStartsOn: WeekStart = 'monday'): { from: Record<FromAnchor, string>; until: Record<UntilAnchor, string> } {
+  const from = Object.fromEntries(FROM_OPTIONS.map(({ id }) => [id, rangeBounds({ ...prefs, from: id }, today, weekStartsOn).from]))
+  const until = Object.fromEntries(UNTIL_OPTIONS.map(({ id }) => [id, rangeBounds({ ...prefs, until: id }, today, weekStartsOn).to]))
+  return { from: from as Record<FromAnchor, string>, until: until as Record<UntilAnchor, string> }
 }
 
 /** Drops what the visible-items choices hide. With "Favorite plans only", items of a plan that is not a favorite go (personal to-dos and events stay). */
@@ -349,6 +309,12 @@ export function dayLabel(date: string, today: string): { label: string; dateText
   if (date === addDaysISO(today, 1)) return { label: 'Tomorrow', dateText }
   if (date === addDaysISO(today, -1)) return { label: 'Yesterday', dateText }
   return { label: d.toLocaleDateString('en-US', { weekday: 'long' }), dateText }
+}
+
+/** "Oct 12" in the user's locale, with the year only when it isn't today's year ("Dec 28, 2025"). */
+export function shortDate(date: string, today: string): string {
+  const withYear = date.slice(0, 4) !== today.slice(0, 4)
+  return dateOf(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', ...(withYear ? { year: 'numeric' } : {}) })
 }
 
 /**

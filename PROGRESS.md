@@ -41,7 +41,6 @@ Decisions taken during the unattended run (user to confirm on review):
 - Backups omit calendar feed links; a restored feed asks for the link again.
 - Course plan keys for non-plain course codes carry a short hash suffix.
 - Quick add: due dates in the past are cleared with a warning; changed lines drop their table edits with a notice.
-- To Do custom range: From = latest occurrence on or before today, Until = first occurrence on or after From.
 - Plan editor refuses a save if another device changed editable content meanwhile ("Reopen the editor"); progress changes never block. Restore deliberately reverts content, progress kept.
 - Streaks keep counting finished practice problems after a plan turns daily practice off.
 - Onboarding does not show expected finish per preset (onboarding only appears with zero plans).

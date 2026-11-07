@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Plus, SlidersHorizontal } from 'lucide-react'
-import { filterTodoItems, rangeBounds, todoView, type TodoItem } from '../../domain/todo'
-import { Button, Link } from '../../ui/button'
+import { DEFAULT_TODO_PREFS, filterTodoItems, rangeBounds, todoView, type TodoItem, type TodoPrefs } from '../../domain/todo'
+import { Button, IconButton, Link } from '../../ui/button'
 import { Checkbox } from '../../ui/form'
 import { Badge, EmptyState, Skeleton } from '../../ui/surface'
 import { Page } from '../Page'
@@ -13,6 +13,8 @@ import { PersonalActions } from '../todo/PersonalActions'
 import { Preferences } from '../todo/Preferences'
 import { TodoEditor } from '../todo/TodoEditor'
 import { formatDay } from '../../lib/date'
+
+const filtersOn = (p: TodoPrefs) => (Object.keys(DEFAULT_TODO_PREFS) as (keyof TodoPrefs)[]).some((k) => p[k] !== DEFAULT_TODO_PREFS[k])
 
 function Row({ item, onComplete, pending }: { item: TodoItem; onComplete: (i: Completable) => void; pending: boolean }) {
   const muted = item.done
@@ -87,8 +89,16 @@ export default function TodoPage() {
     return todoView(items, rangeBounds(prefs, today, data.weekStartsOn), today)
   }, [data, prefs, today])
 
+  const narrowed = !!prefs && filtersOn(prefs)
+  const trigger = data && prefs && (
+    <IconButton variant="secondary" aria-label={narrowed ? 'To-do List Preferences, filters on' : 'To-do List Preferences'} onPress={() => setPrefsOpen(true)} className="relative">
+      <SlidersHorizontal size={18} aria-hidden="true" />
+      {narrowed && <span aria-hidden="true" className="absolute -top-1 -right-1 size-2 rounded-full bg-accent ring-2 ring-surface" />}
+    </IconButton>
+  )
+
   return (
-    <Page title="To Do">
+    <Page title="To Do" actions={trigger}>
       {!data || !prefs || !view ? (
         <div aria-hidden="true" className="grid gap-3">
           <Skeleton className="h-10 w-64" />
@@ -97,10 +107,6 @@ export default function TodoPage() {
       ) : (
         <div className="grid gap-6">
           <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" onPress={() => setPrefsOpen(true)}>
-              <SlidersHorizontal size={16} aria-hidden="true" />
-              To-do list preferences
-            </Button>
             <Button variant="secondary" onPress={() => setAdding(true)}>
               <Plus size={16} aria-hidden="true" />
               Add to-do
@@ -124,7 +130,7 @@ export default function TodoPage() {
               ))}
             </div>
           )}
-          <Preferences prefs={prefs} onChange={(p) => void safely(() => savePrefs(p))} isOpen={prefsOpen} onClose={() => setPrefsOpen(false)} />
+          <Preferences prefs={prefs} today={today} weekStartsOn={data.weekStartsOn} onSave={(p) => void safely(() => savePrefs(p))} isOpen={prefsOpen} onClose={() => setPrefsOpen(false)} />
           <TodoEditor isOpen={adding} onClose={() => setAdding(false)} />
         </div>
       )}

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { ReactNode, Ref } from 'react'
 import {
   Button as AriaButton,
   Link as AriaLink,
@@ -17,10 +17,13 @@ const variants = {
   quiet: 'text-text data-hovered:bg-surface-muted',
   danger:
     'bg-danger text-danger-contrast data-hovered:bg-[color-mix(in_oklab,var(--kiln-danger),var(--kiln-text)_14%)]',
+  // A destructive action that opens a confirm: as quiet as secondary, but marked by its color.
+  'danger-outline': 'border border-border-strong bg-surface-raised text-danger data-hovered:bg-surface-muted',
 }
 export type ButtonVariant = keyof typeof variants
 
 type ButtonProps = Omit<AriaButtonProps, 'className' | 'children'> & {
+  ref?: Ref<HTMLButtonElement>
   variant?: ButtonVariant
   className?: string
   children: ReactNode

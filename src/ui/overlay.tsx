@@ -19,6 +19,7 @@ import {
   type ModalOverlayProps,
   type PopoverProps,
 } from 'react-aria-components'
+import { Button } from './button'
 import { popoverClass } from './form'
 
 type SheetProps = Omit<ModalOverlayProps, 'className' | 'children'> & {
@@ -56,6 +57,41 @@ export function Sheet({ title, children, isDismissable = true, ...props }: Sheet
               {typeof children === 'function' ? children({ close }) : children}
             </>
           )}
+        </Dialog>
+      </Modal>
+    </ModalOverlay>
+  )
+}
+
+/**
+ * Settings-style sheet: Cancel left, title centered, Done right, in a header that stays put while the
+ * body scrolls. A bottom sheet on phones, a centered dialog from md up. Escape, a scrim tap and Cancel
+ * all call onCancel (the caller discards its draft); Done calls onDone.
+ */
+export function FormSheet({ title, isOpen, onCancel, onDone, doneLabel = 'Done', children }: { title: string; isOpen: boolean; onCancel: () => void; onDone: () => void; doneLabel?: string; children: ReactNode }) {
+  // 44px pills of equal width keep the title centred. Important: Button's base h-10, px-4 and rounded-md otherwise win the cascade.
+  const pill = 'h-11! min-w-20 rounded-full! px-3!'
+  return (
+    <ModalOverlay
+      isOpen={isOpen}
+      onOpenChange={(o) => !o && onCancel()}
+      isDismissable
+      className="fixed inset-0 z-50 flex items-end justify-center bg-(--kiln-scrim) data-entering:animate-fade md:items-center md:p-6"
+    >
+      <Modal className="flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-xl border border-border bg-surface text-text shadow-lg data-entering:animate-sheet md:max-h-[80dvh] md:max-w-md md:rounded-xl">
+        <Dialog className="flex min-h-0 flex-1 flex-col outline-none">
+          <div className="grid shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 border-b border-border bg-surface-raised px-4 py-3">
+            <Button variant="secondary" className={pill} onPress={onCancel} autoFocus>
+              Cancel
+            </Button>
+            <Heading slot="title" className="text-center text-base leading-tight font-medium text-balance">
+              {title}
+            </Heading>
+            <Button variant="primary" className={pill} onPress={onDone}>
+              {doneLabel}
+            </Button>
+          </div>
+          <div className="min-h-0 overflow-y-auto overscroll-contain pb-[max(1rem,env(safe-area-inset-bottom))]">{children}</div>
         </Dialog>
       </Modal>
     </ModalOverlay>
