@@ -31,10 +31,11 @@ export async function fetchFeedText(fetchImpl: typeof fetch, apiUrl: string, url
 }
 
 /** "3 new assignments, 1 due date changed". */
-export function feedNotice(added: number, changed: number): string {
+export function feedNotice(added: number, changed: number, moved = 0): string {
   const parts: string[] = []
   if (added > 0) parts.push(`${added} new assignment${added === 1 ? '' : 's'}`)
   if (changed > 0) parts.push(`${changed} due date${changed === 1 ? '' : 's'} changed`)
+  if (moved > 0) parts.push(`${moved} class time${moved === 1 ? '' : 's'} or exam${moved === 1 ? '' : 's'} moved`)
   return parts.join(', ')
 }
 
@@ -42,6 +43,7 @@ export interface FeedCheck {
   feed: FeedRecord
   added: number
   changed: number
+  moved: number
 }
 
 let inFlight: Promise<FeedCheck[]> | undefined
@@ -57,12 +59,13 @@ export function checkFeedsIfDue(db: KilnDB, fetchImpl: typeof fetch, apiUrl: str
     const out: FeedCheck[] = []
     try {
       for (const feed of await listFeeds(db)) {
-        if (now - (feed.lastFetchedAt ?? 0) < FEED_CHECK_MS) continue
+        if (feed.url === '' || now - (feed.lastFetchedAt ?? 0) < FEED_CHECK_MS) continue // no link after a restore
         try {
           const text = await fetchFeedText(fetchImpl, apiUrl, feed.url)
-          const { added, changed } = await feedChanges(db, feed, text, today)
-          await updateRecord(db, 'feeds', feed.id, { lastFetchedAt: now, lastResult: { ok: true, added, changed } })
-          if (added + changed > 0) out.push({ feed, added, changed })
+          const { added, changed, moved, fingerprint } = await feedChanges(db, feed, text, today)
+          await updateRecord(db, 'feeds', feed.id, { lastFetchedAt: now, noticeFp: fingerprint, lastResult: { ok: true, added, changed, moved } })
+          // Told once: rows the person left unticked stay "new", and must not bring the notice back every 6 hours.
+          if (fingerprint !== '' && fingerprint !== (feed.noticeFp ?? '')) out.push({ feed, added, changed, moved })
         } catch (e) {
           const error = (e instanceof Error ? e.message : 'failed').slice(0, 500)
           await updateRecord(db, 'feeds', feed.id, { lastFetchedAt: now, lastResult: { ok: false, error } })

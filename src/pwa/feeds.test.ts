@@ -69,6 +69,36 @@ describe('checkFeedsIfDue', () => {
     expect((await db.tasks.toArray()).map((t) => t.title)).not.toContain('Homework 5')
   })
 
+  it('announces the same news once, not every 6 hours, and again when it changes', async () => {
+    const { db, feed } = await imported()
+    const w = worker(() => new Response(changed))
+    const t1 = feed.lastFetchedAt! + FEED_CHECK_MS
+    expect((await checkFeedsIfDue(db, w.f, API, t1, '2030-01-07')).map((c) => c.added)).toEqual([1])
+    expect(await checkFeedsIfDue(db, w.f, API, t1 + FEED_CHECK_MS, '2030-01-07')).toEqual([]) // the person has not imported it
+    expect(await checkFeedsIfDue(db, w.f, API, t1 + 2 * FEED_CHECK_MS, '2030-01-07')).toEqual([])
+    expect((await db.feeds.get(feed.id))?.lastResult).toMatchObject({ ok: true, added: 1, changed: 1 }) // still counted
+    const more = changed.replace('END:VCALENDAR', 'BEGIN:VEVENT\nDTSTART:20300302T235900Z\nDTEND:20300302T235900Z\nSUMMARY:Homework 6 [MATH-221-001]\nUID:event-assignment-1012\nEND:VEVENT\nEND:VCALENDAR')
+    const w2 = worker(() => new Response(more))
+    expect((await checkFeedsIfDue(db, w2.f, API, t1 + 3 * FEED_CHECK_MS, '2030-01-07')).map((c) => c.added)).toEqual([2])
+  })
+
+  it('counts class times and exams that moved', async () => {
+    const { db, feed } = await imported()
+    const w = worker(() => new Response(CANVAS.replace('20300218T100000', '20300218T130000')))
+    const out = await checkFeedsIfDue(db, w.f, API, feed.lastFetchedAt! + FEED_CHECK_MS, '2030-01-07')
+    expect(out.map((c) => [c.added, c.changed, c.moved])).toEqual([[0, 0, 1]])
+    expect(feedNotice(0, 0, 1)).toBe('1 class time or exam moved')
+    expect(feedNotice(3, 1, 2)).toBe('3 new assignments, 1 due date changed, 2 class times or exams moved')
+  })
+
+  it('skips a feed restored without its link', async () => {
+    const { db, feed } = await imported()
+    await db.feeds.update(feed.id, { url: '', needsLink: true })
+    const w = worker(() => new Response(changed))
+    expect(await checkFeedsIfDue(db, w.f, API, feed.lastFetchedAt! + FEED_CHECK_MS, '2030-01-07')).toEqual([])
+    expect(w.bodies).toHaveLength(0)
+  })
+
   it('checks at most every 6 hours, and not at all without a server', async () => {
     const { db, feed } = await imported()
     const w = worker(() => new Response(changed))

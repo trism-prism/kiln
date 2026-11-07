@@ -1,8 +1,8 @@
 // LMS calendar import into the database: plans per course (through importPlan, so progress is kept),
 // events matched by UID, and the synced feed record for "Keep in sync". Domain logic is in domain/ics.
-import { classify, courseKey, coursePlan, eventItems, parseIcs, taskRows, type CalendarItem, type TaskRow } from '../domain/ics'
+import { classify, courseKey, coursePlan, eventItems, parseIcs, shortHash, taskRows, type CalendarItem, type TaskRow } from '../domain/ics'
 import type { KilnDB } from './db'
-import { getPlanByKey, importPlan, insertRecord, updateRecord } from './repo'
+import { getDeviceId, getPlanByKey, importPlan, insertRecord, updateRecord } from './repo'
 import type { EventRecord, FeedRecord, Lms, TaskRecord } from './types'
 
 export type RowStatus = 'new' | 'changed' | 'same' | 'deleted'
@@ -71,6 +71,12 @@ const defined = <T extends object>(o: T): T => Object.fromEntries(Object.entries
  * the person's edits to titles and minutes stay. Tasks are then put in due order.
  */
 export async function importCalendar(db: KilnDB, input: CalendarImport): Promise<CalendarImportResult> {
+  // One transaction: a course that fails leaves nothing half-imported. The device id is read first (it opens its own transaction).
+  await getDeviceId(db)
+  return db.transaction('rw', db.tables, async () => importAll(db, input))
+}
+
+async function importAll(db: KilnDB, input: CalendarImport): Promise<CalendarImportResult> {
   const res: CalendarImportResult = { planIds: [], tasksAdded: 0, datesChanged: 0, eventsAdded: 0, eventsUpdated: 0 }
   const planOf = new Map<string, string>()
   const states = await rowStates(db, input.rows)
@@ -83,7 +89,7 @@ export async function importCalendar(db: KilnDB, input: CalendarImport): Promise
       const built = coursePlan(course, fresh, input.startDate, plan?.title)
       if (!built.plan) throw new Error(`${course}: ${built.issues[0]?.path ?? ''} ${built.issues[0]?.message ?? 'invalid'}`.trim())
       const file = plan
-        ? { ...built.plan, description: plan.description, goal: plan.goal, subject: plan.subject, level: plan.level, audience: plan.audience, sources: plan.sources, dailyPractice: plan.dailyPractice }
+        ? { ...built.plan, schedulingMode: plan.schedulingMode, description: plan.description, goal: plan.goal, subject: plan.subject, level: plan.level, audience: plan.audience, sources: plan.sources, dailyPractice: plan.dailyPractice }
         : built.plan
       const r = await importPlan(db, file, { startDate: input.startDate })
       res.tasksAdded += r.tasksAdded
@@ -126,8 +132,10 @@ export async function importCalendar(db: KilnDB, input: CalendarImport): Promise
       await insertRecord(db, 'events', fields)
       res.eventsAdded++
     } else {
-      const keys = ['title', 'date', 'endDate', 'allDay', 'start', 'end', 'course', 'url', 'notes', 'planId', 'feedId'] as const
-      if (keys.some((k) => old[k] !== fields[k])) {
+      const keys = ['title', 'date', 'endDate', 'allDay', 'start', 'end', 'course', 'url', 'notes'] as const
+      // planId and feedId are only compared when this import sets them (an upload sets no feed, and must not look like a change).
+      const kept = (['planId', 'feedId'] as const).filter((k) => fields[k] !== undefined)
+      if ([...keys, ...kept].some((k) => old[k] !== fields[k])) {
         // Fields the feed no longer has are cleared.
         await updateRecord(db, 'events', old.id, { endDate: undefined, start: undefined, end: undefined, url: undefined, notes: undefined, ...fields })
         res.eventsUpdated++
@@ -139,9 +147,14 @@ export async function importCalendar(db: KilnDB, input: CalendarImport): Promise
 
 async function saveFeed(db: KilnDB, feed: NonNullable<CalendarImport['feed']>, res: CalendarImportResult): Promise<string> {
   const lastResult = { ok: true, added: res.tasksAdded, changed: res.datesChanged }
-  const old = feed.id ? await db.feeds.get(feed.id) : (await db.feeds.toArray()).find((f) => !f.deleted && f.url === feed.url)
-  if (old && !old.deleted) {
-    await updateRecord(db, 'feeds', old.id, { lms: feed.lms, url: feed.url, planIds: [...new Set([...old.planIds, ...res.planIds])], lastFetchedAt: Date.now(), lastResult })
+  const all = (await db.feeds.toArray()).filter((f) => !f.deleted)
+  // The same id or link; else a feed restored from a backup (no link) that made one of these plans: it gets its link back.
+  const old =
+    (feed.id ? all.find((f) => f.id === feed.id) : undefined) ??
+    all.find((f) => f.url === feed.url) ??
+    all.find((f) => f.needsLink && f.planIds.some((id) => res.planIds.includes(id)))
+  if (old) {
+    await updateRecord(db, 'feeds', old.id, { lms: feed.lms, url: feed.url, needsLink: false, planIds: [...new Set([...old.planIds, ...res.planIds])], lastFetchedAt: Date.now(), lastResult })
     return old.id
   }
   const rec = await insertRecord(db, 'feeds', { lms: feed.lms, url: feed.url, planIds: res.planIds, lastFetchedAt: Date.now(), lastResult })
@@ -164,15 +177,42 @@ export async function feedCourses(db: KilnDB, feed: FeedRecord): Promise<Set<str
 }
 
 /** New rows and changed due dates in a fetched feed, for the feed's courses, due today or later. */
-export async function feedChanges(db: KilnDB, feed: FeedRecord, text: string, today: string): Promise<{ added: number; changed: number }> {
+export interface FeedChanges {
+  added: number
+  changed: number
+  /** Class times and exams of the feed's courses that now start at another time. */
+  moved: number
+  /** Names exactly what is new, so the same news is announced once ('' when there is none). */
+  fingerprint: string
+}
+
+export async function feedChanges(db: KilnDB, feed: FeedRecord, text: string, today: string): Promise<FeedChanges> {
   const keys = await feedCourses(db, feed)
-  const rows = readCalendar(text).rows.filter((r) => keys.has(courseKey(r.course)) && r.due >= today)
+  const { items, rows: all } = readCalendar(text)
+  const rows = all.filter((r) => keys.has(courseKey(r.course)) && r.due >= today)
   const states = await rowStates(db, rows)
+  const marks: string[] = []
   let added = 0
   let changed = 0
-  for (const s of states.values()) {
-    if (s.status === 'new') added++
-    if (s.status === 'changed') changed++
+  for (const r of rows) {
+    const s = states.get(r.key)
+    if (s?.status === 'new') {
+      added++
+      marks.push(`n:${r.key}`)
+    }
+    if (s?.status === 'changed') {
+      changed++
+      marks.push(`c:${r.key}:${r.due}`)
+    }
   }
-  return { added, changed }
+  let moved = 0
+  for (const it of eventItems(items).filter((i) => keys.has(courseKey(i.course)) && (i.event.endDate ?? i.event.date) >= today)) {
+    const old = (await db.events.where('uid').equals(it.uid.slice(0, 1000)).toArray()).find((e) => !e.deleted)
+    const ev = it.event
+    if (old && (old.date !== ev.date || old.endDate !== ev.endDate || old.start !== ev.start || old.end !== ev.end)) {
+      moved++
+      marks.push(`m:${it.uid}:${ev.start ?? ev.date}`)
+    }
+  }
+  return { added, changed, moved, fingerprint: marks.length === 0 ? '' : shortHash(marks.sort().join('|')) }
 }

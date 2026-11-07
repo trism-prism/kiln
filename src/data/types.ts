@@ -234,15 +234,21 @@ export interface FeedResult {
   added?: number
   changed?: number
   removed?: number
+  /** Class times or exams that moved to another time. */
+  moved?: number
   /** Short reason when `ok` is false. */
   error?: string
 }
 
-/** A calendar link kept in sync (schema 4). The URL is a secret: sync carries it end-to-end encrypted; the JSON backup (the user's own file) holds it in plain text. */
+/** A calendar link kept in sync (schema 4). The URL is a secret: sync carries it end-to-end encrypted; the JSON backup leaves it out (a backup file is plain text and gets shared), so a restored feed needs its link pasted again. */
 export interface FeedRecord extends Base {
   lms: Lms
-  /** https URL of the .ics feed. */
+  /** https URL of the .ics feed. Empty after a backup restore (the backup leaves it out): see `needsLink`. */
   url: string
+  /** The link was not in the backup file; the person has to paste it again. */
+  needsLink?: boolean
+  /** Fingerprint of what the last notice was about, so the same news is not announced again every 6 hours. */
+  noticeFp?: string
   /** Display name, e.g. "Canvas (Fall 2026)". */
   name?: string
   /** Plans created from this feed (one per course). */

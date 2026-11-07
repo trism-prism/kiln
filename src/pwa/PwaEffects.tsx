@@ -44,7 +44,7 @@ export function PwaEffects() {
       for (const c of found) {
         toasts.add({
           title: 'Your course calendar changed',
-          description: feedNotice(c.added, c.changed),
+          description: feedNotice(c.added, c.changed, c.moved),
           action: { label: 'Review', onPress: () => void navigate(`/import?tab=calendar&feed=${c.feed.id}`) },
         })
       }

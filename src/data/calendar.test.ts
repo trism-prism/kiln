@@ -125,6 +125,48 @@ describe('importCalendar', () => {
     expect(feeds[0]?.planIds).toHaveLength(2)
   })
 
+  it("keeps the plan's scheduling mode when it is imported into again", async () => {
+    const db = newDb()
+    await importCalendar(db, input(CANVAS, { courses: ['MATH-221-001'] }))
+    const plan = await getPlanByKey(db, 'course-math-221-001')
+    await db.plans.update(plan!.id, { schedulingMode: 'auto' })
+    const more = CANVAS.replace('END:VCALENDAR', 'BEGIN:VEVENT\nDTSTART:20300301T235900Z\nDTEND:20300301T235900Z\nSUMMARY:Homework 5 [MATH-221-001]\nUID:event-assignment-1010\nEND:VEVENT\nEND:VCALENDAR')
+    const res = await importCalendar(db, input(more, { courses: ['MATH-221-001'] }))
+    expect(res.tasksAdded).toBe(1)
+    expect((await getPlanByKey(db, 'course-math-221-001'))?.schedulingMode).toBe('auto')
+  })
+
+  it('imports all ticked courses or none: a failing course leaves nothing behind', async () => {
+    const db = newDb()
+    const i = input(CANVAS, { courses: ['MATH-221-001', 'HIST-110'] })
+    i.rows = i.rows.map((r) => (r.course === 'HIST-110' ? { ...r, due: '2000-01-01' } : r))
+    await expect(importCalendar(db, i)).rejects.toThrow(/^HIST-110: /)
+    expect(await db.plans.count()).toBe(0)
+    expect(await db.tasks.count()).toBe(0)
+    expect(await db.events.count()).toBe(0)
+  })
+
+  it('does not count events as updated when only the feed or plan link differs', async () => {
+    const db = newDb()
+    const feed = { lms: 'canvas' as const, url: 'https://canvas.example.edu/feeds/calendars/user_abc.ics' }
+    await importCalendar(db, input(CANVAS, { feed }))
+    expect((await importCalendar(db, input(CANVAS, { feed }))).eventsUpdated).toBe(0)
+    expect((await importCalendar(db, input(CANVAS))).eventsUpdated).toBe(0) // an upload sets no feed
+    expect((await importCalendar(db, input(CANVAS, { courses: ['CS-150'] }))).eventsUpdated).toBe(0) // another course set: events of ticked courses only
+  })
+
+  it('gives a feed restored without its link the pasted link back, keeping its id', async () => {
+    const db = newDb()
+    const url = 'https://canvas.example.edu/feeds/calendars/user_abc.ics'
+    await importCalendar(db, input(CANVAS, { courses: ['HIST-110'], feed: { lms: 'canvas', url } }))
+    const [old] = await db.feeds.toArray()
+    await db.feeds.update(old!.id, { url: '', needsLink: true })
+    await importCalendar(db, input(CANVAS, { courses: ['HIST-110'], feed: { lms: 'canvas', url } }))
+    const feeds = await db.feeds.toArray()
+    expect(feeds).toHaveLength(1)
+    expect(feeds[0]).toMatchObject({ id: old!.id, url, needsLink: false })
+  })
+
   it('refuses rows due before the start date with a clear error', async () => {
     const db = newDb()
     await expect(importCalendar(db, input(CANVAS, { startDate: '2031-01-01' }))).rejects.toThrow(/^MATH-221-001: /)
