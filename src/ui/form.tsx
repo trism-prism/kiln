@@ -95,6 +95,18 @@ export function ListBoxItem({ children, ...props }: Omit<ListBoxItemProps, 'clas
   )
 }
 
+/**
+ * What a select's button shows: the chosen item's text only. By default `SelectValue` renders the item's whole
+ * children, including its (block, invisible) check icon, which made the box 36px tall and pushed the text up.
+ */
+export function SelectedText({ className = '' }: { className?: string }) {
+  return (
+    <SelectValue className={`truncate ${className}`}>
+      {({ isPlaceholder, selectedText, defaultChildren }) => (isPlaceholder ? defaultChildren : selectedText)}
+    </SelectValue>
+  )
+}
+
 export function Select<T extends object>({
   label,
   description,
@@ -106,7 +118,7 @@ export function Select<T extends object>({
     <AriaSelect {...props} className={`${field} ${className}`}>
       <Label className="font-medium">{label}</Label>
       <AriaButton className={`${control} flex cursor-default items-center justify-between gap-2 text-left`}>
-        <SelectValue className="truncate" />
+        <SelectedText />
         <ChevronDown className="text-text-muted" />
       </AriaButton>
       {description && <Text slot="description" className={help}>{description}</Text>}
