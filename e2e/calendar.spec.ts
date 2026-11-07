@@ -47,7 +47,7 @@ test('week view, remembered after a reload', async ({ page }) => {
   await expect(page.getByRole('grid', { name: 'Nov 16 to Nov 22, 2026' })).toBeVisible()
   await page.getByRole('button', { name: 'Today' }).click()
   await expect(page.getByRole('grid', { name: 'Nov 9 to Nov 15, 2026' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Today' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Today', exact: true })).toBeDisabled()
   await page.reload()
   await expect(page.getByRole('tab', { name: 'Week', selected: true })).toBeVisible()
 })

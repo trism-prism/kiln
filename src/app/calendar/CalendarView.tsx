@@ -288,7 +288,7 @@ export function CalendarView({ items, today, view, onViewChange, weekStartsOn, m
             <ChevronRight />
           </IconButton>
         </div>
-        <h2 aria-live="polite" className="text-lg font-medium whitespace-nowrap">
+        <h2 aria-live="polite" className="text-base font-medium whitespace-nowrap md:text-lg">
           {label}
         </h2>
         {/* Disabled, not hidden, while today is on show, so nothing shifts. */}
