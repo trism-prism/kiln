@@ -1,11 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { Minus, Plus } from 'lucide-react'
-import { Group, Input, NumberField } from 'react-aria-components'
+import { Group, Input, NumberField, useLocale } from 'react-aria-components'
 import { Button } from '../../ui/button'
 import { formatHours, MAX_DAY_MINUTES, parseMinutes, WEEKDAYS, weekTotal } from './budget'
 
 const STEP = 15
 const inputOf = (e: { currentTarget: HTMLElement }) => e.currentTarget.parentElement?.querySelector('input')?.value
+/** Minutes typed in the box as the locale writes them: "1.200" in German is 1200. Anything else is undefined. */
+export function parseTyped(text: string, locale: string): number | undefined {
+  const group = new Intl.NumberFormat(locale).formatToParts(1234567).find((p) => p.type === 'group')?.value
+  // \s also covers the no-break spaces some locales group with.
+  return parseMinutes((group ? text.split(group).join('') : text).replace(/\s/g, ''))
+}
 const step = 'flex size-9 items-center justify-center rounded-md border border-border-strong bg-surface-raised text-text outline-none focus-visible:outline-2 focus-visible:outline-focus active:bg-surface-muted'
 
 /**
@@ -15,6 +21,8 @@ const step = 'flex size-9 items-center justify-center rounded-md border border-b
  */
 export function WeekdayMinutes({ values, onChange }: { values: string[]; onChange: (values: string[]) => void }) {
   const [editing, setEditing] = useState<number>()
+  const { locale } = useLocale()
+  const [said, setSaid] = useState('')
   const root = useRef<HTMLDivElement>(null)
   const refocus = useRef<number | undefined>(undefined)
   // Enter and Escape close the editor; put focus back on that day's button, which is mounted again by then.
@@ -27,8 +35,11 @@ export function WeekdayMinutes({ values, onChange }: { values: string[]; onChang
   // Typed minutes are kept as typed; only the buttons move in 15-minute steps (NumberField's own `step` would round 50 to 45).
   // The step starts from what is in the box, which may not be committed yet (the buttons do not take focus).
   const nudge = (i: number, by: number, typed?: string) => {
-    const base = parseMinutes((typed ?? '').replace(/[,\s]/g, '')) ?? parseMinutes(values[i] ?? '') ?? 0
-    onChange(values.map((x, j) => (j === i ? String(Math.min(MAX_DAY_MINUTES, Math.max(0, base + by))) : x)))
+    // Text that was passed is what the box shows (blank or invalid counts as 0); the saved value is only for when none was.
+    const base = typed !== undefined ? (parseTyped(typed, locale) ?? 0) : (parseMinutes(values[i] ?? '') ?? 0)
+    const next = Math.min(MAX_DAY_MINUTES, Math.max(0, base + by))
+    setSaid(`${WEEKDAYS[i]} ${next} min`)
+    onChange(values.map((x, j) => (j === i ? String(next) : x)))
   }
   return (
     <div ref={root} className="grid gap-2">
@@ -54,8 +65,9 @@ export function WeekdayMinutes({ values, onChange }: { values: string[]; onChang
                     <div
                       // On key up, not down: NumberField commits the typed text on Enter's key down, and closing on key down would
                       // move focus to the day button in time for the key up to press it and open the editor again.
+                      // Escape closes from anywhere in the row; Enter only from the box (on the +/- buttons it presses them).
                       onKeyUpCapture={(e) => {
-                        if ((e.key !== 'Enter' && e.key !== 'Escape') || !(e.target instanceof HTMLInputElement)) return
+                        if (e.key !== 'Escape' && !(e.key === 'Enter' && e.target instanceof HTMLInputElement)) return
                         refocus.current = i
                         setEditing(undefined)
                       }}
@@ -95,6 +107,7 @@ export function WeekdayMinutes({ values, onChange }: { values: string[]; onChang
           })}
         </tbody>
       </table>
+      <span role="status" className="sr-only">{said}</span>
       <p className="text-sm" data-testid="week-total">
         Total per week: <strong className="font-medium tabular-nums">{total} min</strong> <span className="text-text-muted">({formatHours(total)})</span>
       </p>

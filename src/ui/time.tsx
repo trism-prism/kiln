@@ -54,19 +54,19 @@ export function TimeInput({
   const pm = time ? time.hour >= 12 : false
 
   return (
-    <div className={`flex items-start gap-2 ${className}`}>
-      <TimeField
-        value={time}
-        onChange={(t) => onChange(t ? `${pad(t.hour)}:${pad(t.minute)}` : '')}
-        hourCycle={twelve ? 12 : 24}
-        granularity="minute"
-        isInvalid={isInvalid}
-        className="grid gap-1.5 text-sm"
-      >
-        <Label className="font-medium">{label}</Label>
+    <TimeField
+      value={time}
+      onChange={(t) => onChange(t ? `${pad(t.hour)}:${pad(t.minute)}` : '')}
+      hourCycle={twelve ? 12 : 24}
+      granularity="minute"
+      isInvalid={isInvalid}
+      className={`grid gap-1.5 text-sm ${className}`}
+    >
+      <Label className="font-medium">{label}</Label>
+      <div className="flex items-center gap-2">
         <DateInput className={`${controlClass} flex w-fit items-center`}>
           {(segment) =>
-            // The AM/PM select below replaces this segment.
+            // The AM/PM select beside it replaces this segment.
             segment.type === 'dayPeriod' ? <></> : (
               <DateSegment
                 segment={segment}
@@ -75,28 +75,27 @@ export function TimeInput({
             )
           }
         </DateInput>
-        <FieldError className="text-sm text-danger">{errorMessage}</FieldError>
-      </TimeField>
-      {twelve && (
-        <AriaSelect
-          aria-label={`${label}: AM or PM`}
-          selectedKey={pm ? 'pm' : 'am'}
-          isDisabled={!time}
-          onSelectionChange={(k) => onChange(withPeriod(value, k === 'pm'))}
-          className="mt-[calc(1.25rem+0.375rem)]"
-        >
-          <AriaButton className={`${controlClass} flex cursor-default items-center gap-2`}>
-            <SelectValue />
-            <ChevronDown size={16} className="text-text-muted" />
-          </AriaButton>
-          <Popover className={popoverClass}>
-            <ListBox>
-              <ListBoxItem id="am">AM</ListBoxItem>
-              <ListBoxItem id="pm">PM</ListBoxItem>
-            </ListBox>
-          </Popover>
-        </AriaSelect>
-      )}
-    </div>
+        {twelve && (
+          <AriaSelect
+            aria-label={`${label}: AM or PM`}
+            selectedKey={pm ? 'pm' : 'am'}
+            isDisabled={!time}
+            onSelectionChange={(k) => onChange(withPeriod(value, k === 'pm'))}
+          >
+            <AriaButton className={`${controlClass} flex cursor-default items-center gap-2`}>
+              <SelectValue />
+              <ChevronDown size={16} className="text-text-muted" />
+            </AriaButton>
+            <Popover className={popoverClass}>
+              <ListBox>
+                <ListBoxItem id="am">AM</ListBoxItem>
+                <ListBoxItem id="pm">PM</ListBoxItem>
+              </ListBox>
+            </Popover>
+          </AriaSelect>
+        )}
+      </div>
+      <FieldError className="text-sm text-danger">{errorMessage}</FieldError>
+    </TimeField>
   )
 }
