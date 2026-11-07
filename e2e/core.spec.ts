@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { advanceDays, openSeeded } from './seed'
+import { advanceDays, animationsDone, openSeeded } from './seed'
 
 const badgeCount = async (page: Page) => {
   const name = (await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /^To Do/ }).first().getAttribute('aria-label')) ?? ''
@@ -88,23 +88,52 @@ test('overdue work is pinned on top and can be rescheduled', async ({ page }) =>
   await expect(page.getByRole('region', { name: /^Overdue/ })).toBeHidden()
 })
 
-test('to-do list preferences: choose the days, kept after a reload', async ({ page }) => {
+test('to-do list preferences: Cancel drops changes, Done applies them, kept after a reload', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
   await openSeeded(page, '/todo')
   await expect(page.getByRole('heading', { level: 2, name: 'Today' })).toBeVisible()
   await expect(page.getByRole('heading', { level: 2, name: 'Tomorrow' })).toBeHidden()
-  await page.getByRole('button', { name: 'To-do list preferences' }).click()
-  const dialog = page.getByRole('dialog', { name: 'To-do list preferences' })
-  await expect(dialog.getByRole('checkbox', { name: 'Show personal to-dos' })).toBeChecked()
-  await dialog.getByRole('radiogroup', { name: 'Show tasks until' }).locator('label', { hasText: 'Next week' }).click()
-  await dialog.getByLabel('Until day').fill('31')
-  await expect(dialog.getByText('Pick a month and a day')).toBeVisible()
-  await expect(dialog.getByLabel('Until day')).toHaveAccessibleDescription('Pick a month and a day')
-  await dialog.getByLabel('Until day').fill('')
-  await expect(dialog.getByText('Pick a month and a day')).toBeHidden()
+  const open = () => page.getByRole('button', { name: /^To-do List Preferences/ }).click()
+  const dialog = page.getByRole('dialog', { name: 'To-do List Preferences' })
+  const until = dialog.getByRole('radiogroup', { name: 'Show tasks until' })
+
+  // Cancel: the change is gone when the sheet opens again.
+  await open()
+  await expect(dialog.getByRole('checkbox', { name: 'Show Personal To-dos' })).toBeChecked()
+  await expect(dialog.getByRole('radio', { name: '4 Weeks Ago, From Oct 12' })).toBeVisible()
+  await until.locator('label', { hasText: 'Next Week' }).click()
+  await expect(until.getByRole('radio', { name: /^Next Week/ })).toBeChecked()
+  await dialog.getByRole('button', { name: 'Cancel' }).click()
+  await expect(dialog).toBeHidden()
+  await expect(page.getByRole('heading', { level: 2, name: 'Tomorrow' })).toBeHidden()
+  await open()
+  await expect(until.getByRole('radio', { name: /^Today/ })).toBeChecked()
+
+  // At 390 the header stays on one line: Cancel, title and Done share a row (measured once the sheet has slid in).
+  await animationsDone(page)
+  const boxes = await Promise.all([dialog.getByRole('button', { name: 'Cancel' }), dialog.getByRole('heading', { name: 'To-do List Preferences' }), dialog.getByRole('button', { name: 'Done' })].map((l) => l.boundingBox()))
+  const mids = boxes.map((b) => b!.y + b!.height / 2)
+  for (const m of mids) expect(Math.abs(m - mids[0]!)).toBeLessThan(2)
+  expect(boxes[1]!.height).toBeLessThan(30)
+
+  // The last row scrolls into view below the fixed header and can be chosen.
+  const last = until.getByRole('radio', { name: 'In 4 Weeks, Until Dec 13' })
+  const lastRow = until.locator('label', { hasText: 'In 4 Weeks' })
+  await lastRow.scrollIntoViewIfNeeded()
+  await expect(lastRow).toBeInViewport({ ratio: 1 })
+  expect((await lastRow.boundingBox())!.y).toBeGreaterThanOrEqual(boxes[2]!.y + boxes[2]!.height)
+  await lastRow.click()
+  await expect(last).toBeChecked()
+
+  // Done applies it; the trigger says filters are on.
+  await until.locator('label', { hasText: 'Next Week' }).click()
   await dialog.getByRole('button', { name: 'Done' }).click()
+  await expect(dialog).toBeHidden()
   await expect(page.getByRole('heading', { level: 2, name: 'Tomorrow' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'To-do List Preferences, filters on' })).toBeVisible()
   await page.reload()
   await expect(page.getByRole('heading', { level: 2, name: 'Tomorrow' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'To-do List Preferences, filters on' })).toBeVisible()
 })
 
 test('personal to-dos: add with minutes, mark done, edit, delete', async ({ page }) => {
