@@ -47,6 +47,16 @@ function chipsOf(items: TodoItem[]): Chip[] {
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
+/** The period label for phones: no year when it is this year, and one month name for a week inside one month. */
+function shortPeriodLabel(days: readonly string[], anchor: string, view: View, today: string): string {
+  const year = (d: string) => (d.slice(0, 4) === today.slice(0, 4) ? '' : ` ${d.slice(0, 4)}`)
+  if (view === 'month') return `${new Date(Number(anchor.slice(0, 4)), Number(anchor.slice(5, 7)) - 1, 1).toLocaleDateString('en-US', { month: 'long' })}${year(anchor)}`
+  const first = days[0]!
+  const last = days[days.length - 1]!
+  const monthDay = (d: string) => formatDay(d).replace(/^[A-Za-z]+, /, '')
+  return `${monthDay(first)} to ${sameMonth(first, last) ? Number(last.slice(8)) : monthDay(last)}${year(last) && `,${year(last)}`}`
+}
+
 function ItemChip({ chip, date }: { chip: Chip; date: string }) {
   const item = chip.item
   const movable = !!item && !item.done && (item.kind === 'task' || item.kind === 'practice')
@@ -209,7 +219,14 @@ export function CalendarView({ items, today, view, onViewChange, weekStartsOn, m
     if (!refocus.current) return
     refocus.current = false
     grid.current?.querySelector<HTMLElement>(`[data-day="${focus}"]`)?.focus()
-  }, [focus, anchor]) // anchor: Today can change only the anchor (focus already on today)
+  }, [focus])
+
+  // Today disables itself, which would drop its focus to the page: each press lands the focus on today's cell
+  // once the grid has re-rendered. A counter, so a press that leaves focus and anchor unchanged still runs it.
+  const [todayPresses, setTodayPresses] = useState(0)
+  useEffect(() => {
+    if (todayPresses) grid.current?.querySelector<HTMLElement>(`[data-day="${today}"]`)?.focus()
+  }, [todayPresses, today])
 
   const focusDay = (date: string) => grid.current?.querySelector<HTMLElement>(`[data-day="${date}"]`)?.focus()
   const goTo = (date: string) => {
@@ -219,8 +236,9 @@ export function CalendarView({ items, today, view, onViewChange, weekStartsOn, m
     if (!weeks.flat().includes(date)) setAnchor(date)
   }
   // Previous and next keep the day you are on (same weekday in the week view, same day number in the month view).
+  // In the month view the step is from the month on show, even when the focus sits on a neighbour month's day.
   const step = (n: number) => {
-    const next = view === 'month' ? shiftMonth(focus, n) : addDaysISO(focus, 7 * n)
+    const next = view === 'month' ? shiftMonth(sameMonth(focus, anchor) ? focus : anchor, n) : addDaysISO(focus, 7 * n)
     refocus.current = false
     setAnchor(next)
     setFocus(next)
@@ -236,8 +254,18 @@ export function CalendarView({ items, today, view, onViewChange, weekStartsOn, m
 
   const names = weekdayNames(weekStartsOn)
   const label = periodLabel(anchor, view, weekStartsOn)
+  const todayOnShow = weeks.flat().includes(today)
   const gridEl = (
-    <div ref={grid} role="grid" aria-label={label} onKeyDown={onKeyDown} className="overflow-hidden rounded-lg border border-border shadow-sm">
+    // Both tab panels render this grid, and the old panel unmounts after the new one mounts: a plain ref would end up null.
+    <div
+      ref={(el) => {
+        if (el) grid.current = el
+      }}
+      role="grid"
+      aria-label={label}
+      onKeyDown={onKeyDown}
+      className="overflow-hidden rounded-lg border border-border shadow-sm"
+    >
       <div role="row" className={`grid-cols-7 border-b border-border bg-surface-muted ${view === 'week' ? 'hidden md:grid' : 'grid'}`}>
         {names.map((n) => (
           <div key={n} role="columnheader" className="px-2 py-1.5 text-xs font-medium text-text-muted">
@@ -278,39 +306,45 @@ export function CalendarView({ items, today, view, onViewChange, weekStartsOn, m
       }}
     >
       {/* The arrows sit together as one pager, so "Today" can't read as previous day / next day.
-          Phones: arrows, period and Today on one row, the view tabs full width below. */}
+          Phones: arrows, a shorter period and Today on one row that never wraps, the view tabs full width below. */}
       <div className="flex flex-wrap items-center gap-3">
-        <div role="group" aria-label={`Change ${view}`} className="flex">
-          <IconButton variant="secondary" aria-label={`Previous ${view}`} onPress={() => step(-1)} className="relative rounded-r-none data-focus-visible:z-10">
-            <ChevronLeft />
-          </IconButton>
-          <IconButton variant="secondary" aria-label={`Next ${view}`} onPress={() => step(1)} className="relative -ml-px rounded-l-none data-focus-visible:z-10">
-            <ChevronRight />
-          </IconButton>
+        <div className="flex min-w-0 flex-1 items-center gap-2 md:gap-3">
+          <div role="group" aria-label={`Change ${view}`} className="flex shrink-0">
+            <IconButton variant="secondary" aria-label={`Previous ${view}`} onPress={() => step(-1)} className="relative rounded-r-none data-focus-visible:z-10">
+              <ChevronLeft />
+            </IconButton>
+            <IconButton variant="secondary" aria-label={`Next ${view}`} onPress={() => step(1)} className="relative -ml-px rounded-l-none data-focus-visible:z-10">
+              <ChevronRight />
+            </IconButton>
+          </div>
+          {/* truncate is the last resort (a week across two years at 320); the short label normally fits */}
+          <h2 aria-live="polite" className="min-w-0 truncate text-base font-medium md:text-lg">
+            <span className="md:hidden">{shortPeriodLabel(weeks.flat(), anchor, view, today)}</span>
+            <span className="max-md:hidden">{label}</span>
+          </h2>
+          {/* Disabled, not hidden, while today is on show, so nothing shifts. */}
+          <Button
+            variant="secondary"
+            className="ml-auto max-sm:px-3"
+            isDisabled={todayOnShow}
+            onPress={() => {
+              refocus.current = false
+              setAnchor(today)
+              setFocus(today)
+              setTodayPresses((n) => n + 1)
+            }}
+          >
+            Today
+          </Button>
         </div>
-        <h2 aria-live="polite" className="text-base font-medium whitespace-nowrap md:text-lg">
-          {label}
-        </h2>
-        {/* Disabled, not hidden, while today is on show, so nothing shifts. */}
-        <Button
-          variant="quiet"
-          className="ml-auto"
-          isDisabled={view === 'month' ? sameMonth(anchor, today) : weeks.flat().includes(today)}
-          onPress={() => {
-            // The button disables itself, so its focus would drop to the page; land on today instead.
-            refocus.current = true
-            setAnchor(today)
-            setFocus(today)
-          }}
-        >
-          Today
-        </Button>
-        <div className="w-full md:w-auto max-md:[&_[role=tablist]]:w-full max-md:[&_[role=tab]]:flex-1 max-md:[&_[role=tab]]:justify-center">
-          <TabList aria-label="Calendar view">
-            <Tab id="month">Month</Tab>
-            <Tab id="week">Week</Tab>
-          </TabList>
-        </div>
+        <TabList aria-label="Calendar view" className="max-md:w-full">
+          <Tab id="month" className="justify-center max-md:flex-1">
+            Month
+          </Tab>
+          <Tab id="week" className="justify-center max-md:flex-1">
+            Week
+          </Tab>
+        </TabList>
       </div>
       <TabPanel id="month">{gridEl}</TabPanel>
       <TabPanel id="week">{gridEl}</TabPanel>

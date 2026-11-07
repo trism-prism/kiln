@@ -114,6 +114,39 @@ describe('month view', () => {
     expect(today.hasAttribute('disabled')).toBe(true)
     // The button turned itself off, so the focus moves to today rather than dropping to the page
     expect(document.activeElement).toBe(dayButton(TODAY))
+    // And again on a second use
+    await user.click(screen.getByRole('button', { name: 'Next month' }))
+    await user.click(today)
+    expect(document.activeElement).toBe(dayButton(TODAY))
+  })
+
+  it('steps from the month on show when the focus is on a neighbour month day', async () => {
+    const user = userEvent.setup()
+    render(<Harness items={[]} />)
+    dayButton('2026-11-29').focus()
+    await user.keyboard('{ArrowDown}') // Dec 6, still in the November grid
+    expect(screen.getByRole('grid', { name: 'November 2026' })).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Next month' }))
+    expect(screen.getByRole('grid', { name: 'December 2026' })).toBeTruthy()
+  })
+
+  it('crosses the year, and the phone label adds the year only when it is not this year', async () => {
+    const user = userEvent.setup()
+    render(<Harness items={[]} />)
+    const phoneLabel = () => screen.getByRole('heading', { level: 2 }).firstElementChild!.textContent
+    expect(phoneLabel()).toBe('November')
+    await user.click(screen.getByRole('button', { name: 'Next month' }))
+    await user.click(screen.getByRole('button', { name: 'Next month' }))
+    expect(screen.getByRole('grid', { name: 'January 2027' })).toBeTruthy()
+    expect(phoneLabel()).toBe('January 2027')
+    await user.click(screen.getByRole('button', { name: 'Previous month' }))
+    await user.click(screen.getByRole('tab', { name: 'Week' })) // the week of Dec 11
+    expect(phoneLabel()).toBe('Dec 7 to 13')
+    await user.click(screen.getByRole('button', { name: 'Next week' }))
+    await user.click(screen.getByRole('button', { name: 'Next week' }))
+    await user.click(screen.getByRole('button', { name: 'Next week' }))
+    expect(screen.getByRole('grid', { name: 'Dec 28 to Jan 3, 2027' })).toBeTruthy()
+    expect(phoneLabel()).toBe('Dec 28 to Jan 3, 2027')
   })
 
   it('shows three items, "+N more", the day count, overdue and over-budget in the cell and its label', () => {
@@ -173,6 +206,15 @@ describe('week view', () => {
     dayButton(TODAY).focus() // Wednesday
     await user.keyboard('{ArrowRight}') // Thursday 12th
     expect(within(screen.getByRole('group', { name: 'Change week' })).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Previous week', 'Next week'])
+    const today = screen.getByRole('button', { name: 'Today' })
+    expect(today.hasAttribute('disabled')).toBe(true)
+    await user.click(screen.getByRole('button', { name: 'Next week' }))
+    expect(today.hasAttribute('disabled')).toBe(false)
+    await user.click(today)
+    expect(today.hasAttribute('disabled')).toBe(true)
+    expect(document.activeElement).toBe(dayButton(TODAY))
+    dayButton(TODAY).focus()
+    await user.keyboard('{ArrowRight}') // Thursday 12th
     await user.click(screen.getByRole('button', { name: 'Next week' }))
     expect(screen.getByRole('grid', { name: 'Nov 16 to Nov 22, 2026' })).toBeTruthy()
     expect(dayButton('2026-11-19').tabIndex).toBe(0) // the Thursday, not the Monday
