@@ -36,7 +36,7 @@ function MoveField({ item, date, today, onMove, onDone }: { item: TodoItem; date
         onChange={setTo}
         onInvalidChange={setBad}
         description={to === date && !bad ? 'Pick a day from today on, other than this one.' : undefined}
-        className="w-56"
+        className="w-full sm:w-56"
       />
       <Button type="submit" variant="secondary" isDisabled={!valid}>
         Move
