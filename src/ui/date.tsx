@@ -184,6 +184,8 @@ export function DateField({
           <Popover placement="bottom end" className={popoverClass}>
             <Dialog aria-label="Choose a date" className="outline-none">
               <Calendar
+                // Focus starts on the chosen day (or today), so the arrow keys pick a day straight away.
+                autoFocus
                 value={isRealISODate(value) ? parseDate(value) : null}
                 minValue={min ? parseDate(min) : undefined}
                 maxValue={max ? parseDate(max) : undefined}

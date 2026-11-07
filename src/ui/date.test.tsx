@@ -148,6 +148,15 @@ describe('DateField', () => {
     expect(screen.getByTestId('bad').textContent).toBe('false')
   })
 
+  it('opens the calendar with focus on the chosen day, so the arrow keys pick a day', async () => {
+    const user = userEvent.setup()
+    render(<Harness initial="2026-11-20" />)
+    await user.click(screen.getByRole('button', { name: 'Choose a date' }))
+    expect(document.activeElement?.getAttribute('aria-label')).toMatch(/November 20, 2026/)
+    await user.keyboard('{ArrowRight}{Enter}')
+    expect(value()).toBe('2026-11-21')
+  })
+
   it('has no spin buttons, and TextField type="date" renders it', () => {
     render(
       <I18nProvider locale="en-US">
