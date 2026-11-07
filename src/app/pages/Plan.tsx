@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Trash2 } from 'lucide-react'
-import { useEffect, useId, useRef, useState, type RefObject } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import {
   db,
@@ -85,7 +85,6 @@ function Modules({ detail, today }: { detail: PlanDetail; today: string }) {
 function Settings({ detail, today }: { detail: PlanDetail; today: string }) {
   const { plan } = detail
   const [deadline, setDeadline] = useState(plan.deadline ?? '')
-  const reviewsHelp = useId()
   // Plans with no lessons (course calendars) have nothing to review, so they get no switch.
   const hasReviewable = detail.modules.some((m) => m.tasks.some((t) => cardMinutes(t) !== undefined))
   const others = useLiveQuery(async () => ({ plans: await listPlans(db), settings: await getSettings(db) }))
@@ -123,14 +122,9 @@ function Settings({ detail, today }: { detail: PlanDetail; today: string }) {
         Daily practice problem
       </Switch>
       {hasReviewable && (
-        <div className="grid gap-1.5">
-          <Switch isSelected={reviewsOn(plan)} onChange={(on) => rescheduleAfter(() => updateRecord(db, 'plans', plan.id, { reviewsOn: on }))} aria-describedby={reviewsHelp}>
-            Schedule reviews
-          </Switch>
-          <p id={reviewsHelp} className="text-sm text-text-muted">
-            Finished lessons come back for a short review on later days.
-          </p>
-        </div>
+        <Switch isSelected={reviewsOn(plan)} onChange={(on) => rescheduleAfter(() => updateRecord(db, 'plans', plan.id, { reviewsOn: on }))}>
+          Schedule reviews
+        </Switch>
       )}
       <TextField
         label="Deadline (optional)"
