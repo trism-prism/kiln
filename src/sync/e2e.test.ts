@@ -1,6 +1,7 @@
 // Two devices (two fake-indexeddb databases running the real client engine) against the real Worker
 // code, in process. D1 is stood in for by SQLite (node:sqlite) running the real migrations; the
 // route tests in worker/test run the same server code on real D1 inside the Workers runtime.
+import 'fake-indexeddb/auto'
 import { DatabaseSync } from 'node:sqlite'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { KilnDB } from '../data/db'

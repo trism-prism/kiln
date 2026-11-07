@@ -1,8 +1,9 @@
 // Plan version history (schema 4): a snapshot of a plan's content after each edit, newest 20 kept per plan.
+import Dexie from 'dexie'
 import { planSchema, type Plan } from '../domain/plan-format'
 import { b64uDecode, b64uEncode } from '../sync/crypto'
 import type { KilnDB } from './db'
-import { getDeviceId, getPlan, listModules, listTasks, stampAfter } from './repo'
+import { getDeviceId, getPlan, importPlan, listModules, listTasks, stampAfter, updateRecord } from './repo'
 import type { ModuleRecord, PlanRecord, PlanVersionRecord, TaskRecord } from './types'
 import { uuidv7 } from './uuid'
 
@@ -61,29 +62,34 @@ async function gunzip(data: string): Promise<string> {
 // ponytail: a whole-plan snapshot per version. Compressed it fits the 64 KB sync limit for plans of a
 // few hundred tasks; a much larger plan's versions stay on this device (sync lists them as tooLarge).
 export async function snapshotPlan(db: KilnDB, planId: string, info: { summary: string; label?: string }): Promise<PlanVersionRecord> {
+  const deviceId = await getDeviceId(db)
+  return db.transaction('rw', PLAN_TABLES(db), () => snapshotIn(db, planId, info, deviceId))
+}
+
+const PLAN_TABLES = (db: KilnDB) => [db.plans, db.modules, db.tasks, db.planVersions]
+
+/** snapshotPlan inside a transaction over PLAN_TABLES (the device id is read before it opens). */
+async function snapshotIn(db: KilnDB, planId: string, info: { summary: string; label?: string }, deviceId: string): Promise<PlanVersionRecord> {
   const plan = await getPlan(db, planId)
   if (!plan) throw new Error('The plan is missing or deleted')
   const [modules, tasks] = await Promise.all([listModules(db, planId), listTasks(db, planId)])
-  // Compression and the device id come before the transaction: Dexie commits across a non-Dexie await.
-  const snapshot = await gzip(JSON.stringify(planFromRecords(plan, modules, tasks)))
-  const deviceId = await getDeviceId(db)
-  return db.transaction('rw', db.planVersions, async () => {
-    const rec: PlanVersionRecord = {
-      id: uuidv7(),
-      planId,
-      createdAt: Date.now(),
-      summary: info.summary,
-      ...(info.label ? { label: info.label } : {}),
-      snapshot,
-      updatedAt: stampAfter(),
-      deleted: false,
-      deviceId,
-    }
-    await db.planVersions.add(rec)
-    const old = newestFirst(await db.planVersions.where('planId').equals(planId).toArray()).slice(MAX_VERSIONS)
-    await db.planVersions.bulkPut(old.map((v) => ({ ...v, snapshot: '', deleted: true, updatedAt: stampAfter(v.updatedAt), deviceId })))
-    return rec
-  })
+  // Compression is not a Dexie request: waitFor keeps the transaction open across it.
+  const snapshot = await Dexie.waitFor(gzip(JSON.stringify(planFromRecords(plan, modules, tasks))))
+  const rec: PlanVersionRecord = {
+    id: uuidv7(),
+    planId,
+    createdAt: Math.max(Date.now(), (newestFirst(await db.planVersions.where('planId').equals(planId).toArray())[0]?.createdAt ?? -1) + 1),
+    summary: info.summary,
+    ...(info.label ? { label: info.label } : {}),
+    snapshot,
+    updatedAt: stampAfter(),
+    deleted: false,
+    deviceId,
+  }
+  await db.planVersions.add(rec)
+  const old = newestFirst(await db.planVersions.where('planId').equals(planId).toArray()).slice(MAX_VERSIONS)
+  await db.planVersions.bulkPut(old.map((v) => ({ ...v, snapshot: '', deleted: true, updatedAt: stampAfter(v.updatedAt), deviceId })))
+  return rec
 }
 
 const newestFirst = (rows: PlanVersionRecord[]) =>
@@ -97,4 +103,136 @@ export async function listPlanVersions(db: KilnDB, planId: string): Promise<Plan
 /** The plan file stored in a version. Throws if the snapshot is damaged or no longer valid. */
 export async function readSnapshot(version: Pick<PlanVersionRecord, 'snapshot'>): Promise<Plan> {
   return planSchema.parse(JSON.parse(await gunzip(version.snapshot)))
+}
+
+// Key order differs between records and parsed snapshots, so keys are sorted before comparing.
+const json = (v: unknown) => JSON.stringify(v, (_k, x: unknown) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => (a < b ? -1 : 1))) : x))
+const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`
+
+/** "renamed 2 tasks, added 1, reordered tasks" for one kind of item, or nothing when unchanged. */
+function itemChanges<T extends { id: string; title: string; order: number }>(noun: string, before: T[], after: T[]): string[] {
+  // Everything but the id, title and position, which are counted separately.
+  const content = (t: T) => ({ ...t, id: undefined, title: undefined, order: undefined })
+  const old = new Map(before.map((t) => [t.id, t]))
+  const now = new Set(after.map((t) => t.id))
+  const kept = after.filter((t) => old.has(t.id))
+  const counts: [string, number][] = [
+    ['renamed', kept.filter((t) => t.title !== old.get(t.id)!.title).length],
+    ['added', after.length - kept.length],
+    ['removed', before.filter((t) => !now.has(t.id)).length],
+    ['edited', kept.filter((t) => json(content(t)) !== json(content(old.get(t.id)!))).length],
+  ]
+  const out = counts.filter(([, n]) => n > 0).map(([verb, n], i) => (i === 0 ? `${verb} ${plural(n, noun)}` : `${verb} ${n}`))
+  const sequence = (list: T[]) => list.filter((t) => old.has(t.id) && now.has(t.id)).map((t) => t.id)
+  if (json(sequence(before)) !== json(sequence(after))) out.push(`reordered ${noun}s`)
+  return out
+}
+
+/** Items in plan order: modules by order, tasks by their module's order, then their own. */
+function inPlanOrder(plan: Plan) {
+  const modules = [...plan.modules].sort((a, b) => a.order - b.order)
+  const pos = new Map(modules.map((m, i) => [m.id, i]))
+  const tasks = [...plan.tasks].sort((a, b) => (pos.get(a.moduleId) ?? 0) - (pos.get(b.moduleId) ?? 0) || a.order - b.order)
+  return { modules, tasks }
+}
+
+/** A version's summary, e.g. "Renamed 2 tasks, added 1". Positions (order numbers) are compared as a sequence. */
+export function describeChanges(before: Plan, after: Plan): string {
+  const a = inPlanOrder(before)
+  const b = inPlanOrder(after)
+  const parts = [
+    ...(before.title !== after.title ? ['renamed the plan'] : []),
+    ...(before.goal !== after.goal || before.description !== after.description ? ["edited the plan's goal or description"] : []),
+    ...itemChanges('module', a.modules, b.modules),
+    ...itemChanges('task', a.tasks, b.tasks),
+  ]
+  const text = parts.join(', ')
+  return text ? text[0]!.toUpperCase() + text.slice(1) : 'No changes'
+}
+
+async function currentPlan(db: KilnDB, planId: string): Promise<{ plan: PlanRecord; content: Plan }> {
+  const plan = await getPlan(db, planId)
+  if (!plan) throw new Error('The plan is missing or deleted')
+  return { plan, content: planFromRecords(plan, await listModules(db, planId), await listTasks(db, planId)) }
+}
+
+/**
+ * What the editor opened with: the plan's text fields and a fingerprint of each live module's and
+ * task's content (what the editor writes: title, minutes, priority, links, dates, pin, dependencies,
+ * module and position), by key. Progress (status, completion, reviews) is not in it.
+ */
+export interface EditBase {
+  plan: { title: string; goal?: string; description?: string }
+  modules: Record<string, string>
+  tasks: Record<string, string>
+}
+
+export function editBase(plan: PlanRecord, modules: ModuleRecord[], tasks: TaskRecord[]): EditBase {
+  const liveModules = modules.filter((m) => !m.deleted)
+  const liveTasks = tasks.filter((t) => !t.deleted)
+  const content = planFromRecords(plan, liveModules, liveTasks)
+  const pin = new Map(liveTasks.map((t) => [t.key, t.pinnedDate]))
+  return {
+    plan: { title: plan.title, goal: plan.goal, description: plan.description },
+    modules: Object.fromEntries(content.modules.map((m) => [m.id, json(m)])),
+    tasks: Object.fromEntries(content.tasks.map((t) => [t.id, json({ ...t, pin: pin.get(t.id) })])),
+  }
+}
+
+export const PLAN_CHANGED = 'This plan changed on another device. Reopen the editor.'
+
+/**
+ * Saves an edit of the plan's content (title, goal, description, modules and tasks of `edited`).
+ * Everything else about the plan (subject, level, sources, dailyPractice...) is kept as it is now, not
+ * as the editor saw it. Applied to plan `planId` with importPlan, so progress is kept. `base` (what the
+ * editor opened with) limits deletes to keys that were in it and are missing from the edit, so records
+ * added elsewhere survive, and the save is refused (PLAN_CHANGED) if the content of a base record or
+ * the plan's text changed since (progress changes do not count), or if a task added elsewhere depends
+ * on a task this save removes or sits in a module it removes. `pins` sets or clears (undefined) the
+ * pinned day of tasks by key. One transaction: the checks, the write and both snapshots (before the
+ * first edit, and after every edit) land together or not at all.
+ */
+export async function savePlanEdit(db: KilnDB, planId: string, edited: Plan, pins: Record<string, string | undefined>, base: EditBase): Promise<PlanVersionRecord> {
+  const deviceId = await getDeviceId(db)
+  return db.transaction('rw', [...PLAN_TABLES(db), db.meta], async () => {
+    const { plan, content: before } = await currentPlan(db, planId)
+    const modules = await listModules(db, planId)
+    const tasks = await listTasks(db, planId)
+    const now = editBase(plan, modules, tasks)
+    const same = (a: Record<string, string>, b: Record<string, string>) => Object.keys(a).every((k) => k in b && a[k] === b[k])
+    const textChanged = (['title', 'goal', 'description'] as const).some((k) => base.plan[k] !== now.plan[k])
+    const removedModules = new Set(Object.keys(base.modules).filter((k) => !edited.modules.some((m) => m.id === k)))
+    const removedTasks = new Set(Object.keys(base.tasks).filter((k) => !edited.tasks.some((t) => t.id === k)))
+    const moduleKey = new Map(modules.map((m) => [m.id, m.key]))
+    // Records added elsewhere that this save would orphan: in a module it removes, or depending on a task it removes.
+    const orphaned = tasks.some((t) => !(t.key in base.tasks) && (removedModules.has(moduleKey.get(t.moduleId) ?? '') || t.dependsOn.some((d) => removedTasks.has(d))))
+    if (textChanged || !same(base.modules, now.modules) || !same(base.tasks, now.tasks) || orphaned) throw new Error(PLAN_CHANGED)
+
+    if (!(await listPlanVersions(db, planId)).length) await snapshotIn(db, planId, { summary: 'Before your first edit' }, deviceId)
+    // Plan-level fields the editor does not edit come from the plan as it is now.
+    const file: Plan = { ...before, title: edited.title, goal: edited.goal, description: edited.description, modules: edited.modules, tasks: edited.tasks }
+    await importPlan(db, file, { startDate: plan.startDate, replace: true, planId, onlyRemove: new Set([...Object.keys(base.modules), ...Object.keys(base.tasks)]) })
+    for (const t of await listTasks(db, planId)) {
+      if (!(t.key in pins) || pins[t.key] === t.pinnedDate) continue
+      const date = pins[t.key]
+      await updateRecord(db, 'tasks', t.id, date ? { pinnedDate: date, scheduledDate: date, backlog: undefined } : { pinnedDate: undefined })
+    }
+    return snapshotIn(db, planId, { summary: describeChanges(before, (await currentPlan(db, planId)).content) }, deviceId)
+  })
+}
+
+/**
+ * Applies a saved version as a new version. This intentionally reverts the plan's content to the
+ * snapshot, including changes made on other devices; progress is kept: tasks and modules deleted
+ * since come back with it, ones added since are deleted. Snapshots carry no part info, so the plan
+ * counts as whole. One transaction, on the plan resolved once from `planId`.
+ */
+export async function restoreVersion(db: KilnDB, planId: string, version: Pick<PlanVersionRecord, 'snapshot'>): Promise<PlanVersionRecord> {
+  const target = await readSnapshot(version)
+  const deviceId = await getDeviceId(db)
+  return db.transaction('rw', [...PLAN_TABLES(db), db.meta], async () => {
+    const { plan, content: before } = await currentPlan(db, planId)
+    await importPlan(db, { ...target, id: plan.key }, { startDate: plan.startDate, replace: true, planId })
+    return snapshotIn(db, planId, { summary: describeChanges(before, target), label: 'Restored' }, deviceId)
+  })
 }
