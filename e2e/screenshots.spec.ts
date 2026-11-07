@@ -52,30 +52,41 @@ async function openFirstPlan(page: Page) {
   await expect(page.getByRole('heading', { level: 2, name: 'Modules' })).toBeVisible()
 }
 
-/** Marks the first 90 tasks done on scattered days of the past year (raw IndexedDB), so the heatmap has a history. */
-async function backfillHistory(page: Page) {
-  await page.evaluate(
+/**
+ * Marks up to 90 open tasks done on scattered days of the past 365 (raw IndexedDB), so the heatmap has a history.
+ * Rows get a fresh updatedAt and this device's id (meta "deviceId"), as updateRecord writes them. Returns how many rows it wrote.
+ */
+async function backfillHistory(page: Page): Promise<{ wrote: number; open: number }> {
+  return page.evaluate(
     () =>
-      new Promise<void>((resolve, reject) => {
+      new Promise<{ wrote: number; open: number }>((resolve, reject) => {
         const open = indexedDB.open('kiln')
         open.onerror = () => reject(open.error)
         open.onsuccess = () => {
-          const tx = open.result.transaction('tasks', 'readwrite')
+          const tx = open.result.transaction(['meta', 'tasks'], 'readwrite')
           const store = tx.objectStore('tasks')
-          let n = 0
-          store.openCursor().onsuccess = (e) => {
-            const cursor = (e.target as IDBRequest<IDBCursorWithValue | null>).result
-            if (!cursor || n >= 90) return
-            const t = cursor.value
-            if (!t.deleted && t.status === 'open') {
-              // Deterministic spread: clusters of busy days with gaps, denser toward the present.
-              const daysAgo = Math.floor(((n * 37) % 100) ** 1.45 / 6.5) + (n % 9 === 0 ? 40 : 1)
-              cursor.update({ ...t, status: 'done', completedAt: Date.now() - daysAgo * 86_400_000 })
-              n++
+          let wrote = 0
+          let openTasks = 0
+          tx.objectStore('meta').get('deviceId').onsuccess = (m) => {
+            const deviceId = (m.target as IDBRequest<{ value: string } | undefined>).result?.value
+            if (!deviceId) return reject(new Error('no deviceId in meta'))
+            store.openCursor().onsuccess = (e) => {
+              const cursor = (e.target as IDBRequest<IDBCursorWithValue | null>).result
+              if (!cursor) return
+              const t = cursor.value
+              if (!t.deleted && t.status === 'open') {
+                openTasks++
+                if (wrote < 90) {
+                  // Deterministic spread over the year: clusters of busy days with gaps, denser toward the present.
+                  const daysAgo = Math.min(364, Math.floor(((wrote * 37) % 100) ** 1.45 / 2.2) + (wrote % 9 === 0 ? 40 : 1))
+                  cursor.update({ ...t, status: 'done', completedAt: Date.now() - daysAgo * 86_400_000, updatedAt: Math.max(Date.now(), t.updatedAt + 1), deviceId })
+                  wrote++
+                }
+              }
+              cursor.continue()
             }
-            cursor.continue()
           }
-          tx.oncomplete = () => resolve()
+          tx.oncomplete = () => resolve({ wrote, open: openTasks })
           tx.onerror = () => reject(tx.error)
         }
       }),
@@ -125,16 +136,19 @@ const scenes: Record<string, (page: Page) => Promise<{ full?: boolean; clip?: Lo
     await form.getByRole('button', { name: 'Save plan' }).click()
     await expect(page.getByRole('list', { name: 'Versions' }).getByRole('listitem')).toHaveCount(2)
     await page.getByRole('heading', { level: 2, name: 'History' }).scrollIntoViewIfNeeded()
-    // Dismiss the toast so it does not sit over the list (the page's fake clock never reaches its timeout).
+    // Dismiss the toast so it does not sit over the list: it carries a Reschedule action, so it never closes on its own.
     await page.getByRole('button', { name: 'Dismiss' }).click()
     await expect(page.getByText('Plan saved')).toBeHidden()
   },
   heatmap: async (page) => {
     await openSeeded(page, '/todo')
-    await backfillHistory(page)
+    const { wrote, open } = await backfillHistory(page)
+    expect(wrote).toBe(Math.min(90, open)) // every row it meant to write was written
+    expect(wrote).toBe(90) // the sample plans have far more open tasks than that
     await page.goto('/calendar')
     const streak = page.getByRole('region', { name: 'Streak' })
     await expect(streak.getByRole('group', { name: 'Study activity, last year' })).toBeVisible()
+    await expect(streak.getByText(`${wrote} tasks in the last year`)).toBeVisible()
     return { clip: streak }
   },
 }
