@@ -59,6 +59,9 @@ describe('parseDateText', () => {
     expect(past('yesterday')).toBe('2026-11-08')
     expect(parseDateText('yesterday', TODAY, 'en-US')).toBe('2026-11-08')
     expect(past('nov 20 2026')).toBe('2026-11-20') // a typed year is kept; the field's max refuses it
+    // Across the year boundary: the latest past occurrence, whichever year it falls in.
+    expect(past('jan 2', '2026-12-30')).toBe('2026-01-02')
+    expect(past('dec 30', '2027-01-02')).toBe('2026-12-30')
   })
 
   it('recent: a date with no year up to 30 days back stays this year; anything older rolls forward', () => {
