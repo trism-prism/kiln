@@ -15,7 +15,7 @@ export function parseStudyMinutes(text: string): number | undefined {
   if (/^[0-9]+$/.test(t)) return Number(t)
   // "1h30": hours, then bare minutes.
   const hm = /^([0-9]+)\s*h\s*([0-9]{1,2})$/i.exec(t)
-  if (hm) return Number(hm[1]) * 60 + Number(hm[2])
+  if (hm) return Number(hm[2]) < 60 ? Number(hm[1]) * 60 + Number(hm[2]) : undefined
   // Quick add reads durations; the text must be nothing but a duration.
   const p = parseLine(t, '2000-01-01')
   return p.title === '' && p.minutes !== undefined && !p.due && !p.priority && p.links.length === 0 ? Number(p.minutes) : undefined
