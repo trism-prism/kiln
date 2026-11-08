@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 import { Check, ChevronDown } from 'lucide-react'
 import {
   Button as AriaButton,
@@ -63,6 +63,7 @@ export function TextField({
   /** Date fields only: the earliest yyyy-mm-dd allowed. */
   min?: string
 }) {
+  const helpId = useId()
   if (props.type === 'date') {
     return (
       <DateField
@@ -81,8 +82,25 @@ export function TextField({
     )
   }
   return (
-    <AriaTextField {...props} className={`${field} ${className}`}>
-      <Label className="font-medium">{label}</Label>
+    // The description is linked by our own id: React Aria links its description slot only on the first render,
+    // so a line that appears later (Repeat's, above 1) would not be read out.
+    <AriaTextField
+      {...props}
+      aria-describedby={[description ? helpId : '', props['aria-describedby'] ?? ''].filter(Boolean).join(' ') || undefined}
+      className={`${field} ${className}`}
+    >
+      <Label className="font-medium">
+        {/* The unit drawn in the box is hidden from screen readers, so the name carries it: "Repeat, times".
+            One text node: Chrome puts a space before a separate sr-only part ("Repeat , times"). */}
+        {suffix ? (
+          <>
+            <span aria-hidden="true">{label}</span>
+            <span className="sr-only">{`${label}, ${suffix}`}</span>
+          </>
+        ) : (
+          label
+        )}
+      </Label>
       {suffix ? (
         // A unit means a short number, so the box stays narrow while the description below can run wide.
         <div className="relative max-w-40">
@@ -94,7 +112,7 @@ export function TextField({
       ) : (
         <Input className={`${control} placeholder:text-text-muted`} />
       )}
-      {description && <Text slot="description" className={help}>{description}</Text>}
+      {description && <span id={helpId} className={help}>{description}</span>}
       <FieldError className={error}>{errorMessage}</FieldError>
     </AriaTextField>
   )

@@ -9,7 +9,7 @@ import { DateField } from '../../ui/date'
 import { TextField } from '../../ui/form'
 import type { Draft, DraftTask } from './builder'
 import type { Input as ReviewInput } from './logic'
-import { dropPastDue, MAX_REPEAT, parseQuickAdd } from './quick-add'
+import { dropPastDue, keptEdits, MAX_REPEAT, parseQuickAdd } from './quick-add'
 import { Review } from './Review'
 
 const cell = 'h-9 w-full rounded-md border border-border-strong bg-surface-raised px-2 text-sm text-text'
@@ -35,17 +35,13 @@ export function BuildTab() {
     [parsed, today, edits],
   )
   const taskCount = modules.reduce((n, m) => n + m.tasks.length, 0)
-  // Edits belong to a line's text and its place among identical lines. When the text changes, edits
-  // whose uid is gone are dropped, so an old fix does not come back when the line is typed again.
-  // Identical lines keep their edits by order: removing one of them leaves the remaining lines with the
-  // first copies' edits and drops the last copy's, whichever line was removed.
+  // Edits belong to a line's text. When the text changes, edits whose line is gone are dropped, so an
+  // old fix does not come back when the line is typed again; so are all edits on identical lines once
+  // their number changes, as there is no telling which copy was removed or added.
   function change(nextText: string, nextTimes: number) {
-    const live = new Set(parseQuickAdd(nextText, today, nextTimes).flatMap((m) => m.tasks.map((t) => t.uid)))
-    const gone = Object.keys(edits).filter((uid) => !live.has(uid))
-    if (gone.length > 0) {
-      setEdits((e) => Object.fromEntries(Object.entries(e).filter(([uid]) => live.has(uid))))
-      setDroppedEdits(gone.length)
-    } else setDroppedEdits(0)
+    const next = keptEdits(edits, parsed, parseQuickAdd(nextText, today, nextTimes))
+    if (next.dropped > 0) setEdits(next.edits)
+    setDroppedEdits(next.dropped)
   }
   const draft: Draft = { title, modules }
   const edit = (uid: string, patch: Partial<DraftTask>) => setEdits((e) => ({ ...e, [uid]: { ...e[uid], ...patch } }))
@@ -84,7 +80,7 @@ export function BuildTab() {
           change(text, Math.min(Math.max(Number.parseInt(v, 10) || 1, 1), MAX_REPEAT))
           setRepeat(v)
         }}
-        description="Each copy counts up any 1: Week 1, Week 2, Week 3."
+        description={times > 1 ? 'Numbers like the 1 in Week 1 go up in each copy.' : undefined}
         isInvalid={typedTimes > MAX_REPEAT}
         errorMessage={`Up to ${MAX_REPEAT} times.`}
       />
@@ -110,10 +106,10 @@ export function BuildTab() {
               <caption className="pb-2 text-left font-medium">Preview: fix anything here</caption>
               <thead className="text-left text-text-muted">
                 <tr>
-                  <th scope="col" className="p-1 font-medium">Title</th>
+                  <th scope="col" className="min-w-44 p-1 font-medium">Title</th>
                   <th scope="col" className="w-32 p-1 font-medium">Type</th>
                   <th scope="col" className="w-20 p-1 font-medium">Minutes</th>
-                  <th scope="col" className="w-48 p-1 font-medium">Due</th>
+                  <th scope="col" className="w-40 p-1 font-medium sm:w-48">Due</th>
                   <th scope="col" className="w-36 p-1 font-medium">Priority</th>
                   <th scope="col" className="p-1 font-medium">Links</th>
                 </tr>

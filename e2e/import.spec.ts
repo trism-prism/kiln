@@ -229,9 +229,11 @@ test('quick add: Repeat counts up each 1, caps at 52, and a due cell takes typed
   await page.getByRole('tab', { name: 'Quick add' }).click()
   const panel = page.getByRole('tabpanel', { name: 'Quick add' })
   await panel.getByRole('textbox', { name: 'Tasks, one per line' }).fill('# Week 1\nRead chapter 1 1h')
-  const repeat = panel.getByRole('textbox', { name: 'Repeat' })
-  await expect(repeat).toHaveAccessibleDescription('Each copy counts up any 1: Week 1, Week 2, Week 3.')
+  // The unit drawn in the box is part of the name.
+  const repeat = panel.getByRole('textbox', { name: 'Repeat, times', exact: true })
+  await expect(repeat).toHaveAccessibleDescription('')
   await repeat.fill('3')
+  await expect(repeat).toHaveAccessibleDescription('Numbers like the 1 in Week 1 go up in each copy.')
   await expect(panel.getByRole('status').first()).toHaveText('3 tasks in 3 modules')
   await expect(panel.getByRole('textbox', { name: 'Task 3 title' })).toHaveValue('Read chapter 3')
   await expect(panel.getByRole('textbox', { name: 'Task 3 minutes' })).toHaveValue('60')
@@ -244,6 +246,20 @@ test('quick add: Repeat counts up each 1, caps at 52, and a due cell takes typed
   await due.fill('dec 24 2030')
   await due.press('Enter')
   await expect(due).toHaveValue('Tue, Dec 24, 2030')
+})
+
+test('quick add: changing how many identical lines there are drops their table edits', async ({ page }) => {
+  await page.goto('/import')
+  await page.getByRole('tab', { name: 'Quick add' }).click()
+  const panel = page.getByRole('tabpanel', { name: 'Quick add' })
+  const box = panel.getByRole('textbox', { name: 'Tasks, one per line' })
+  await box.fill('Read\nRead\nQuiz')
+  await panel.getByRole('textbox', { name: 'Task 2 minutes' }).fill('20')
+  await panel.getByRole('textbox', { name: 'Task 3 minutes' }).fill('5')
+  await box.fill('Read\nQuiz')
+  await expect(panel.getByText('1 table edit was dropped because its line changed.')).toBeVisible()
+  await expect(panel.getByRole('textbox', { name: 'Task 1 minutes' })).toHaveValue('30')
+  await expect(panel.getByRole('textbox', { name: 'Task 2 minutes' })).toHaveValue('5')
 })
 
 test('a changed study budget persists and offers a reschedule', async ({ page }) => {
