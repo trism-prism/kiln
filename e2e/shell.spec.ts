@@ -98,10 +98,9 @@ test('an open select list sits on its own opaque surface above the card, in ligh
     ])
     expect(popoverBg).not.toBe('rgba(0, 0, 0, 0)')
     expect(popoverBg).not.toBe(cardBg)
-    // The list covers the help line under the field instead of leaving it showing through a gap.
-    const help = page.getByText("System matches your device's light or dark setting")
-    const [l, h] = [await list.boundingBox(), await help.boundingBox()]
-    expect(l!.y).toBeLessThanOrEqual(h!.y)
+    // The list opens 4px under the field, so the help line below doesn't show through a gap.
+    const [l, t] = [await list.locator('..').boundingBox(), await trigger.boundingBox()]
+    expect(l!.y - (t!.y + t!.height)).toBeLessThan(6) // 8 before; a fraction over 4 at the end of the rise animation
     await page.keyboard.press('Escape')
   }
 })
