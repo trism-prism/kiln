@@ -6,10 +6,16 @@
     "url": "https://fontsource.org/fonts/instrument-sans"
   },
   {
-    "name": "@scure/bip39",
+    "name": "@internationalized/date",
+    "version": "3.12.4",
+    "license": "Apache-2.0",
+    "url": "https://github.com/adobe/react-spectrum/tree/main/packages/@internationalized/date"
+  },
+  {
+    "name": "@noble/curves",
     "version": "2.4.0",
     "license": "MIT",
-    "url": "https://paulmillr.com/noble/#scure"
+    "url": "https://paulmillr.com/noble/"
   },
   {
     "name": "dexie",
@@ -58,12 +64,6 @@
     "version": "6.0.0",
     "license": "MIT",
     "url": "https://github.com/open-spaced-repetition/ts-fsrs#readme"
-  },
-  {
-    "name": "uqr",
-    "version": "0.1.3",
-    "license": "MIT",
-    "url": "https://github.com/unjs/uqr#readme"
   },
   {
     "name": "vite-plugin-pwa",
