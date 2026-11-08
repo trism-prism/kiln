@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { brushUp, db, listPlans, masteryByTopic, reviewsOn, type BrushUpEntry } from '../../data'
 import { formatDay } from '../../lib/date'
-import { localDate } from '../../domain/mastery'
+import { cardMinutes, localDate } from '../../domain/mastery'
 import { Button, Link } from '../../ui/button'
 import { Badge, EmptyState, Meter, Skeleton } from '../../ui/surface'
 import { Page } from '../Page'
@@ -42,12 +42,20 @@ function Entry({ e, onReview }: { e: BrushUpEntry; onReview: () => void }) {
   )
 }
 
+/** True when no plan has reviews on but some plan has lessons that could use them (the same test as the plan settings switch). */
+async function offerReviews() {
+  const plans = await listPlans(db)
+  if (plans.length === 0 || plans.some(reviewsOn)) return false
+  const ids = new Set(plans.map((p) => p.id))
+  return (await db.tasks.toArray()).some((t) => !t.deleted && ids.has(t.planId) && cardMinutes(t) !== undefined)
+}
+
 export default function BrushUpPage() {
   const today = useToday()
   const minute = useMinute()
   const data = useLiveQuery(async () => {
     const now = Date.now()
-    return { entries: await brushUp(db, now), topics: await masteryByTopic(db, now), anyOn: (await listPlans(db)).some(reviewsOn) }
+    return { entries: await brushUp(db, now), topics: await masteryByTopic(db, now), offer: await offerReviews() }
   }, [today, minute])
   const { complete } = useCompleter()
 
@@ -56,7 +64,7 @@ export default function BrushUpPage() {
     <Page title="Brush up">
       {!data ? (
         <Skeleton className="h-48 w-full" />
-      ) : !data.anyOn ? (
+      ) : data.offer ? (
         <p className="text-sm text-text-muted">Turn on Schedule reviews in a plan&apos;s settings.</p>
       ) : (
         <div className="grid gap-10">
