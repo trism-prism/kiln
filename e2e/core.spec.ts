@@ -28,7 +28,8 @@ test('seed, To Do matches the badge, complete a lesson, review comes back and sh
   const title = (await lesson.getByRole('link').first().innerText()).trim()
   await lesson.getByRole('checkbox').click({ force: true })
   await expect(page.getByText(`Done: ${title}`, { exact: true })).toBeVisible()
-  await expect(page.getByRole('dialog', { name: 'How did it go?' })).toHaveCount(0)
+  // The toast is not a dialog, so any dialog here would be a leftover rating sheet.
+  await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(lesson.getByRole('checkbox')).toBeChecked()
   await expect(lesson.getByText('Done', { exact: true })).toBeVisible()
   await expect.poll(() => badgeCount(page)).toBe(before - 1)
