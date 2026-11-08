@@ -12,6 +12,7 @@ import {
   listModules,
   listPlans,
   listTasks,
+  revertWrite,
   setTaskStatus,
   softDelete,
   softDeletePlan,
@@ -214,5 +215,19 @@ describe('writes and reads', () => {
     const gone = async (name: 'reviewCards' | 'reviewLogs' | 'practiceLog', id: string) => (await db.table(name).get(id)).deleted
     expect([await gone('reviewCards', mine.id), await gone('reviewLogs', myLog.id), await gone('practiceLog', myPractice.id)]).toEqual([true, true, true])
     expect([await gone('reviewCards', theirs.id), await gone('reviewLogs', theirLog.id), await gone('practiceLog', loosePractice.id)]).toEqual([false, false, false])
+  })
+})
+
+describe('revertWrite remove', () => {
+  it('removes a record only while it is as the write left it, when given its updatedAt', async () => {
+    const db = newDb()
+    const rec = await insertRecord(db, 'personalTodos', { title: 'Psychology', date: '2026-11-08', minutes: 30, done: true, completedAt: 1 })
+    await updateRecord(db, 'personalTodos', rec.id, { minutes: 45 }) // edited in To Do after it was logged
+    expect(await revertWrite(db, { remove: [['personalTodos', rec.id, rec.updatedAt]] })).toBe(false)
+    expect((await db.personalTodos.get(rec.id))!.deleted).toBe(false)
+
+    const fresh = await insertRecord(db, 'personalTodos', { title: 'Spanish', minutes: 20, done: true, completedAt: 1 })
+    expect(await revertWrite(db, { remove: [['personalTodos', fresh.id, fresh.updatedAt]] })).toBe(true)
+    expect((await db.personalTodos.get(fresh.id))!.deleted).toBe(true)
   })
 })

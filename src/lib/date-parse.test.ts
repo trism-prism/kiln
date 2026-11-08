@@ -47,6 +47,23 @@ describe('parseDateText', () => {
     expect(parseDateText(text, TODAY, 'en-US')).toBeUndefined()
   })
 
+  it('past: a date or weekday with no year is its latest occurrence up to today, however far back; yesterday works', () => {
+    const past = (t: string, today = TODAY) => parseDateText(t, today, 'en-US', { past: true })
+    expect(past('oct 5')).toBe('2026-10-05')
+    expect(past('nov 9')).toBe('2026-11-09') // today
+    expect(past('nov 10')).toBe('2025-11-10') // tomorrow's date came last year
+    expect(past('11/7')).toBe('2026-11-07')
+    expect(past('fri')).toBe('2026-11-06')
+    expect(past('mon')).toBe('2026-11-09') // today is a Monday
+    expect(past('feb 29')).toBe('2024-02-29')
+    expect(past('yesterday')).toBe('2026-11-08')
+    expect(parseDateText('yesterday', TODAY, 'en-US')).toBe('2026-11-08')
+    expect(past('nov 20 2026')).toBe('2026-11-20') // a typed year is kept; the field's max refuses it
+    // Across the year boundary: the latest past occurrence, whichever year it falls in.
+    expect(past('jan 2', '2026-12-30')).toBe('2026-01-02')
+    expect(past('dec 30', '2027-01-02')).toBe('2026-12-30')
+  })
+
   it('recent: a date with no year up to 30 days back stays this year; anything older rolls forward', () => {
     const recent = (t: string, today = TODAY) => parseDateText(t, today, 'en-US', { recent: true })
     expect(recent('nov 7')).toBe('2026-11-07') // two days ago, not next year

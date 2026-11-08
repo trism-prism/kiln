@@ -1,9 +1,10 @@
 // Writes the screens share. Each reports through a toast.
-import { db, insertRecord, revertWrite, scheduleAll, setPersonalTodoDone, skipTask, softDelete, unskipTask, updateRecord } from '../data'
+import { db, insertRecord, type PersonalTodoRecord, revertWrite, scheduleAll, setPersonalTodoDone, skipTask, softDelete, unskipTask, updateRecord } from '../data'
 import { BACKLOG } from '../domain/scheduler'
 import { formatDay, toLocalISODate } from '../lib/date'
 import { toasts } from '../ui/overlay'
 import { describeMoves } from './moveSummary'
+import { minutesText } from './parts'
 
 const today = () => toLocalISODate(new Date())
 
@@ -140,6 +141,44 @@ export async function savePersonalTodo(fields: TodoFields, id?: string): Promise
     fail(e)
     return false
   }
+}
+
+/**
+ * Records study done outside any plan as a personal to-do that is already done, completed at noon of
+ * `date` so it counts for that day. Reports it with Undo. Returns false when it failed (already reported).
+ */
+export async function logStudyTime(title: string, minutes: number, date: string): Promise<boolean> {
+  let rec: PersonalTodoRecord
+  try {
+    const [y, m, d] = date.split('-').map(Number)
+    rec = await insertRecord(db, 'personalTodos', { title, date, minutes, done: true, completedAt: new Date(y!, m! - 1, d!, 12).getTime() })
+  } catch (e) {
+    fail(e)
+    return false
+  }
+  // Saved from here on: a failed reschedule is reported, but the sheet must still close, or Save again adds a copy.
+  try {
+    await scheduleAll(db, today())
+  } catch (e) {
+    fail(e, 'Could not reschedule')
+  }
+  toasts.add(
+    {
+      title: `Logged ${minutesText(minutes)} of ${title}`,
+      action: {
+        label: 'Undo',
+        onPress: () =>
+          void revertWrite(db, { remove: [['personalTodos', rec.id, rec.updatedAt]] })
+            .then(async (ok) => {
+              if (!ok) toasts.add({ title: 'Could not undo', description: 'It was changed after it was logged.' }, { timeout: 6000 })
+              else await scheduleAll(db, today())
+            })
+            .catch(fail),
+      },
+    },
+    { timeout: 8000 },
+  )
+  return true
 }
 
 export async function setTodoDone(id: string, done: boolean): Promise<void> {

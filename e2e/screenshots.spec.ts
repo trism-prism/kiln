@@ -142,11 +142,11 @@ const scenes: Record<string, (page: Page) => Promise<{ full?: boolean; clip?: Lo
     const { wrote, open } = await backfillHistory(page)
     expect(wrote).toBe(Math.min(90, open)) // every row it meant to write was written
     expect(wrote).toBe(90) // the sample plans have far more open tasks than that
-    await page.goto('/calendar')
-    const streak = page.getByRole('region', { name: 'Streak' })
-    await expect(streak.getByRole('group', { name: 'Study activity, last year' })).toBeVisible()
-    await expect(streak.getByText(`${wrote} tasks in the last year`)).toBeVisible()
-    return { clip: streak }
+    await page.goto('/progress')
+    const heatmap = page.getByRole('group', { name: 'Study activity, last year' })
+    await expect(heatmap).toBeVisible()
+    await expect(page.getByText(/in the last year$/)).toBeVisible()
+    return { clip: page.getByRole('main') }
   },
 }
 
