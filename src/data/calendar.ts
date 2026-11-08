@@ -36,6 +36,16 @@ export async function rowStates(db: KilnDB, rows: TaskRow[]): Promise<Map<string
   return out
 }
 
+/** The current title of each course that is already a live plan. */
+export async function planTitles(db: KilnDB, courses: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  for (const c of courses) {
+    const plan = await getPlanByKey(db, courseKey(c))
+    if (plan) out.set(c, plan.title)
+  }
+  return out
+}
+
 /** Reads a calendar file: every item and the grid rows. */
 export function readCalendar(text: string): { items: CalendarItem[]; rows: TaskRow[] } {
   const items = classify(parseIcs(text))
@@ -44,11 +54,13 @@ export function readCalendar(text: string): { items: CalendarItem[]; rows: TaskR
 
 export interface CalendarImport {
   items: CalendarItem[]
-  /** Grid rows as edited, only the ticked ones, of ticked courses. */
+  /** Grid rows as edited, only the ticked ones, of ticked courses. Rows due before today carry `done`. */
   rows: TaskRow[]
   /** Ticked courses: their class times and exams go on the calendar. */
   courses: string[]
-  /** Day 1 for new plans (today). Rows due earlier cannot be imported. */
+  /** Plan names by course, as typed in the review: a new plan gets it, an existing one is renamed. */
+  names?: Record<string, string>
+  /** Day 1 for new plans (today), or the earliest done row's due day when that is earlier. */
   startDate: string
   /** Keep in sync: the link, and the feed record when re-importing from one. */
   feed?: { id?: string; lms: Lms; url: string }
@@ -57,6 +69,8 @@ export interface CalendarImport {
 export interface CalendarImportResult {
   planIds: string[]
   tasksAdded: number
+  /** Of the tasks added, those imported as already done. */
+  markedDone: number
   datesChanged: number
   eventsAdded: number
   eventsUpdated: number
@@ -77,25 +91,36 @@ export async function importCalendar(db: KilnDB, input: CalendarImport): Promise
 }
 
 async function importAll(db: KilnDB, input: CalendarImport): Promise<CalendarImportResult> {
-  const res: CalendarImportResult = { planIds: [], tasksAdded: 0, datesChanged: 0, eventsAdded: 0, eventsUpdated: 0 }
+  const res: CalendarImportResult = { planIds: [], tasksAdded: 0, markedDone: 0, datesChanged: 0, eventsAdded: 0, eventsUpdated: 0 }
   const planOf = new Map<string, string>()
   const states = await rowStates(db, input.rows)
 
   for (const course of input.courses) {
     const rows = input.rows.filter((r) => r.course === course)
     const fresh = rows.filter((r) => states.get(r.key)?.status === 'new')
+    const name = input.names?.[course]?.trim().slice(0, 120) || undefined
     let plan = await getPlanByKey(db, courseKey(course))
     if (fresh.length > 0) {
-      const built = coursePlan(course, fresh, input.startDate, plan?.title)
+      // Done rows are history, due before today: the plan starts early enough for the file to accept their deadlines.
+      const start = fresh.reduce((d, r) => (r.done && r.due < d ? r.due : d), input.startDate)
+      const built = coursePlan(course, fresh, start, name ?? plan?.title)
       if (!built.plan) throw new Error(`${course}: ${built.issues[0]?.path ?? ''} ${built.issues[0]?.message ?? 'invalid'}`.trim())
       const file = plan
         ? { ...built.plan, schedulingMode: plan.schedulingMode, description: plan.description, goal: plan.goal, subject: plan.subject, level: plan.level, audience: plan.audience, sources: plan.sources, dailyPractice: plan.dailyPractice }
         : built.plan
-      const r = await importPlan(db, file, { startDate: input.startDate })
+      const r = await importPlan(db, file, { startDate: start })
       res.tasksAdded += r.tasksAdded
       plan = await getPlanByKey(db, courseKey(course))
+      // Done without completedAt: plan progress counts them, the streak and heatmap don't.
+      const done = new Set(fresh.filter((x) => x.done).map((x) => x.key))
+      for (const t of plan ? await db.tasks.where('planId').equals(plan.id).toArray() : []) {
+        if (!done.has(t.key) || t.deleted || t.status !== 'open') continue
+        await updateRecord(db, 'tasks', t.id, { status: 'done' })
+        res.markedDone++
+      }
     }
     if (!plan) continue
+    if (name && name !== plan.title) plan = (await updateRecord(db, 'plans', plan.id, { title: name })) ?? plan
     planOf.set(course, plan.id)
     res.planIds.push(plan.id)
 

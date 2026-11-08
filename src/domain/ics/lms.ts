@@ -18,6 +18,10 @@ export interface CalendarItem {
 export const OTHER_COURSE = 'Other calendar items'
 
 const EXAM = /\b(exam|exams|midterm|midterms)\b/i
+// An assignment named like a test ("Test 4", "Final Exam"), but not "Final Paper" or "Test Corrections".
+const EXAM_LIKE = /\b(exam|exams|midterm|midterms|test|tests|final|finals)\b/i
+const NOT_EXAM = /\b(project|paper|essay|presentation|reflection|report|draft|corrections?|review|outline)\b/i
+export const examLike = (title: string) => EXAM_LIKE.test(title) && !NOT_EXAM.test(title)
 const ASSIGNMENT_WORDS =
   /\b(due|assignment|assignments|homework|hw|quiz|quizzes|essay|paper|project|lab|problem set|pset|worksheet|reading|discussion|submit|submission|report)\b/i
 // "CS 101", "MATH-221", "BIO101L": letters, optional space or dash, digits.
@@ -42,6 +46,9 @@ export function courseOf(ev: IcsEvent): { course: string; title: string } {
   if (ev.location && CODE.test(ev.location.trim())) return { course: ev.location.trim(), title: ev.summary }
   return { course: OTHER_COURSE, title: ev.summary }
 }
+
+/** A course tag without its section group: "COB300A (Section 02 Fall 2026)" is "COB300A". For display and default plan titles; ids keep the raw tag. */
+export const courseName = (raw: string) => raw.replace(/\s*\((?:section|sec\.?)\s[^)]*\)\s*$/i, '').trim() || raw
 
 /** Assignment, exam or class time. Canvas marks assignments in the UID; other LMSs by keyword or a zero-length (due-time) event. */
 export function kindOf(ev: IcsEvent, title: string): ItemKind {
@@ -118,23 +125,38 @@ export interface TaskRow {
   due: string
   type: TaskType
   url?: string
+  /** The prep row of an exam. */
+  prep?: boolean
+  /** The feed marks the item as completed (STATUS:COMPLETED, COMPLETED or PERCENT-COMPLETE:100). */
+  completed?: boolean
+  /** Import as already done: one task, status done, no completion time (so it never counts toward a streak). */
+  done?: boolean
 }
 
-/** Work items for the grid. An assignment is due on the local day of its due time (all-day: that day); exam prep is due the day before the exam. */
+/** The day an item is due: an assignment on the local day of its due time (all-day: that day; exactly midnight: the day before); others on their day. */
+export function dueOf(it: CalendarItem): string {
+  const ev = it.event
+  if (it.kind !== 'assignment' || ev.allDay) return ev.date
+  return dayIn((ev.end ?? ev.start ?? 0) - 1, ev.tz)
+}
+
+/**
+ * Work items for the grid, due on `dueOf`. An exam, and an assignment named like one ("Test 4"), get a
+ * "Prepare for" row due the day before (180 minutes, so two 90-minute sessions); such an assignment
+ * also keeps its own row, the test itself.
+ */
 export function taskRows(items: CalendarItem[]): TaskRow[] {
   const rows: TaskRow[] = []
   for (const it of items) {
-    const ev = it.event
-    const url = ev.url
+    if (it.kind === 'event') continue
+    const base = { uid: it.uid, course: it.course, url: it.event.url, ...(it.event.completed ? { completed: true } : {}) }
+    const due = dueOf(it)
+    const test = it.kind === 'exam' || examLike(it.title)
     if (it.kind === 'assignment') {
-      // A due time of exactly midnight means the end of the day before.
-      const due = ev.allDay ? ev.date : dayIn((ev.end ?? ev.start ?? 0) - 1, ev.tz)
-      const d = defaultMinutes(it.title, false)
-      rows.push({ uid: it.uid, key: taskKey(it.uid), course: it.course, title: it.title, minutes: d.minutes, due, type: d.type, url })
-    } else if (it.kind === 'exam') {
-      const title = `Prepare for ${it.title}`.slice(0, 120)
-      rows.push({ uid: it.uid, key: taskKey(`${it.uid}#prep`), course: it.course, title, minutes: 180, due: addDays(ev.date, -1), type: 'assessment', url })
+      const d = test ? { minutes: 60, type: 'assessment' as const } : defaultMinutes(it.title, false)
+      rows.push({ ...base, key: taskKey(it.uid), title: it.title, minutes: d.minutes, due, type: d.type })
     }
+    if (test) rows.push({ ...base, key: taskKey(`${it.uid}#prep`), title: `Prepare for ${it.title}`.slice(0, 120), minutes: 180, due: addDays(due, -1), type: 'practice', prep: true })
   }
   return rows.sort((a, b) => a.due.localeCompare(b.due) || a.title.localeCompare(b.title))
 }
@@ -159,12 +181,12 @@ export function sessions(row: Pick<TaskRow, 'key' | 'title' | 'minutes' | 'type'
 }
 
 /**
- * A plan file for one course: fixed mode, one "Assignments" module, a task per session with the
- * row's due day as its deadline, in due order. Returns the validation issues if the file is invalid.
+ * A plan file for one course: fixed mode, one "Assignments" module, a task per session (one for a
+ * done row) with the row's due day as its deadline, in due order. Returns the validation issues if the file is invalid.
  */
-export function coursePlan(course: string, rows: TaskRow[], startDate: string, title = course): { plan?: Plan; issues: Issue[] } {
+export function coursePlan(course: string, rows: TaskRow[], startDate: string, title = courseName(course)): { plan?: Plan; issues: Issue[] } {
   const tasks = rows.flatMap((r) =>
-    sessions(r).map((s) => ({
+    (r.done ? [{ id: r.key, title: r.title, minutes: Math.max(5, Math.min(180, r.minutes)) }] : sessions(r)).map((s) => ({
       id: s.id,
       moduleId: 'assignments',
       title: s.title,
@@ -188,13 +210,15 @@ export function coursePlan(course: string, rows: TaskRow[], startDate: string, t
   return { plan: res.plan, issues: res.issues.filter((i) => i.severity === 'error') }
 }
 
-/** Courses in first-seen order with their item counts. */
-export function courses(items: CalendarItem[]): { course: string; tasks: number; events: number }[] {
-  const m = new Map<string, { course: string; tasks: number; events: number }>()
+/** Courses in first-seen order: their assignments and exams (`total`) and those due `today` or later (`due`). */
+export function courses(items: CalendarItem[], today: string): { course: string; total: number; due: number }[] {
+  const m = new Map<string, { course: string; total: number; due: number }>()
   for (const it of items) {
-    const c = m.get(it.course) ?? { course: it.course, tasks: 0, events: 0 }
-    if (it.kind !== 'event') c.tasks++
-    if (it.kind !== 'assignment') c.events++
+    const c = m.get(it.course) ?? { course: it.course, total: 0, due: 0 }
+    if (it.kind !== 'event') {
+      c.total++
+      if (dueOf(it) >= today) c.due++
+    }
     m.set(it.course, c)
   }
   return [...m.values()]
