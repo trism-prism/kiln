@@ -10,6 +10,8 @@ export {
   coursePlan,
   courses,
   defaultMinutes,
+  displayNames,
+  doneParts,
   dueOf,
   eventItems,
   examLike,

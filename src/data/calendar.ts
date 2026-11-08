@@ -112,9 +112,9 @@ async function importAll(db: KilnDB, input: CalendarImport): Promise<CalendarImp
       res.tasksAdded += r.tasksAdded
       plan = await getPlanByKey(db, courseKey(course))
       // Done without completedAt: plan progress counts them, the streak and heatmap don't.
-      const done = new Set(fresh.filter((x) => x.done).map((x) => x.key))
+      const doneRows = fresh.filter((x) => x.done)
       for (const t of plan ? await db.tasks.where('planId').equals(plan.id).toArray() : []) {
-        if (!done.has(t.key) || t.deleted || t.status !== 'open') continue
+        if (t.deleted || t.status !== 'open' || !doneRows.some((x) => ownTasks([t], x.key).length > 0)) continue
         await updateRecord(db, 'tasks', t.id, { status: 'done' })
         res.markedDone++
       }

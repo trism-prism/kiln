@@ -204,6 +204,18 @@ describe('importCalendar', () => {
     expect(res2).toMatchObject({ tasksAdded: 1, markedDone: 1 })
   })
 
+  it('marks every part of a long done row done', async () => {
+    const db = newDb()
+    const { items, rows } = readCalendar(REAL)
+    const memo = rows.find((r) => r.title === 'Case Memo 1')!
+    const res = await importCalendar(db, { items, rows: [{ ...memo, minutes: 240, done: true }], courses: [COB_A], startDate: '2026-11-09' })
+    expect(res).toMatchObject({ tasksAdded: 2, markedDone: 2 })
+    expect((await tasksOf(db, courseKey(COB_A))).map((t) => [t.title, t.estimatedMinutes, t.status])).toEqual([
+      ['Case Memo 1 (part 1 of 2)', 120, 'done'],
+      ['Case Memo 1 (part 2 of 2)', 120, 'done'],
+    ])
+  })
+
   it('refuses rows due before the start date with a clear error', async () => {
     const db = newDb()
     await expect(importCalendar(db, input(CANVAS, { startDate: '2031-01-01' }))).rejects.toThrow(/^MATH-221-001: /)

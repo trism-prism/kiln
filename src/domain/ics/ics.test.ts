@@ -8,6 +8,7 @@ import {
   coursePlan,
   courses,
   defaultMinutes,
+  displayNames,
   eventItems,
   examLike,
   parseIcs,
@@ -261,8 +262,28 @@ describe('LMS mapping', () => {
   })
 
   it('treats test-like assignment titles as tests, but not papers or corrections', () => {
-    for (const t of ['Test 4', 'Final Exam', 'Exam 2', 'Midterm', 'Finals week quiz', 'Unit tests']) expect(examLike(t), t).toBe(true)
-    for (const t of ['Final Paper', 'Test Corrections', 'Final Project', 'Exam review', 'Midterm Reflection Essay', 'Testing lab']) expect(examLike(t), t).toBe(false)
+    for (const t of ['Test 4', 'Final Exam', 'Exam 2', 'Midterm', 'Unit tests', 'Test1', 'Exam2', 'Midterm1', 'Exam-3']) expect(examLike(t), t).toBe(true)
+    for (const t of [
+      'Final Paper',
+      'Test Corrections',
+      'Final Project',
+      'Exam review',
+      'Midterm Reflection Essay',
+      'Testing lab',
+      'Pre-test',
+      'Test-taking strategies',
+      'Midterm discussion post',
+      'Final deliverable',
+      'Exam summary',
+      'Final portfolio',
+      'Midterm analysis',
+      'Test answers',
+      'Quiz 3',
+      'Finals week quiz',
+    ])
+      expect(examLike(t), t).toBe(false)
+    const quiz = taskRows(classify([ev({ uid: 'event-assignment-7', summary: 'Quiz 3 [X-1]' })]))
+    expect(quiz.map((r) => [r.title, r.minutes, r.type])).toEqual([['Quiz 3', 30, 'assessment']])
   })
 
   it('turns a test-like assignment into the test itself and a prep row the day before', () => {
@@ -288,8 +309,18 @@ describe('LMS mapping', () => {
     expect(taskRows(classify(parseIcs(text('STATUS:COMPLETED'))))[0]?.completed).toBe(true)
   })
 
-  it('makes a done row one task, however long', () => {
-    const row = { uid: 'u', key: 'a-1', course: 'X', title: 'Big project', minutes: 240, due: '2030-01-05', type: 'project' as const, done: true }
-    expect(coursePlan('X', [row], '2030-01-05').plan?.tasks.map((t) => [t.id, t.title, t.estimatedMinutes])).toEqual([['a-1', 'Big project', 180]])
+  it('keeps the real minutes of a done row: one task, or parts of at most 180 minutes', () => {
+    const row = { uid: 'u', key: 'a-1', course: 'X', title: 'Essay', minutes: 150, due: '2030-01-05', type: 'project' as const, done: true }
+    const tasks = (r: typeof row) => coursePlan('X', [r], '2030-01-05').plan?.tasks.map((t) => [t.id, t.title, t.estimatedMinutes])
+    expect(tasks(row)).toEqual([['a-1', 'Essay', 150]])
+    expect(tasks({ ...row, title: 'Big project', minutes: 240 })).toEqual([
+      ['a-1', 'Big project (part 1 of 2)', 120],
+      ['a-1-2', 'Big project (part 2 of 2)', 120],
+    ])
+  })
+
+  it('keeps the section in the name when two courses would otherwise share one', () => {
+    const names = displayNames(['CS 101 (Section 01)', 'CS 101 (Section 02)', 'COB300A (Section 02 Fall 2026)'])
+    expect([...names.values()]).toEqual(['CS 101 (Section 01)', 'CS 101 (Section 02)', 'COB300A'])
   })
 })

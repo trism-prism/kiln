@@ -19,8 +19,10 @@ export const OTHER_COURSE = 'Other calendar items'
 
 const EXAM = /\b(exam|exams|midterm|midterms)\b/i
 // An assignment named like a test ("Test 4", "Final Exam"), but not "Final Paper" or "Test Corrections".
-const EXAM_LIKE = /\b(exam|exams|midterm|midterms|test|tests|final|finals)\b/i
-const NOT_EXAM = /\b(project|paper|essay|presentation|reflection|report|draft|corrections?|review|outline)\b/i
+// A number may follow straight on ("Test1", "Exam-2"); a hyphenated word ("Pre-test", "Test-taking") is not a test.
+const EXAM_LIKE = /(?<![\w-])(exam|exams|midterm|midterms|test|tests|final|finals)(?:-?[0-9]+)?(?![\w-])/i
+const NOT_EXAM =
+  /\b(project|paper|essay|presentation|reflection|report|draft|corrections?|review|outline|discussion|deliverable|summary|portfolio|analysis|post|answers|strategies|quiz|quizzes)\b/i
 export const examLike = (title: string) => EXAM_LIKE.test(title) && !NOT_EXAM.test(title)
 const ASSIGNMENT_WORDS =
   /\b(due|assignment|assignments|homework|hw|quiz|quizzes|essay|paper|project|lab|problem set|pset|worksheet|reading|discussion|submit|submission|report)\b/i
@@ -181,12 +183,33 @@ export function sessions(row: Pick<TaskRow, 'key' | 'title' | 'minutes' | 'type'
 }
 
 /**
+ * Tasks a done row becomes: one with its real minutes, or, over 180 (the most one task may hold), equal
+ * parts of at most 180, so the plan keeps the real total.
+ */
+export function doneParts(row: Pick<TaskRow, 'key' | 'title' | 'minutes'>): { id: string; title: string; minutes: number }[] {
+  const n = Math.max(1, Math.ceil(row.minutes / 180))
+  const each = Math.max(5, Math.round(row.minutes / n))
+  if (n === 1) return [{ id: row.key, title: row.title, minutes: each }]
+  return Array.from({ length: n }, (_, i) => {
+    const suffix = ` (part ${i + 1} of ${n})`
+    return { id: i === 0 ? row.key : `${row.key}-${i + 1}`, title: row.title.slice(0, 120 - suffix.length) + suffix, minutes: each }
+  })
+}
+
+/** Names to show for courses: the course without its section, unless two courses would then share a name. */
+export function displayNames(raw: string[]): Map<string, string> {
+  const count = new Map<string, number>()
+  for (const c of raw) count.set(courseName(c), (count.get(courseName(c)) ?? 0) + 1)
+  return new Map(raw.map((c) => [c, (count.get(courseName(c)) ?? 0) > 1 ? c : courseName(c)]))
+}
+
+/**
  * A plan file for one course: fixed mode, one "Assignments" module, a task per session (one for a
  * done row) with the row's due day as its deadline, in due order. Returns the validation issues if the file is invalid.
  */
 export function coursePlan(course: string, rows: TaskRow[], startDate: string, title = courseName(course)): { plan?: Plan; issues: Issue[] } {
   const tasks = rows.flatMap((r) =>
-    (r.done ? [{ id: r.key, title: r.title, minutes: Math.max(5, Math.min(180, r.minutes)) }] : sessions(r)).map((s) => ({
+    (r.done ? doneParts(r) : sessions(r)).map((s) => ({
       id: s.id,
       moduleId: 'assignments',
       title: s.title,
