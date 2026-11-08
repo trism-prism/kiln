@@ -30,6 +30,16 @@ describe.each(Object.entries(files))('prompt file %s', (_name, markdown) => {
     expect(prompt).toContain(schemaReference(planJsonSchema()))
     expect(prompt.startsWith('You are helping me create a study plan')).toBe(true)
   })
+
+  it('asks for a class calendar and keeps the questions plain', () => {
+    const prompt = buildPrompt(markdown)
+    expect(prompt).toContain('Do you have a class calendar link? Paste it here, or say no.')
+    expect(prompt).toContain('Talk to me in plain, friendly language')
+    expect(prompt).toContain('Copy this whole reply and paste it into Kiln.')
+    // The questions are relayed to me as written; the reference further down keeps its yyyy-mm-dd format for the AI.
+    expect(prompt.slice(0, prompt.indexOf('## Step 2'))).not.toContain('yyyy-mm-dd')
+    expect(prompt).not.toContain('reviews Kiln adds')
+  })
 })
 
 describe('buildPrompt', () => {

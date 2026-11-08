@@ -19,7 +19,17 @@ export async function copyText(text: string): Promise<boolean> {
  * Copies `getText()` on press. No toast: the button turns into a check and "Copied" for 2 s and a polite
  * live region says so. A refused copy still gets a toast, because nothing else would tell the user.
  */
-export function CopyButton({ getText, children, variant }: { getText: () => string; children: ReactNode; variant?: ButtonVariant }) {
+export function CopyButton({
+  getText,
+  children,
+  variant,
+  'aria-describedby': describedBy,
+}: {
+  getText: () => string
+  children: ReactNode
+  variant?: ButtonVariant
+  'aria-describedby'?: string
+}) {
   const [copied, setCopied] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
   useEffect(() => () => clearTimeout(timer.current), [])
@@ -34,7 +44,7 @@ export function CopyButton({ getText, children, variant }: { getText: () => stri
   }
   return (
     <>
-      <Button variant={variant} onPress={copy}>
+      <Button variant={variant} aria-describedby={describedBy} onPress={copy}>
         {copied ? <Check /> : <Copy />} {copied ? 'Copied' : children}
       </Button>
       <span aria-live="polite" className="sr-only">{copied ? 'Copied to the clipboard' : ''}</span>

@@ -13,7 +13,7 @@ const publicFile = (name: string) => fileURLToPath(new URL(`../public/${name}`, 
  */
 async function paste(page: Page, text: string) {
   await page.goto('/import')
-  const box = page.getByLabel('Plan text')
+  const box = page.getByLabel('Paste the plan here')
   await expect(box).toBeVisible()
   await box.evaluate((el, value) => {
     // React tracks the value itself, so go through the native setter or it ignores the event.
@@ -106,7 +106,7 @@ test('plan errors are listed in the spec format', async ({ page }) => {
 test('uploading the CSV template imports it', async ({ page }) => {
   await page.goto('/import')
   await page.locator('input[type=file]').first().setInputFiles(publicFile('kiln-plan-template.csv'))
-  await expect(page.getByLabel('Plan text')).toHaveValue(/^moduleId,/)
+  await expect(page.getByLabel('Paste the plan here')).toHaveValue(/^moduleId,/)
   await expect(page.getByText('Enter a title for the plan.').first()).toBeVisible()
   await expect(page.getByRole('button', { name: /^Import "/ })).toBeDisabled()
   await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Template plan')
@@ -118,7 +118,7 @@ test('uploading the CSV template imports it', async ({ page }) => {
 test('uploading the XLSX template imports it', async ({ page }) => {
   await page.goto('/import')
   await page.locator('input[type=file]').first().setInputFiles(publicFile('kiln-plan-template.xlsx'))
-  await expect(page.getByText('Spreadsheet loaded: kiln-plan-template.xlsx')).toBeVisible()
+  await expect(page.getByText('Loaded kiln-plan-template.xlsx')).toBeVisible()
   await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Excel plan')
   await importIt(page)
 })
@@ -126,18 +126,22 @@ test('uploading the XLSX template imports it', async ({ page }) => {
 test.describe('clipboard', () => {
   test.use({ permissions: ['clipboard-read', 'clipboard-write'] })
 
-  for (const [button, mentions] of [
-    ['Copy prompt (Kiln assigns dates)', 'schemaVersion'],
-    ['Copy prompt (fixed dates)', 'fixedDate'],
+  for (const [index, description, mentions] of [
+    [0, 'Let Kiln assign dates based on your minutes per weekday.', '"schedulingMode": "auto"'],
+    [1, 'Assign the dates yourself. The AI will ask you.', '"schedulingMode": "fixed"'],
   ] as const) {
-    test(`${button} puts the prompt on the clipboard`, async ({ page }) => {
+    test(`Copy prompt ${index + 1} puts its prompt on the clipboard`, async ({ page }) => {
       await page.goto('/import')
-      await page.getByRole('button', { name: button }).click()
+      // The two buttons share a name; their descriptions tell them apart.
+      const button = page.getByRole('button', { name: 'Copy prompt' }).nth(index)
+      await expect(button).toHaveAccessibleDescription(description)
+      await button.click()
       await expect(page.getByRole('button', { name: 'Copied' })).toBeVisible()
       const text = await page.evaluate(() => navigator.clipboard.readText())
       expect(text.length).toBeGreaterThan(2000)
       expect(text).toContain(mentions)
       expect(text).not.toContain('{{SCHEMA_REFERENCE}}')
+      expect(text).toContain('Do you have a class calendar link? Paste it here, or say no.')
     })
   }
 
@@ -145,7 +149,7 @@ test.describe('clipboard', () => {
     await page.goto('/import')
     await page.evaluate((t) => navigator.clipboard.writeText(t), '{"hello": 1}')
     await page.getByRole('button', { name: 'Paste from clipboard' }).click()
-    await expect(page.getByLabel('Plan text')).toHaveValue('{"hello": 1}')
+    await expect(page.getByLabel('Paste the plan here')).toHaveValue('{"hello": 1}')
   })
 })
 
@@ -153,7 +157,7 @@ test('Paste from clipboard shows a hint when the browser refuses', async ({ page
   await page.goto('/import')
   await page.getByRole('button', { name: 'Paste from clipboard' }).click()
   await expect(page.getByText(/could not read the clipboard/)).toBeVisible()
-  await expect(page.getByLabel('Plan text')).toBeFocused()
+  await expect(page.getByLabel('Paste the plan here')).toBeFocused()
 })
 
 const QUICK_ADD = [

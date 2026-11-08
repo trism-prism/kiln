@@ -28,7 +28,7 @@ describe('ImportTab file reads', () => {
     const { container } = renderTab()
     upload(container, fileWith('plan.json', () => Promise.reject(new Error('disk gone'))))
     await waitFor(() => expect(toasts.visibleToasts.some((t) => t.content.title === 'Could not read plan.json')).toBe(true))
-    expect((screen.getByLabelText('Plan text') as HTMLTextAreaElement).value).toBe('')
+    expect((screen.getByLabelText('Paste the plan here') as HTMLTextAreaElement).value).toBe('')
   })
 
   it('ignores a slow read when a newer file was picked meanwhile', async () => {
@@ -36,17 +36,17 @@ describe('ImportTab file reads', () => {
     let release: (s: string) => void = () => {}
     upload(container, fileWith('slow.json', () => new Promise<string>((r) => (release = r))))
     upload(container, fileWith('fast.json', () => Promise.resolve('{"fast": true}')))
-    await waitFor(() => expect((screen.getByLabelText('Plan text') as HTMLTextAreaElement).value).toBe('{"fast": true}'))
+    await waitFor(() => expect((screen.getByLabelText('Paste the plan here') as HTMLTextAreaElement).value).toBe('{"fast": true}'))
     await act(async () => release('{"slow": true}'))
-    expect((screen.getByLabelText('Plan text') as HTMLTextAreaElement).value).toBe('{"fast": true}')
+    expect((screen.getByLabelText('Paste the plan here') as HTMLTextAreaElement).value).toBe('{"fast": true}')
   })
 
   it('ignores a slow read when the user typed meanwhile', async () => {
     const { container } = renderTab()
     let release: (s: string) => void = () => {}
     upload(container, fileWith('slow.json', () => new Promise<string>((r) => (release = r))))
-    fireEvent.change(screen.getByLabelText('Plan text'), { target: { value: 'typed' } })
+    fireEvent.change(screen.getByLabelText('Paste the plan here'), { target: { value: 'typed' } })
     await act(async () => release('{"slow": true}'))
-    expect((screen.getByLabelText('Plan text') as HTMLTextAreaElement).value).toBe('typed')
+    expect((screen.getByLabelText('Paste the plan here') as HTMLTextAreaElement).value).toBe('typed')
   })
 })
