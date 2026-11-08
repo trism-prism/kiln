@@ -81,9 +81,10 @@ Input over 5 MB is rejected before parsing with `input: text is larger than 5 MB
 | `deadline` | date | no; auto: forbidden | `>= startDate` | All `core` and `recommended` tasks should be done by the end of this day. Drives deferral (see Priority). In auto mode the user sets a deadline in the app instead. |
 | `sources` | Source[] | no | at most 50 | Whole works the plan draws on (a course, a book). Lets Kiln total study time per source. |
 | `dailyPractice` | DailyPractice | no | | Daily problem slot. Absent means no daily slot. |
+| `studyMinutesPerWeek` | integer | no | 15-2400 | Makes the plan a study time plan (see Study time plans). |
 | `part` | Part | no | | Present only when the plan is split across several files. |
-| `modules` | Module[] | yes | 1-100 | Ordered groups of tasks (weeks, units, chapters). |
-| `tasks` | Task[] | yes | 1-2000 | The schedulable work. |
+| `modules` | Module[] | yes, unless a study time plan | 1-100 (empty in a study time plan) | Ordered groups of tasks (weeks, units, chapters). Defaults to an empty list. |
+| `tasks` | Task[] | yes, unless a study time plan | 1-2000 (empty in a study time plan) | The schedulable work. Defaults to an empty list. |
 
 Derived, never stored: total estimate (sum of `estimatedMinutes`), minutes per module, per topic and per source, task counts, projected end date. A file that contains `totalEstimate` gets the warning `totalEstimate is derived by Kiln and was ignored`.
 
@@ -241,6 +242,24 @@ Topic matching for NeetCode uses these topic strings. DSA plans should tag lesso
 | `math-geometry` | Math & Geometry |
 | `bit-manipulation` | Bit Manipulation |
 
+## Study time plans
+
+A plan with `studyMinutesPerWeek` is a study time plan: a subject and a time per week, with no lessons or tasks. Kiln plans one session a day from the weekly time.
+
+```json
+{"schemaVersion": 1, "id": "study-psychology", "title": "Psychology", "subject": "Psychology", "schedulingMode": "auto", "studyMinutesPerWeek": 180}
+```
+
+- `modules` and `tasks` are empty (or left out). `sources`, `dailyPractice` and `part` are not allowed, and `schedulingMode` is `"auto"`: the file has no dates. The start and end dates are set in Kiln.
+- The plan's name is its `title`; each session is called "Study <title>".
+- Which days: every day with study minutes in Settings, from the plan's start to its end. Days off get none.
+- How a week splits: in proportion to each day's minutes, in 5-minute steps, adding up to the weekly time. A first or last partial week, or a week with days off, gets its share. Example: 3 hours a week with 60 minutes Monday to Friday and 120 on Saturday is 25 minutes Monday to Friday and 55 on Saturday.
+- Sessions are 15 to 120 minutes and never more than the day's minutes; shorter ones merge into fewer days.
+- A missed session expires; its minutes move to the rest of the same week, never into the next one. It is never overdue.
+- When study time plans ask for more than a week holds, they all shrink by the same factor. Study time is reserved before reviews, daily problems and tasks on each day, so other plans get the room that is left.
+- A finished session counts toward the streak and the heatmap on the day it was ticked.
+- A plan never changes kind: re-importing the same `id` as a task plan (or the other way round) adds a copy.
+
 ## Parts (large plans)
 
 A plan too long for one LLM reply is written as several files with the same `id`.
@@ -298,6 +317,8 @@ Validation runs in two passes: shape (types, required fields, enums, ranges, len
 - Practice: `practice` on a type other than `practice` or `assessment`; leetcode without `slug`; other without `url`.
 - Minutes: outside 5-180 (0-180 for milestones).
 - Parts: rules in Parts.
+- Lists: `modules` or `tasks` empty in a plan without `studyMinutesPerWeek` (`modules must have at least 1 item`).
+- Study time plans: `modules` or `tasks` not empty (`must be empty in a study time plan`); `sources`, `dailyPractice` or `part` present (`is not allowed in a study time plan`); `schedulingMode` is `"fixed"` (`must be "auto" in a study time plan`).
 
 ### Warnings
 

@@ -13,6 +13,7 @@ Dexie (IndexedDB) database `kiln`, a small repository API, and JSON backup. No R
 | `reviewLogs` | one row per review | `cardId`, `reviewedAt` |
 | `practiceLog` | daily LeetCode problems done | `date`, `slug` |
 | `practiceItems` | generated daily LeetCode problems placed on a date, open or done (added in schema 3) | `[planId+date+slug]`, `date`, `planId` |
+| `studyItems` | study time plans' sessions, one per plan and day: id `${planId}:${date}`, minutes, open or done, completedAt (schema 5). Plans of this kind have `studyMinutesPerWeek` | `planId`, `date` |
 | `personalTodos` | one-off to-dos outside plans: title, optional date and minutes, done, completedAt, notes (schema 4) | `date` |
 | `events` | dated items that take no study time (LMS classes, exams): date, endDate, allDay, start/end ms, course, url, planId, feedId, uid (schema 4) | `date`, `planId`, `feedId`, `uid` |
 | `planVersions` | a plan's content, saved by `snapshotPlan` (the plan edit path calls it after saving), newest 20 per plan: createdAt, label, summary, snapshot (schema 4) | `planId` |
@@ -33,6 +34,12 @@ Use `insertRecord`, `updateRecord`, `softDelete`, `softDeletePlan`, `setTaskStat
 ## Sync
 
 Every table except `meta` syncs (`src/sync/README.md`). It reuses `rowSchemas` and `mergeRows` from `backup.ts`, so a new field must be added to the row schema there or it is dropped by backup import and by sync.
+
+Rows go out with a version (`rowVersion` in `src/sync/crypto.ts`): study time plans and `studyItems` are version 2, everything else 1. An app that reads only version 1 (before schema 5) holds version 2 rows back and asks to be updated, so it never strips `studyMinutesPerWeek` and writes the plan back as an empty task plan.
+
+## Study sessions (`study.ts`)
+
+A study time plan has `studyMinutesPerWeek` and no modules or tasks. The scheduler's `studySessions` (`src/domain/scheduler/study.ts`) turns the weekly time into one session a day; `scheduleAll` reserves the minutes first and stores the sessions from today through 34 days ahead (`persistStudy`): done sessions are never touched, open ones before today are tombstoned (missed), open ones follow the output (minutes updated in place, not wanted tombstoned, wanted again revived). The id `${planId}:${date}` means two devices that generate the same session write the same record. `completeStudy(db, id, now)` marks one done with undo; it does not reschedule. `topUpStudy(db, today)` (in `schedule.ts`) runs the scheduler once a day per device when a study plan exists, and `refreshStudy` after budget changes. `softDeletePlan` tombstones the plan's sessions.
 
 ## Plan settings, to-dos, events, versions (schema 4)
 
