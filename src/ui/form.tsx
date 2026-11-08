@@ -49,12 +49,15 @@ export function TextField({
   className = '',
   onInvalidChange,
   min,
+  suffix,
   ...props
 }: Omit<TextFieldProps, 'className'> & {
   label: string
   description?: string
   errorMessage?: string
   className?: string
+  /** A unit drawn inside the box on the right ("times", "min"). */
+  suffix?: string
   /** Date fields only: told whether the typed text can't be used, so the form can hold off saving. */
   onInvalidChange?: (invalid: boolean) => void
   /** Date fields only: the earliest yyyy-mm-dd allowed. */
@@ -80,7 +83,16 @@ export function TextField({
   return (
     <AriaTextField {...props} className={`${field} ${className}`}>
       <Label className="font-medium">{label}</Label>
-      <Input className={`${control} placeholder:text-text-muted`} />
+      {suffix ? (
+        <div className="relative">
+          <Input className={`${control} w-full pr-16 placeholder:text-text-muted`} />
+          <span aria-hidden="true" className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-text-muted">
+            {suffix}
+          </span>
+        </div>
+      ) : (
+        <Input className={`${control} placeholder:text-text-muted`} />
+      )}
       {description && <Text slot="description" className={help}>{description}</Text>}
       <FieldError className={error}>{errorMessage}</FieldError>
     </AriaTextField>

@@ -119,8 +119,8 @@ export function expandRepeat(text: string, times: number): string {
  * The draft modules for the text. Lines starting with # or ## start a module; tasks before the
  * first heading go into "Tasks". A task's uid is its line text plus how often that text came
  * before, so edits made in the preview stay on their row while other lines change. Identical lines
- * are told apart only by order: deleting the first of two "Read" lines gives the second one the
- * first one's edits ("Read#1"), and the second one's edits are dropped.
+ * are told apart only by order: deleting the first of two "Read" lines leaves the other one as
+ * "Read#1" with the first one's edits, and the "Read#2" edits are dropped.
  */
 export function parseQuickAdd(text: string, today: string, times = 1): DraftModule[] {
   const modules: DraftModule[] = []

@@ -224,6 +224,28 @@ test('quick add: 12 lines become a plan that imports', async ({ page }) => {
   await importIt(page)
 })
 
+test('quick add: Repeat counts up each 1, caps at 52, and a due cell takes typed dates', async ({ page }) => {
+  await page.goto('/import')
+  await page.getByRole('tab', { name: 'Quick add' }).click()
+  const panel = page.getByRole('tabpanel', { name: 'Quick add' })
+  await panel.getByRole('textbox', { name: 'Tasks, one per line' }).fill('# Week 1\nRead chapter 1 1h')
+  const repeat = panel.getByRole('textbox', { name: 'Repeat' })
+  await expect(repeat).toHaveAccessibleDescription('Each copy counts up any 1: Week 1, Week 2, Week 3.')
+  await repeat.fill('3')
+  await expect(panel.getByRole('status').first()).toHaveText('3 tasks in 3 modules')
+  await expect(panel.getByRole('textbox', { name: 'Task 3 title' })).toHaveValue('Read chapter 3')
+  await expect(panel.getByRole('textbox', { name: 'Task 3 minutes' })).toHaveValue('60')
+  await expect(panel.locator('th', { hasText: 'Week 3' })).toBeVisible()
+  await repeat.fill('60')
+  await expect(panel.getByText('Up to 52 times.')).toBeVisible()
+  await expect(panel.getByRole('status').first()).toHaveText('52 tasks in 52 modules')
+  await repeat.fill('1')
+  const due = panel.getByRole('textbox', { name: 'Task 1 due' })
+  await due.fill('dec 24 2030')
+  await due.press('Enter')
+  await expect(due).toHaveValue('Tue, Dec 24, 2030')
+})
+
 test('a changed study budget persists and offers a reschedule', async ({ page }) => {
   await page.goto('/settings')
   await expect(page.getByRole('row', { name: /Monday/ })).toContainText('120 min')

@@ -5,6 +5,7 @@ import { toLocalISODate } from '../../lib/date'
 import { PRIORITY_HINT, PRIORITY_LABEL } from '../priority'
 import { PRIORITY_VALUES, TYPE_OPTIONS } from './builder-options'
 import { Button } from '../../ui/button'
+import { DateField } from '../../ui/date'
 import { TextField } from '../../ui/form'
 import type { Draft, DraftTask } from './builder'
 import type { Input as ReviewInput } from './logic'
@@ -12,19 +13,20 @@ import { dropPastDue, MAX_REPEAT, parseQuickAdd } from './quick-add'
 import { Review } from './Review'
 
 const cell = 'h-9 w-full rounded-md border border-border-strong bg-surface-raised px-2 text-sm text-text'
-const EXAMPLE = '# Week {n}\nRead chapter {n} 45m\nWatch the lecture https://youtube.com/...\nPractice set {n} 1h fri\nExtra reading ?'
+const EXAMPLE = '# Week 1\nRead chapter 1 45m\nWatch the lecture https://youtube.com/...\nPractice set 1 1h fri\nExtra reading ?'
 
 export function BuildTab() {
   const today = toLocalISODate(new Date())
   const [title, setTitle] = useState('')
   const [text, setText] = useState('')
   const [repeat, setRepeat] = useState('1')
-  // Fixes made in the table, by row uid; they stay while the row's line is unchanged.
+  // Fixes made in the table, by row uid (the line's text and which copy of that text it is, see parseQuickAdd).
   const [edits, setEdits] = useState<Record<string, Partial<DraftTask>>>({})
   // The snapshot being reviewed: changes do not touch it until "Review plan" is pressed again.
   const [reviewed, setReviewed] = useState<{ input: ReviewInput; n: number }>()
 
-  const times = Math.min(Math.max(Number.parseInt(repeat, 10) || 1, 1), MAX_REPEAT)
+  const typedTimes = Number.parseInt(repeat, 10) || 1
+  const times = Math.min(Math.max(typedTimes, 1), MAX_REPEAT)
   const [droppedEdits, setDroppedEdits] = useState(0)
   const parsed = useMemo(() => parseQuickAdd(text, today, times), [text, today, times])
   // Past dates are cleared after the table edits apply, so a date typed in the table is checked too.
@@ -33,8 +35,10 @@ export function BuildTab() {
     [parsed, today, edits],
   )
   const taskCount = modules.reduce((n, m) => n + m.tasks.length, 0)
-  // Edits belong to a line's text. When the text changes, edits whose line is gone are dropped, so
-  // an old fix does not come back when the line is typed again.
+  // Edits belong to a line's text and its place among identical lines. When the text changes, edits
+  // whose uid is gone are dropped, so an old fix does not come back when the line is typed again.
+  // Identical lines keep their edits by order: removing one of them leaves the remaining lines with the
+  // first copies' edits and drops the last copy's, whichever line was removed.
   function change(nextText: string, nextTimes: number) {
     const live = new Set(parseQuickAdd(nextText, today, nextTimes).flatMap((m) => m.tasks.map((t) => t.uid)))
     const gone = Object.keys(edits).filter((uid) => !live.has(uid))
@@ -49,7 +53,6 @@ export function BuildTab() {
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
-      <p className="text-sm text-text-muted">Make a plan for any subject: type one task per line, check the preview, and import it.</p>
       <TextField label="Plan title" value={title} onChange={setTitle} className="max-w-xl" />
       <div className="grid gap-1.5 text-sm">
         <label htmlFor="quick-add" className="font-medium">
@@ -66,23 +69,25 @@ export function BuildTab() {
           rows={10}
           spellCheck={false}
           placeholder={EXAMPLE}
-          className="min-h-40 w-full rounded-md border border-border-strong bg-surface-raised p-3 font-mono text-sm text-text placeholder:text-text-muted"
+          className="min-h-40 w-full rounded-md border border-border-strong bg-surface-raised p-3 text-sm text-text placeholder:text-text-muted"
         />
         <p id="quick-add-help" className="text-text-muted">
-          A line starting with # starts a module. On a task line, add a time (45m, 1h30m), a due day (today, tomorrow, fri, nov 20), ! for Essential or ? for
-          Optional, and any links. Defaults: 30 min, Essential.
+          Start a line with # for a new module. Add a time (45m), a day (fri or nov 20), ! for Essential, ? for Optional, and any links.
         </p>
       </div>
       <TextField
-        label="Repeat ×N"
+        label="Repeat"
+        suffix="times"
         inputMode="numeric"
         value={repeat}
         onChange={(v) => {
           change(text, Math.min(Math.max(Number.parseInt(v, 10) || 1, 1), MAX_REPEAT))
           setRepeat(v)
         }}
-        className="max-w-48"
-        description="1 to 52. Copies the list N times; {n} becomes 1, 2, 3..."
+        className="max-w-40"
+        description="Each copy counts up any 1: Week 1, Week 2, Week 3."
+        isInvalid={typedTimes > MAX_REPEAT}
+        errorMessage={`Up to ${MAX_REPEAT} times.`}
       />
 
       <p role="status" className="text-sm text-text-muted">
@@ -141,7 +146,7 @@ export function BuildTab() {
                           <input aria-label={`Task ${n} minutes`} inputMode="numeric" value={t.minutes} onChange={(e) => edit(t.uid, { minutes: e.target.value })} className={cell} />
                         </td>
                         <td className="p-1">
-                          <input aria-label={`Task ${n} due`} type="date" value={t.due} onChange={(e) => edit(t.uid, { due: e.target.value })} className={cell} />
+                          <DateField size="sm" aria-label={`Task ${n} due`} value={t.due} min={today} onChange={(due) => edit(t.uid, { due })} />
                         </td>
                         <td className="p-1">
                           <select aria-label={`Task ${n} priority`} value={t.priority} onChange={(e) => edit(t.uid, { priority: e.target.value as DraftTask['priority'] })} className={cell}>
