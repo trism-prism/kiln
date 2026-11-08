@@ -1,13 +1,18 @@
-import { SHARE_LABEL, shareFromWeight } from '../../data'
+import { isStudyPlan, SHARE_LABEL, shareFromWeight } from '../../data'
+import { shortDate } from '../../domain/todo'
 import { Link } from '../../ui/button'
 import { Badge, EmptyState, ProgressBar, Skeleton } from '../../ui/surface'
 import { formatDay } from '../../lib/date'
 import { Page } from '../Page'
+import { minutesText, StudyWeekBar } from '../parts'
 import { FavoriteButton } from '../plan/PlanExtras'
 import { usePlanSummaries, useToday } from '../queries'
 
 export default function PlansPage() {
-  const plans = usePlanSummaries(useToday())
+  const today = useToday()
+  const plans = usePlanSummaries(today)
+  // Share of study time is only a choice between task plans (a study time plan has its own weekly time).
+  const taskPlans = plans?.filter((s) => !isStudyPlan(s.plan)).length ?? 0
   return (
     <Page title="Plans" actions={<Link href="/import" variant="secondary">Import a plan</Link>}>
       {!plans ? (
@@ -29,17 +34,23 @@ export default function PlansPage() {
                   {s.overdue > 0 && <Badge tone="danger">{s.overdue} overdue</Badge>}
                 </div>
                 <p className="text-sm text-text-muted">
-                  {[
+                  {(s.study
+                    ? [`${minutesText(s.plan.studyMinutesPerWeek ?? 0)} a week`, s.plan.deadline ? `ends ${shortDate(s.plan.deadline, today)}` : undefined]
+                    : [
                     `${s.allTotal} tasks`,
-                    plans.length > 1 ? `${SHARE_LABEL[s.plan.share ?? shareFromWeight(s.plan.weight)]} share of study time` : undefined,
+                    taskPlans > 1 ? `${SHARE_LABEL[s.plan.share ?? shareFromWeight(s.plan.weight)]} share of study time` : undefined,
                     s.plan.deadline ? `deadline ${formatDay(s.plan.deadline, true)}` : undefined,
                     s.finish ? `expected finish ${formatDay(s.finish, true)}` : undefined,
-                  ]
+                  ])
                     .filter(Boolean)
                     .join(' · ')}
                 </p>
               </div>
-              <ProgressBar label="Essential tasks" value={s.coreTotal ? Math.round((s.coreDone / s.coreTotal) * 100) : 0} valueLabel={`${s.coreDone} of ${s.coreTotal}`} />
+              {s.study ? (
+                <StudyWeekBar week={s.study} />
+              ) : (
+                <ProgressBar label="Essential tasks" value={s.coreTotal ? Math.round((s.coreDone / s.coreTotal) * 100) : 0} valueLabel={`${s.coreDone} of ${s.coreTotal}`} />
+              )}
             </li>
           ))}
         </ul>

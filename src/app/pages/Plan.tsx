@@ -5,6 +5,7 @@ import { useNavigate, useParams } from 'react-router'
 import {
   db,
   getSettings,
+  isStudyPlan,
   listPlans,
   practiceOn,
   reviewsOn,
@@ -15,23 +16,26 @@ import {
   SHARES,
   softDeletePlan,
   updateRecord,
+  type PlanRecord,
   type Share,
   type TaskRecord,
 } from '../../data'
 import { cardMinutes } from '../../domain/mastery'
+import { dayLabel, shortDate } from '../../domain/todo'
 import { formatDay, isRealISODate, toLocalISODate } from '../../lib/date'
 import { Button, Link } from '../../ui/button'
 import { ListBoxItem, Select, Switch, TextField } from '../../ui/form'
 import { Sheet, toasts } from '../../ui/overlay'
-import { Badge, Card, EmptyState, ProgressBar, Skeleton } from '../../ui/surface'
+import { Badge, Card, EmptyState, ProgressBar, Skeleton, Stat } from '../../ui/surface'
 import { rescheduleOverdue, safely, scheduleBacklogAgain } from '../actions'
 import { Page } from '../Page'
 import { PlanEditor } from '../plan/PlanEditor'
 import { shareExample } from '../plan/share-example'
 import { FavoriteButton, History } from '../plan/PlanExtras'
-import { minutesText, TitleLink } from '../parts'
+import { StudyTimeSheet } from '../plan/StudyTimeSheet'
+import { minutesText, StudyWeekBar, TitleLink } from '../parts'
 import { PRIORITY_LABEL } from '../priority'
-import { usePlanDetail, useToday, type PlanDetail } from '../queries'
+import { usePlanDetail, useStudyDetail, useToday, type PlanDetail } from '../queries'
 
 function TaskRow({ t, today }: { t: TaskRecord; today: string }) {
   const overdue = t.status === 'open' && !!t.scheduledDate && t.scheduledDate < today
@@ -101,7 +105,7 @@ function Settings({ detail, today }: { detail: PlanDetail; today: string }) {
   return (
     <Card className="grid h-fit gap-5">
       <h2 className="text-base font-medium">Plan settings</h2>
-      {others && others.plans.length > 1 && (
+      {others && others.plans.filter((p) => !isStudyPlan(p)).length > 1 && (
         <Select
           label="Share of study time"
           description={example ? `${example[0]!.toUpperCase()}${example.slice(1)}.` : undefined}
@@ -150,6 +154,53 @@ function Settings({ detail, today }: { detail: PlanDetail; today: string }) {
   )
 }
 
+/** A study time plan's main column: this week and the next 7 days of sessions. Checking off happens in To Do. */
+function StudySessions({ plan, today }: { plan: PlanRecord; today: string }) {
+  const d = useStudyDetail(plan.id, today)
+  if (!d) return <Skeleton className="h-40 w-full" />
+  const ended = plan.deadline !== undefined && plan.deadline < today
+  return (
+    <div className="grid min-w-0 content-start gap-8">
+      <StudyWeekBar week={d.week} />
+      <section aria-labelledby="sessions" className="grid gap-3">
+        <h2 id="sessions" className="text-base font-medium">
+          Sessions
+        </h2>
+        {ended ? (
+          <p className="text-sm text-text-muted">This plan ended on {formatDay(plan.deadline!, true)}.</p>
+        ) : d.next.length === 0 ? (
+          <p className="text-sm text-text-muted">No sessions in the next 7 days.</p>
+        ) : (
+          <ul className="divide-y divide-border rounded-lg border border-border bg-surface-raised px-4 shadow-sm">
+            {d.next.map((s) => {
+              const { label, dateText } = dayLabel(s.date, today)
+              return (
+                <li key={s.id} className="flex items-center gap-3 py-2.5 text-sm">
+                  <span className={`min-w-0 flex-1 font-medium ${s.status === 'done' ? 'text-text-muted' : ''}`}>{label === 'Today' || label === 'Tomorrow' ? label : dateText}</span>
+                  {s.status === 'done' && <Badge tone="success">Done</Badge>}
+                  <span className="text-text-muted tabular-nums">{minutesText(s.minutes)}</span>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </section>
+    </div>
+  )
+}
+
+function StudySettings({ plan, today }: { plan: PlanRecord; today: string }) {
+  return (
+    <Card className="grid h-fit gap-4">
+      <h2 className="text-base font-medium">Plan settings</h2>
+      <dl className="grid gap-y-2 text-sm">
+        <Stat label="Time per week" value={minutesText(plan.studyMinutesPerWeek ?? 0)} />
+        <Stat label="Ends" value={plan.deadline ? shortDate(plan.deadline, today) : 'No end date'} />
+      </dl>
+    </Card>
+  )
+}
+
 function DeleteDialog({ detail, isOpen, onOpenChange }: { detail: PlanDetail; isOpen: boolean; onOpenChange: (o: boolean) => void }) {
   const navigate = useNavigate()
   return (
@@ -157,7 +208,9 @@ function DeleteDialog({ detail, isOpen, onOpenChange }: { detail: PlanDetail; is
       {({ close }) => (
         <div className="grid gap-4">
           <p className="text-sm">
-            {detail.plan.title} and its tasks, reviews and history are removed from this device. Export a backup first if you might want them back.
+            {isStudyPlan(detail.plan)
+              ? `${detail.plan.title} and its study history are removed from this device. Export a backup first if you might want them back.`
+              : `${detail.plan.title} and its tasks, reviews and history are removed from this device. Export a backup first if you might want them back.`}
           </p>
           <div className="flex justify-end gap-2">
             <Button variant="quiet" onPress={close}>
@@ -187,12 +240,14 @@ type PlanActionsProps = {
   className: string
   editRef: RefObject<HTMLButtonElement | null>
   editing: boolean
+  /** Study time plans have nothing to reschedule (nothing of theirs is ever overdue). */
+  study: boolean
   onEdit: () => void
   onDelete: () => void
 }
 
 /** Rendered twice: in the top bar from md up, and as a row above the content on phones. */
-function PlanActions({ className, editRef, editing, onEdit, onDelete }: PlanActionsProps) {
+function PlanActions({ className, editRef, editing, study, onEdit, onDelete }: PlanActionsProps) {
   return (
     <div className={`${className} shrink-0 items-center gap-2`}>
       {!editing && (
@@ -200,9 +255,11 @@ function PlanActions({ className, editRef, editing, onEdit, onDelete }: PlanActi
           Edit plan
         </Button>
       )}
-      <Button variant="secondary" onPress={() => void rescheduleOverdue()}>
-        Reschedule
-      </Button>
+      {!study && (
+        <Button variant="secondary" onPress={() => void rescheduleOverdue()}>
+          Reschedule
+        </Button>
+      )}
       <Button variant="danger-outline" onPress={onDelete}>
         {/* No icon on phones, so the row fits a 360px screen. */}
         <Trash2 size={16} aria-hidden="true" className="hidden md:block" /> Delete plan
@@ -217,6 +274,7 @@ export default function PlanPage() {
   const today = useToday()
   const [confirming, setConfirming] = useState(false)
   const [editing, setEditing] = useState(false)
+  const [editingStudy, setEditingStudy] = useState(false)
   const barEdit = useRef<HTMLButtonElement>(null)
   const rowEdit = useRef<HTMLButtonElement>(null)
   // Closing the editor returns focus to the button that opened it (the copy that is on screen).
@@ -245,7 +303,8 @@ export default function PlanPage() {
 
   const all = detail.modules.flatMap((m) => m.tasks).filter((t) => t.status !== 'skipped')
   const done = all.filter((t) => t.status === 'done').length
-  const actions = { editing, onEdit: () => setEditing(true), onDelete: () => setConfirming(true) }
+  const study = isStudyPlan(detail.plan)
+  const actions = { editing, study, onEdit: () => (study ? setEditingStudy(true) : setEditing(true)), onDelete: () => setConfirming(true) }
   return (
     <Page
       title={detail.plan.title}
@@ -261,7 +320,9 @@ export default function PlanPage() {
           only if a longer label can't fit. p-1 keeps focus rings unclipped. */}
       <PlanActions className="-m-1 mb-5 flex overflow-x-auto p-1 *:grow *:px-2 md:hidden" editRef={rowEdit} {...actions} />
       <div className="grid gap-8 lg:grid-cols-[1fr_20rem]">
-        {editing ? (
+        {study ? (
+          <StudySessions plan={detail.plan} today={today} />
+        ) : editing ? (
           <div className="min-w-0">
             <PlanEditor detail={detail} onClose={() => setEditing(false)} />
           </div>
@@ -295,11 +356,12 @@ export default function PlanPage() {
           </div>
         )}
         <div className="grid content-start gap-8">
-          <Settings detail={detail} today={today} />
-          {!editing && <History planId={detail.plan.id} />}
+          {study ? <StudySettings plan={detail.plan} today={today} /> : <Settings detail={detail} today={today} />}
+          {!editing && !study && <History planId={detail.plan.id} />}
         </div>
       </div>
       <DeleteDialog detail={detail} isOpen={confirming} onOpenChange={setConfirming} />
+      {study && <StudyTimeSheet isOpen={editingStudy} today={today} onClose={() => setEditingStudy(false)} plan={detail.plan} />}
     </Page>
   )
 }

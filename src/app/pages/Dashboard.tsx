@@ -5,10 +5,32 @@ import { formatDay } from '../../lib/date'
 import { rescheduleOverdue } from '../actions'
 import { canSeed, loadSamplePlans } from '../devSeed'
 import { Page } from '../Page'
-import { percent } from '../parts'
-import { usePlanSummaries, useToday, type PlanSummary } from '../queries'
+import { shortDate } from '../../domain/todo'
+import { minutesText, percent, StudyWeekBar } from '../parts'
+import { usePlanSummaries, useToday, type PlanSummary, type StudyWeek } from '../queries'
 
 const pct = (n: number, of: number) => (of > 0 ? Math.round((n / of) * 100) : 0)
+
+/** A study time plan: today's session, this week, and the end date if it has one. */
+function StudyCard({ s, study, today }: { s: PlanSummary; study: StudyWeek; today: string }) {
+  const { plan } = s
+  return (
+    <Card className="grid content-start gap-4">
+      <h2 className="text-base font-medium">
+        <Link href={`/plans/${plan.id}`} className="text-text no-underline data-hovered:underline">
+          {plan.title}
+        </Link>
+      </h2>
+      <p className="text-sm text-text-muted">{!study.today ? 'Nothing today' : study.today.done ? 'Done for today' : `${minutesText(study.today.minutes)} today`}</p>
+      <StudyWeekBar week={study} />
+      {plan.deadline && (
+        <p className="text-sm text-text-muted">
+          {plan.deadline < today ? 'Ended' : 'Ends'} {shortDate(plan.deadline, today)}
+        </p>
+      )}
+    </Card>
+  )
+}
 
 function PlanCard({ s }: { s: PlanSummary }) {
   const { plan } = s
@@ -76,9 +98,7 @@ export default function DashboardPage() {
         </EmptyState>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
-          {plans.map((s) => (
-            <PlanCard key={s.plan.id} s={s} />
-          ))}
+          {plans.map((s) => (s.study ? <StudyCard key={s.plan.id} s={s} study={s.study} today={today} /> : <PlanCard key={s.plan.id} s={s} />))}
         </div>
       )}
     </Page>

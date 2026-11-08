@@ -5,7 +5,8 @@ import { leetcodeUrl } from '../data'
 import { DEFAULT_PRACTICE_LANGUAGE } from '../domain/plan-format'
 import { Link } from '../ui/button'
 import type { TodoItem } from '../domain/todo'
-import { Badge } from '../ui/surface'
+import { Badge, ProgressBar } from '../ui/surface'
+import type { StudyWeek } from './queries'
 
 const TONE = { easy: 'success', medium: 'warning', hard: 'danger' } as const
 
@@ -37,3 +38,15 @@ export const percent = (fraction: number) => `${Math.round(fraction * 100)}%`
  * session's title already names its plan ("Study Psychology"), so its line is "Study time · 45 min". */
 export const itemMeta = (item: TodoItem) =>
   [item.kind === 'study' ? '' : item.planTitle, item.typeLabel, item.minutes > 0 || (item.kind !== 'event' && item.kind !== 'personal') ? minutesText(item.minutes) : ''].filter(Boolean).join(' · ')
+
+/** "1 h 15 min of 3 h": a study time plan's week (done of planned), on the plan page and the plan cards. */
+export function StudyWeekBar({ week }: { week: StudyWeek }) {
+  const { weekDone, weekPlanned } = week
+  return (
+    <ProgressBar
+      label="This week"
+      value={weekPlanned ? Math.min(100, Math.round((weekDone / weekPlanned) * 100)) : 0}
+      valueLabel={weekPlanned ? `${minutesText(weekDone)} of ${minutesText(weekPlanned)}` : 'Nothing planned this week'}
+    />
+  )
+}
