@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { mockWorker } from './worker-mock'
+import { mockWorker, newRelay } from './worker-mock'
 
 test.beforeEach(async ({ context }) => {
   await mockWorker(context)
@@ -72,44 +72,89 @@ test.describe('onboarding', () => {
   })
 })
 
-test('the sync key shows 24 words and a QR code, and validates on a second device', async ({ browser }) => {
+// Two browsers, one server: the pairing messages go through a shared in-memory relay (worker-mock.ts), and each
+// browser runs the real CPace, so a right code connects them and a wrong one cannot.
+test('a second device joins with a 6-digit code, a wrong code is rejected, and Disconnect ends sync on both', async ({ browser }) => {
+  const slow = { timeout: 20_000 }
+  const relay = newRelay()
   const a = await browser.newContext()
-  await mockWorker(a)
+  await mockWorker(a, relay)
   const first = await a.newPage()
   await first.goto('/settings')
-  await first.getByRole('button', { name: 'Create a sync key' }).click()
-  const list = first.getByRole('list', { name: 'Sync key, 24 words' })
-  await expect(list.getByRole('listitem')).toHaveCount(24)
-  await expect(first.getByRole('img', { name: 'QR code of your sync key' })).toBeVisible()
-  const words = (await list.locator('li span.font-medium').allTextContents()).join(' ')
-  expect(words.split(' ')).toHaveLength(24)
+  await first.getByRole('button', { name: 'Set up sync' }).click()
+  const code = first.getByTestId('pair-code')
+  await expect(code).toHaveText(/^\d{3} \d{3}$/, slow)
+  await expect(first.getByText(/Expires in [0-3]:\d\d/)).toBeVisible()
+  await expect(first.getByText('Waiting for your other device...')).toBeVisible()
+  const digits = ((await code.textContent()) ?? '').replace(/\D/g, '')
+  expect(digits).toHaveLength(6)
 
-  // A second device: no server needed to check the words.
   const b = await browser.newContext()
-  await mockWorker(b)
+  await mockWorker(b, relay)
   const second = await b.newPage()
   await second.goto('/settings')
-  await second.getByRole('button', { name: 'Join with a key' }).click()
-  const box = second.getByRole('textbox', { name: 'Sync key' })
+  await second.getByRole('button', { name: 'Join with a code' }).click()
+  const field = second.getByRole('textbox', { name: 'Code from your other device' })
   const join = second.getByRole('button', { name: 'Join', exact: true })
-
-  await box.fill(words.split(' ').slice(0, 5).join(' '))
-  await expect(second.getByText('5 of 24 words')).toBeVisible()
   await expect(join).toBeDisabled()
 
-  await box.fill(['zzzzz', ...words.split(' ').slice(1)].join(' '))
-  await expect(second.getByText(/not a valid sync key/)).toBeVisible()
-  await expect(join).toBeDisabled()
-
-  await box.fill(words)
-  await expect(second.getByText('This is a valid sync key.')).toBeVisible()
+  // A wrong last digit: both screens say so, and the code still works afterwards.
+  const wrong = digits.slice(0, 5) + String((Number(digits[5]) + 1) % 10)
+  await field.fill(wrong)
   await expect(join).toBeEnabled()
   await join.click()
-  await expect(second.getByText(/^Sync is on\. Last synced/)).toBeVisible()
-  await second.getByRole('button', { name: 'Show key' }).click()
-  const joined = (await second.getByRole('list', { name: 'Sync key, 24 words' }).locator('li span.font-medium').allTextContents()).join(' ')
-  expect(joined).toBe(words)
-  await expect(second.getByTestId('sync-summary')).toContainText('Received 0')
+  await expect(second.getByText(/That code did not match.*2 tries left\./)).toBeVisible(slow)
+  await expect(field).toHaveValue('')
+  await expect(first.getByText('Someone entered a wrong code. 2 tries left.')).toBeVisible(slow)
+  await expect(code).toBeVisible()
+
+  await field.fill(digits.slice(0, 3) + ' ' + digits.slice(3))
+  await join.click()
+  await expect(second.getByText(/^Sync is on\. Last synced/)).toBeVisible(slow)
+  await expect(first.getByText(/^Sync is on\. Last synced/)).toBeVisible(slow)
+  await expect(first.getByRole('button', { name: 'Sync a device' })).toBeVisible()
+  await expect(first.getByTestId('pair-code')).toBeHidden()
+
+  // Disconnect on the first device: it is off at once, the second finds out on its next run.
+  await first.getByRole('button', { name: 'Disconnect device' }).click()
+  await expect(first.getByText('This stops sync on this device and on every device it syncs with.')).toBeVisible()
+  await first.getByRole('dialog').getByRole('button', { name: 'Disconnect', exact: true }).click()
+  await expect(first.getByRole('button', { name: 'Set up sync' })).toBeVisible()
+  await second.reload()
+  await expect(second.getByRole('button', { name: 'Set up sync' })).toBeVisible(slow)
+  await expect(second.getByText('Sync was turned off from another device. Everything on this device stays here.')).toBeVisible(slow)
+
+  await a.close()
+  await b.close()
+})
+
+test('three wrong codes end the code on both screens', async ({ browser }) => {
+  const slow = { timeout: 20_000 }
+  const relay = newRelay()
+  const a = await browser.newContext()
+  await mockWorker(a, relay)
+  const first = await a.newPage()
+  await first.goto('/settings')
+  await first.getByRole('button', { name: 'Set up sync' }).click()
+  const digits = (((await first.getByTestId('pair-code').textContent({ timeout: 20_000 })) ?? '').replace(/\D/g, ''))
+  const b = await browser.newContext()
+  await mockWorker(b, relay)
+  const second = await b.newPage()
+  await second.goto('/settings')
+  await second.getByRole('button', { name: 'Join with a code' }).click()
+  const wrong = digits.slice(0, 5) + String((Number(digits[5]) + 1) % 10)
+  for (const left of ['2 tries left', '1 try left']) {
+    await second.getByRole('textbox', { name: 'Code from your other device' }).fill(wrong)
+    await second.getByRole('button', { name: 'Join', exact: true }).click()
+    await expect(second.getByText(new RegExp(left))).toBeVisible(slow)
+  }
+  await second.getByRole('textbox', { name: 'Code from your other device' }).fill(wrong)
+  await second.getByRole('button', { name: 'Join', exact: true }).click()
+  await expect(second.getByText('Too many wrong tries. Get a new code on your other device.')).toBeVisible(slow)
+  await expect(first.getByText('Too many wrong tries, so this code no longer works.')).toBeVisible(slow)
+  await expect(first.getByRole('button', { name: 'Get a new code' })).toBeVisible()
+  await first.getByRole('button', { name: 'Get a new code' }).click()
+  await expect(first.getByTestId('pair-code')).toBeVisible(slow)
 
   await a.close()
   await b.close()
