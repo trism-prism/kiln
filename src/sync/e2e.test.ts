@@ -11,8 +11,9 @@ import { readSnapshot, snapshotPlan } from '../data/versions'
 import { newDb } from '../data/test-db'
 import type { PracticeLogRecord } from '../data/types'
 import type { Plan } from '../domain/plan-format'
-import { deriveKeys, encryptRow, generateSyncKey, keyToMnemonic, mnemonicToKey } from './crypto'
-import { disableSync, enableSync, enableSyncFromQr, getSyncSecret, getSyncStatus, syncNow, type SyncSummary } from './index'
+import { deriveKeys, encryptRow, generateSyncKey } from './crypto'
+import { disableSync, disconnectSync, enableSyncKey, getSyncKey, getSyncStatus, syncNow, type SyncSummary } from './index'
+import { cleanCode, hostPairing, joinPairing, type HostState, type JoinState } from './pair'
 
 // SYNC_VERSION as this test's client sees it: set `clientVersion.v` to act as an older app.
 const clientVersion = vi.hoisted(() => ({ v: undefined as number | undefined }))
@@ -69,13 +70,13 @@ const { default: worker } = (await import(/* @vite-ignore */ workerPath)) as {
 const sqlite = new DatabaseSync(':memory:')
 for (const sql of Object.values(migrations)) sqlite.exec(sql)
 const d1 = fakeD1(sqlite)
-const reset = () => sqlite.exec('DELETE FROM sync_records; DELETE FROM sync_spaces')
+const reset = () => sqlite.exec('DELETE FROM sync_records; DELETE FROM sync_spaces; DELETE FROM sync_pairings')
 
 const BASE = 'https://kiln.test'
 const worldFetch =
   (over: WorkerEnv = {}): typeof fetch =>
   (input, init) =>
-    worker.fetch(new Request(input as string, init), { DB: d1, ALLOWED_ORIGINS: '', ...over })
+    worker.fetch(new Request(input as string, init), { DB: d1, ALLOWED_ORIGINS: '', PAIR_LIMITER: { limit: async () => ({ success: true }) }, ...over })
 
 const sync = (db: KilnDB, over: WorkerEnv = {}) => syncNow(db, worldFetch(over), BASE)
 const ok = (s: SyncSummary) => {
@@ -97,9 +98,10 @@ const slugs = async (db: KilnDB) => (await db.practiceLog.toArray()).filter((r) 
 async function twoDevices() {
   const a = newDb()
   const b = newDb()
-  const { mnemonic } = await enableSync(a)
-  await enableSync(b, mnemonic)
-  return { a, b, mnemonic }
+  const key = generateSyncKey()
+  await enableSyncKey(a, key)
+  await enableSyncKey(b, key)
+  return { a, b, key }
 }
 
 describe('two devices', () => {
@@ -208,7 +210,7 @@ describe('two devices', () => {
   it('a key change waits for a running sync: the new space starts with a clean cursor and marks', async () => {
     const { a } = await twoDevices()
     await add(a, 'one')
-    const other = keyToMnemonic(generateSyncKey())
+    const other = generateSyncKey()
     let release!: () => void
     const gate = new Promise<void>((r) => (release = r))
     const slow: typeof fetch = async (input, init) => {
@@ -216,12 +218,13 @@ describe('two devices', () => {
       return worldFetch()(input, init)
     }
     const run = syncNow(a, slow, BASE)
-    const join = enableSync(a, other) // queued behind the run
+    const join = enableSyncKey(a, other) // queued behind the run
     await new Promise((r) => setTimeout(r, 20))
-    expect((await getSyncSecret(a))?.mnemonic).not.toBe(other) // not switched yet
+    expect(await getSyncKey(a)).not.toEqual(other) // not switched yet
     release()
     expect((await run).error).toBeUndefined() // the run finished against the old key
-    expect((await join).mnemonic).toBe(other)
+    await join
+    expect(await getSyncKey(a)).toEqual(other)
     expect(await a.meta.get('syncCursor')).toBeUndefined()
     expect(await a.meta.get('syncPushed')).toBeUndefined()
     expect(ok(await sync(a))).toMatchObject({ pushed: 1 }) // everything goes to the new space
@@ -255,27 +258,9 @@ describe('two devices', () => {
     }
   })
 
-  it('a rejected new key leaves the old one in place; an accepted one replaces it', async () => {
-    const { a } = await twoDevices()
-    const before = (await getSyncSecret(a))!.mnemonic
-    const next = generateSyncKey()
-    const refuse: typeof fetch = async () => new Response('{}', { status: 403 })
-    const refused = await enableSync(a, keyToMnemonic(next), { fetch: refuse, baseUrl: BASE })
-    expect(refused).toMatchObject({ ok: false, error: { kind: 'wrong-key' } })
-    const offline: typeof fetch = () => Promise.reject(new TypeError('offline'))
-    expect(await enableSyncFromQr(a, 'kiln-sync:' + Buffer.from(next).toString('base64url'), { fetch: offline, baseUrl: BASE })).toMatchObject({
-      ok: false,
-      error: { kind: 'network' },
-    })
-    expect((await getSyncSecret(a))?.mnemonic).toBe(before)
-    const accepted = await enableSync(a, keyToMnemonic(next), { fetch: worldFetch(), baseUrl: BASE })
-    expect(accepted).toMatchObject({ ok: true, mnemonic: keyToMnemonic(next) })
-    expect((await getSyncSecret(a))?.mnemonic).toBe(keyToMnemonic(next))
-  })
-
   it('rows written in a newer format wait, sync reports update-required, and a newer valid version clears them', async () => {
-    const { b, mnemonic } = await twoDevices()
-    const keys = await deriveKeys(mnemonicToKey(mnemonic))
+    const { b, key } = await twoDevices()
+    const keys = await deriveKeys(key)
     const base = { deleted: false, deviceId: 'x', date: '2026-11-09', slug: 'future', title: 'future', difficulty: 'easy', completedAt: 1 }
     const put = async (row: Row & { id: string; updatedAt: number }, v: number) => {
       const w = await encryptRow(keys, 'practiceLog', row, v)
@@ -368,8 +353,8 @@ describe('two devices', () => {
   })
 
   it('a row that fails validation today is applied when a later run can accept it', async () => {
-    const { b, mnemonic } = await twoDevices()
-    const keys = await deriveKeys(mnemonicToKey(mnemonic))
+    const { b, key } = await twoDevices()
+    const keys = await deriveKeys(key)
     const t0 = Date.now()
     // Dated 2 days ahead inside the ciphertext: rejected as a clock error now, fine in 2 days.
     const row = { id: 'later-1', updatedAt: t0 + 2 * 86_400_000, deleted: false, deviceId: 'x', date: '2026-11-09', slug: 'later', title: 'later', difficulty: 'easy', completedAt: 1 }
@@ -466,9 +451,10 @@ describe('two devices', () => {
     const b = newDb()
     await add(a, 'on-a')
     await add(b, 'on-b')
-    const { mnemonic } = await enableSync(a)
+    const key = generateSyncKey()
+    await enableSyncKey(a, key)
     ok(await sync(a))
-    await enableSync(b, mnemonic)
+    await enableSyncKey(b, key)
     expect(ok(await sync(b))).toMatchObject({ pulled: 1, applied: 1, pushed: 1 })
     ok(await sync(a))
     expect(await slugs(a)).toEqual(['on-a', 'on-b'])
@@ -492,10 +478,10 @@ describe('two devices', () => {
   })
 
   it('keeps rows that decrypt but fail validation for later, and applies the rest', async () => {
-    const { a, b, mnemonic } = await twoDevices()
+    const { a, b, key } = await twoDevices()
     await add(a, 'fine')
     ok(await sync(a))
-    const keys = await deriveKeys(mnemonicToKey(mnemonic))
+    const keys = await deriveKeys(key)
     const base = { updatedAt: Date.now(), deleted: false, deviceId: 'x' }
     const enc = (table: string, row: Row & { id: string; updatedAt: number }) => encryptRow(keys, table as never, row)
     const wire = [
@@ -608,15 +594,15 @@ describe('trouble', () => {
   it('disableSync forgets the key; the data stays', async () => {
     const { a } = await twoDevices()
     await add(a, 'one')
-    expect(await getSyncSecret(a)).toBeDefined()
+    expect(await getSyncKey(a)).toBeDefined()
     await disableSync(a)
-    expect(await getSyncSecret(a)).toBeUndefined()
+    expect(await getSyncKey(a)).toBeUndefined()
     expect((await sync(a)).error?.kind).toBe('not-enabled')
     expect(await slugs(a)).toEqual(['one'])
   })
 
-  it('the server never holds the words, the key, table names or record ids', async () => {
-    const { a, mnemonic } = await twoDevices()
+  it('the server never holds the key, table names or record ids', async () => {
+    const { a, key } = await twoDevices()
     const r = await add(a, 'secret-slug')
     await updateRecord(a, 'practiceLog', r.id, { title: 'Secret Title' })
     ok(await sync(a))
@@ -624,7 +610,7 @@ describe('trouble', () => {
       (await d1.prepare('SELECT * FROM sync_records').all()).results,
       (await d1.prepare('SELECT * FROM sync_spaces').all()).results,
     ])
-    for (const needle of ['secret-slug', 'Secret Title', 'practiceLog', r.id, mnemonic.split(' ')[0]!]) expect(dump).not.toContain(needle)
+    for (const needle of ['secret-slug', 'Secret Title', 'practiceLog', r.id, Buffer.from(key).toString('base64url')]) expect(dump).not.toContain(needle)
   })
 })
 
@@ -669,5 +655,208 @@ describe('schema 4 tables', () => {
     // The feed URL is a secret: the server only ever holds ciphertext.
     const dump = JSON.stringify((await d1.prepare('SELECT * FROM sync_records').all()).results)
     expect(dump).not.toContain('user_secret')
+  })
+})
+
+// ---- pairing with a code, and disconnecting ----
+
+const net = { fetch: worldFetch(), baseUrl: BASE }
+
+/** A device showing a code. `code()` waits for it. */
+function host(key: Uint8Array, over: { onDelivered?: () => Promise<void>; pollMs?: number } = {}) {
+  const ctl = new AbortController()
+  const states: HostState[] = []
+  const done = hostPairing({ key, net, signal: ctl.signal, onState: (s) => states.push(s), pollMs: 10, ...over })
+  const last = () => states[states.length - 1]
+  const code = async () => {
+    await vi.waitFor(() => expect(states.some((s) => s.kind === 'code')).toBe(true))
+    return (states.find((s) => s.kind === 'code') as Extract<HostState, { kind: 'code' }>).code
+  }
+  return { ctl, states, done, last, code }
+}
+
+/** One try with a code on a guest device: resolves with the state that ended it. */
+async function join(code: string) {
+  const states: JoinState[] = []
+  await joinPairing({ code: cleanCode(code), net, signal: new AbortController().signal, onState: (s) => states.push(s), pollMs: 10 })
+  return states[states.length - 1]!
+}
+
+const pairingRow = () => sqlite.prepare('SELECT * FROM sync_pairings').get() as Row | undefined
+
+describe('pairing with a code', () => {
+  beforeEach(reset)
+
+  it('hands the key to the other device, which then syncs the same data', async () => {
+    const a = newDb()
+    const b = newDb()
+    const key = generateSyncKey()
+    await add(a, 'from-a')
+    const h = host(key, { onDelivered: () => enableSyncKey(a, key) })
+    const code = await h.code()
+    expect(code).toMatch(/^\d{6}$/)
+    const g = await join(code)
+    expect(g.kind).toBe('done')
+    if (g.kind !== 'done') return
+    await h.done
+    expect(h.last()).toEqual({ kind: 'done' })
+    expect(g.key).toEqual(key)
+    await enableSyncKey(b, g.key)
+    ok(await sync(a))
+    ok(await sync(b))
+    expect(await slugs(b)).toEqual(['from-a'])
+    // The server holds no password and no key; the box is gone once fetched.
+    const row = pairingRow()!
+    expect(row.box).toBeNull()
+    expect(JSON.stringify(row)).not.toContain(code.slice(2))
+    expect(JSON.stringify(row)).not.toContain(Buffer.from(key).toString('base64url'))
+    // The code works once.
+    expect((await join(code)).kind).toBe('expired')
+  })
+
+  it('a wrong code shows on both screens and the right one still works', async () => {
+    const key = generateSyncKey()
+    const h = host(key)
+    const code = await h.code()
+    const wrong = code.slice(0, 5) + String((Number(code[5]) + 1) % 10)
+    expect(await join(wrong)).toEqual({ kind: 'wrong', left: 2 })
+    await vi.waitFor(() => expect(h.states).toContainEqual({ kind: 'wrong', left: 2 }))
+    const g = await join(code)
+    expect(g.kind).toBe('done')
+    await h.done
+    expect(h.last()).toEqual({ kind: 'done' })
+  })
+
+  it('three wrong tries kill the code on both devices', async () => {
+    const h = host(generateSyncKey())
+    const code = await h.code()
+    const wrong = code.slice(0, 5) + String((Number(code[5]) + 1) % 10)
+    expect(await join(wrong)).toEqual({ kind: 'wrong', left: 2 })
+    expect(await join(wrong)).toEqual({ kind: 'wrong', left: 1 })
+    expect(await join(wrong)).toEqual({ kind: 'dead' })
+    await h.done
+    expect(h.last()).toEqual({ kind: 'dead' })
+    expect((await join(code)).kind).toBe('expired')
+  })
+
+  it('a code expires after 3 minutes', async () => {
+    const h = host(generateSyncKey())
+    const code = await h.code()
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      vi.setSystemTime(Date.now() + 181_000)
+      expect((await join(code)).kind).toBe('expired')
+      await h.done
+      expect(h.last()).toEqual({ kind: 'expired' })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('cancelling stops the host without a result', async () => {
+    const h = host(generateSyncKey())
+    await h.code()
+    h.ctl.abort()
+    await h.done
+    expect(h.last()?.kind).toBe('code')
+  })
+
+  it('reports a server that cannot be reached', async () => {
+    const offline = { fetch: () => Promise.reject(new TypeError('offline')), baseUrl: BASE }
+    const states: HostState[] = []
+    await hostPairing({ key: generateSyncKey(), net: offline, signal: new AbortController().signal, onState: (s) => states.push(s) })
+    expect(states).toEqual([{ kind: 'error', reason: 'network' }])
+    const g: JoinState[] = []
+    await joinPairing({ code: '074821', net: offline, signal: new AbortController().signal, onState: (s) => g.push(s) })
+    expect(g.at(-1)).toEqual({ kind: 'error', reason: 'network' })
+  })
+
+  it('answers busy while another device is answering, and slow when the limit is hit', async () => {
+    // The host does not look for an hour, so the first answer stays waiting on the server.
+    const h = host(generateSyncKey(), { pollMs: 3_600_000 })
+    const code = await h.code()
+    const first = new AbortController()
+    void joinPairing({ code, net, signal: first.signal, onState: () => undefined, pollMs: 10 })
+    await vi.waitFor(() => expect(pairingRow()?.msg_b).toBeTruthy())
+    expect((await join(code)).kind).toBe('busy')
+    first.abort()
+    h.ctl.abort()
+    await h.done
+    const limited = worldFetch({ PAIR_LIMITER: { limit: async () => ({ success: false }) } })
+    const states: JoinState[] = []
+    await joinPairing({ code: '074821', net: { fetch: limited, baseUrl: BASE }, signal: new AbortController().signal, onState: (s) => states.push(s) })
+    expect(states.at(-1)).toEqual({ kind: 'slow' })
+  })
+})
+
+describe('disconnecting', () => {
+  beforeEach(reset)
+
+  it('ends sync on both devices; each keeps its data', async () => {
+    const { a, b } = await twoDevices()
+    await add(a, 'one')
+    ok(await sync(a))
+    ok(await sync(b))
+    // B has an edit that was never synced.
+    await add(b, 'unsynced-on-b')
+    expect(await disconnectSync(a, net)).toEqual({ ok: true })
+    expect(await getSyncKey(a)).toBeUndefined()
+    expect(sqlite.prepare('SELECT COUNT(*) AS n FROM sync_records').get()).toEqual({ n: 0 })
+    const s = await sync(b)
+    expect(s.error?.kind).toBe('disconnected')
+    expect(await getSyncKey(b)).toBeUndefined()
+    expect(await getSyncStatus(b)).toMatchObject({ enabled: false, disconnectedByPeer: true })
+    expect(await slugs(b)).toEqual(['one', 'unsynced-on-b'])
+    expect(await slugs(a)).toEqual(['one'])
+    expect((await sync(b)).error?.kind).toBe('not-enabled')
+    // Turning sync on again clears the note.
+    await enableSyncKey(b, generateSyncKey())
+    expect((await getSyncStatus(b)).disconnectedByPeer).toBe(false)
+  })
+
+  it('a device that was offline learns of it when it comes back', async () => {
+    const { a, b } = await twoDevices()
+    await add(a, 'one')
+    ok(await sync(a))
+    const offline: typeof fetch = () => Promise.reject(new TypeError('offline'))
+    expect(await disconnectSync(a, net)).toEqual({ ok: true })
+    expect((await syncNow(b, offline, BASE)).error?.kind).toBe('network')
+    expect(await getSyncKey(b)).toBeDefined()
+    expect((await sync(b)).error?.kind).toBe('disconnected')
+    expect(await getSyncKey(b)).toBeUndefined()
+  })
+
+  it('works for a space nobody pushed to', async () => {
+    const { a, b } = await twoDevices()
+    expect(await disconnectSync(a, net)).toEqual({ ok: true })
+    expect((await sync(b)).error?.kind).toBe('disconnected')
+  })
+
+  it('without a connection nothing changes and sync stays on', async () => {
+    const { a } = await twoDevices()
+    const r = await disconnectSync(a, { fetch: () => Promise.reject(new TypeError('offline')), baseUrl: BASE })
+    expect(r).toMatchObject({ ok: false, error: { kind: 'network' } })
+    expect(await getSyncKey(a)).toBeDefined()
+    const refused = await disconnectSync(a, { fetch: async () => new Response('{}', { status: 500 }), baseUrl: BASE })
+    expect(refused).toMatchObject({ ok: false, error: { kind: 'server' } })
+    expect((await getSyncStatus(a)).enabled).toBe(true)
+  })
+
+  it('a peer that already disconnected is fine (410 counts as done)', async () => {
+    const { a, b } = await twoDevices()
+    expect(await disconnectSync(a, net)).toEqual({ ok: true })
+    expect(await disconnectSync(b, net)).toEqual({ ok: true })
+    expect(await getSyncKey(b)).toBeUndefined()
+  })
+
+  it('a new key set right after the disconnect is kept', async () => {
+    const { a, b } = await twoDevices()
+    expect(await disconnectSync(a, net)).toEqual({ ok: true })
+    const next = generateSyncKey()
+    const run = syncNow(b, worldFetch(), BASE)
+    const swap = enableSyncKey(b, next) // queued behind the run
+    expect((await run).error?.kind).toBe('disconnected')
+    await swap
+    expect(await getSyncKey(b)).toEqual(next)
   })
 })
