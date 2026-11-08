@@ -7,7 +7,7 @@ import { CalendarDays, ChevronRight, FileUp, Link2 } from 'lucide-react'
 import { Disclosure, DisclosurePanel, FileTrigger, Heading } from 'react-aria-components'
 import { db, scheduleAll, type Lms } from '../../data'
 import { feedCourses, importCalendar, listFeeds, planTitles, readCalendar, rowStates, type RowState } from '../../data/calendar'
-import { courseKey, courseName, courses, type TaskRow } from '../../domain/ics'
+import { courseKey, courses, displayNames, type TaskRow } from '../../domain/ics'
 import { formatDay, isRealISODate, toLocalISODate } from '../../lib/date'
 import { API_URL } from '../../pwa/env'
 import { feedUrl, fetchFeedText } from '../../pwa/feeds'
@@ -111,20 +111,20 @@ export function CalendarTab() {
           </ol>
           <p className="text-text-muted">
             {guide.mayVary ? 'These steps may vary: Google changes its menus, and some schools turn calendar sharing off. ' : ''}
-            Keep this link private: anyone with it can see your calendar. Kiln stores it only on your devices.
+            Keep this link private: anyone with it can see your calendar. Kiln keeps it on your devices and syncs it end-to-end encrypted.
           </p>
         </div>
       </Card>
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="grid content-start gap-3">
-          <TextField label="Calendar link" value={link} onChange={setLink} />
+          <TextField label="Calendar link" value={link} onChange={setLink} description="Starts with https:// or webcal://" />
           <div className="grid gap-1">
             <Checkbox isSelected={keep} onChange={setKeep} aria-describedby="calendar-keep-help">
               Keep in sync
             </Checkbox>
             <p id="calendar-keep-help" className="pl-8 text-sm text-text-muted">
-              Kiln checks for new assignments each time it opens.
+              Kiln checks for new assignments when it opens, at most every 6 hours.
             </p>
           </div>
           <div>
@@ -134,10 +134,15 @@ export function CalendarTab() {
           </div>
         </div>
         <div className="grid content-start gap-3">
-          <p className="text-sm font-medium">Or upload a calendar file</p>
+          <div className="grid gap-1">
+            <p className="text-sm font-medium">Or upload a calendar file</p>
+            <p id="calendar-file-help" className="text-sm text-text-muted">
+              Up to 2 MB.
+            </p>
+          </div>
           <div>
             <FileTrigger acceptedFileTypes={['.ics', 'text/calendar']} onSelect={(files) => void pick(files as FileList | null)}>
-              <Button variant="secondary">
+              <Button variant="secondary" aria-describedby="calendar-file-help">
                 <FileUp /> Choose .ics file
               </Button>
             </FileTrigger>
@@ -201,6 +206,7 @@ function CalendarReview({ loaded, lms }: { loaded: Loaded; lms: Lms }) {
   // A test's prep row is not history worth keeping, so only the work itself is offered.
   const pastRows = useMemo(() => rows.filter((r) => r.due < today && !r.prep), [rows, today])
   const list = useMemo(() => courses(items, today), [items, today])
+  const display = useMemo(() => displayNames(list.map((c) => c.course)), [list])
   const [ticked, setTicked] = useState<Set<string>>(
     () => new Set(list.filter((c) => !loaded.tick || loaded.tick.has(courseKey(c.course))).map((c) => c.course)),
   )
@@ -214,7 +220,8 @@ function CalendarReview({ loaded, lms }: { loaded: Loaded; lms: Lms }) {
   const known = useLiveQuery(async () => ({ states: await rowStates(db, rows), titles: await planTitles(db, list.map((c) => c.course)) }), [rows, list])
   const states = known?.states
   const edit = (key: string, patch: Edit) => setEdits((all) => ({ ...all, [key]: { ...all[key], ...patch } }))
-  const nameOf = (course: string) => names[course] ?? known?.titles.get(course) ?? courseName(course)
+  const shown = (course: string) => display.get(course) ?? course
+  const nameOf = (course: string) => names[course] ?? known?.titles.get(course) ?? shown(course)
   const setPast = (keys: string[], on: boolean) => setPastOn((s) => (on ? new Set([...s, ...keys]) : new Set([...s].filter((k) => !keys.includes(k)))))
 
   if (items.length === 0) return <p role="alert" className="text-sm text-danger">No events found in this calendar.</p>
@@ -226,6 +233,7 @@ function CalendarReview({ loaded, lms }: { loaded: Loaded; lms: Lms }) {
   const problems = chosen.filter((r) => hasProblem(rowProblems(r, edits[r.key] ?? {}, today)))
   const unnamed = [...ticked].filter((c) => nameOf(c).trim() === '')
   const count = chosen.length + pastChosen.length
+  const renames = [...ticked].filter((c) => known?.titles.has(c) && nameOf(c).trim() !== known.titles.get(c))
   // Why the Import button is off, in words.
   const reason = !states
     ? 'Checking what is already in Kiln...'
@@ -235,7 +243,9 @@ function CalendarReview({ loaded, lms }: { loaded: Loaded; lms: Lms }) {
         ? 'Give each ticked course a plan name.'
         : problems.length > 0
           ? `Fix the ${problems.length} row${problems.length === 1 ? '' : 's'} marked in red first, or untick ${problems.length === 1 ? 'it' : 'them'}.`
-          : undefined
+          : count === 0 && renames.length === 0
+            ? 'Nothing new to import.'
+            : undefined
 
   async function run() {
     setBusy(true)
@@ -281,7 +291,7 @@ function CalendarReview({ loaded, lms }: { loaded: Loaded; lms: Lms }) {
             isSelected={ticked.has(c.course)}
             onChange={(on) => setTicked((s) => (on ? new Set([...s, c.course]) : new Set([...s].filter((x) => x !== c.course))))}
           >
-            {courseName(c.course)}: {c.total} in your calendar, {c.due} still due
+            {shown(c.course)}: {plural(c.due, 'assignment')} still due ({c.total} in your calendar)
           </Checkbox>
         ))}
         {lms === 'canvas' && <p className="text-sm text-text-muted">Canvas only lists assignments with a due date.</p>}
@@ -291,14 +301,15 @@ function CalendarReview({ loaded, lms }: { loaded: Loaded; lms: Lms }) {
         .filter((c) => ticked.has(c.course))
         .map((c) => {
           const mine = upcoming.filter((r) => r.course === c.course)
-          const shown = mine.filter((r) => isAction(states?.get(r.key)))
-          const already = mine.length - shown.length
+          const offered = mine.filter((r) => isAction(states?.get(r.key)))
+          const already = mine.length - offered.length
           const past = pastNew.filter((r) => r.course === c.course)
           const pastTicked = past.filter((r) => pastOn.has(r.key)).length
           const name = nameOf(c.course)
           return (
             <Card key={c.course} className="grid gap-3">
-              <h2 className="text-sm text-text-muted">{courseName(c.course)}</h2>
+              {/* The course, for when the plan name no longer says which one this is. */}
+              <h2 className={name.trim() === shown(c.course) ? 'sr-only' : 'text-sm text-text-muted'}>{shown(c.course)}</h2>
               <TextField
                 label="Plan name"
                 value={name}
@@ -308,15 +319,13 @@ function CalendarReview({ loaded, lms }: { loaded: Loaded; lms: Lms }) {
                 maxLength={120}
                 className="max-w-md"
               />
-              <p className="text-sm">
-                {c.total} in your calendar, {c.due} still due
-              </p>
-              {shown.length === 0 && <p className="text-sm text-text-muted">{states ? 'No new assignments.' : 'Checking...'}</p>}
-              {shown.length > 0 && (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <caption className="sr-only">Assignments in {name || courseName(c.course)}</caption>
-                    <thead className="text-text-muted">
+              {offered.length === 0 && <p className="text-sm text-text-muted">{states ? 'No new assignments.' : 'Checking...'}</p>}
+              {offered.length > 0 && (
+                // Phones: each row is two lines (tick and title, then minutes and due), so nothing scrolls sideways.
+                <div className="md:overflow-x-auto">
+                  <table className="block w-full text-left text-sm md:table">
+                    <caption className="sr-only">Assignments in {name || shown(c.course)}</caption>
+                    <thead className="hidden text-text-muted md:table-header-group">
                       <tr>
                         <th className="p-1 font-medium">Import</th>
                         <th className="p-1 font-medium">Title</th>
@@ -324,33 +333,43 @@ function CalendarReview({ loaded, lms }: { loaded: Loaded; lms: Lms }) {
                         <th className="p-1 font-medium">Due</th>
                       </tr>
                     </thead>
-                    <tbody>
-                      {shown.map((r) => {
+                    <tbody className="block md:table-row-group">
+                      {offered.map((r) => {
                         const e = edits[r.key] ?? {}
                         const st = states?.get(r.key)
                         const problem = e.include !== false ? rowProblems(r, e, today) : {}
                         const fieldProps = (f: keyof Problems) => ({ 'aria-invalid': problem[f] ? true : undefined, 'aria-describedby': problem[f] ? `${r.key}-${f}-error` : undefined })
                         const input = 'h-9 w-full rounded-md border border-border-strong bg-surface-raised px-2 text-sm text-text'
                         return (
-                          <tr key={r.key} className="align-top" data-testid="calendar-row">
+                          <tr
+                            key={r.key}
+                            className="grid grid-cols-[auto_6rem_minmax(0,1fr)] border-t border-border py-1 align-top first:border-t-0 md:table-row md:border-0 md:py-0"
+                            data-testid="calendar-row"
+                          >
                             <td className="p-1">
                               <input type="checkbox" aria-label={`Import ${r.title}`} className="mt-2.5 size-4 accent-accent" checked={e.include !== false} onChange={(ev) => edit(r.key, { include: ev.target.checked })} />
                             </td>
                             {st?.status === 'changed' ? (
-                              <td className="p-1 pt-2.5" colSpan={3}>
+                              <td className="col-span-2 p-1 pt-2.5" colSpan={3}>
                                 {r.title}: due date moved from {st.oldDue ? formatDay(st.oldDue) : 'none'} to {formatDay(r.due)}
                               </td>
                             ) : (
                               <>
-                                <td className="min-w-48 p-1">
+                                <td className="col-span-2 min-w-0 p-1 md:min-w-48">
                                   <input aria-label={`Title of ${r.title}`} className={input} value={e.title ?? r.title} onChange={(ev) => edit(r.key, { title: ev.target.value })} {...fieldProps('title')} />
                                   {problem.title && <p id={`${r.key}-title-error`} className="pt-1 text-danger">{problem.title}</p>}
                                 </td>
-                                <td className="w-24 p-1">
+                                <td className="col-start-2 p-1 md:w-24">
+                                  <span aria-hidden="true" className="block pb-1 text-xs text-text-muted md:hidden">
+                                    Minutes
+                                  </span>
                                   <input aria-label={`Minutes for ${r.title}`} className={input} inputMode="numeric" value={e.minutes ?? String(r.minutes)} onChange={(ev) => edit(r.key, { minutes: ev.target.value })} {...fieldProps('minutes')} />
                                   {problem.minutes && <p id={`${r.key}-minutes-error`} className="pt-1 text-danger">{problem.minutes}</p>}
                                 </td>
-                                <td className="w-44 p-1">
+                                <td className="min-w-0 p-1 md:w-44">
+                                  <span aria-hidden="true" className="block pb-1 text-xs text-text-muted md:hidden">
+                                    Due
+                                  </span>
                                   <DateField
                                     size="sm"
                                     placeholder=""
@@ -379,7 +398,6 @@ function CalendarReview({ loaded, lms }: { loaded: Loaded; lms: Lms }) {
                     </Button>
                   </Heading>
                   <DisclosurePanel className="grid gap-3 pl-6">
-                    <p className="text-sm text-text-muted">Ticked items are added as completed.</p>
                     <Checkbox
                       isSelected={pastTicked === past.length}
                       isIndeterminate={pastTicked > 0 && pastTicked < past.length}
@@ -397,7 +415,7 @@ function CalendarReview({ loaded, lms }: { loaded: Loaded; lms: Lms }) {
                   </DisclosurePanel>
                 </Disclosure>
               )}
-              {already > 0 && <p className="text-sm text-text-muted">{already} already in Kiln (re-importing keeps your progress).</p>}
+              {already > 0 && <p className="text-sm text-text-muted">{already} already in Kiln</p>}
             </Card>
           )
         })}
