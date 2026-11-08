@@ -13,7 +13,7 @@ const publicFile = (name: string) => fileURLToPath(new URL(`../public/${name}`, 
  */
 async function paste(page: Page, text: string) {
   await page.goto('/import')
-  const box = page.getByLabel('Plan text')
+  const box = page.getByLabel('Paste the plan here')
   await expect(box).toBeVisible()
   await box.evaluate((el, value) => {
     // React tracks the value itself, so go through the native setter or it ignores the event.
@@ -106,7 +106,7 @@ test('plan errors are listed in the spec format', async ({ page }) => {
 test('uploading the CSV template imports it', async ({ page }) => {
   await page.goto('/import')
   await page.locator('input[type=file]').first().setInputFiles(publicFile('kiln-plan-template.csv'))
-  await expect(page.getByLabel('Plan text')).toHaveValue(/^moduleId,/)
+  await expect(page.getByLabel('Paste the plan here')).toHaveValue(/^moduleId,/)
   await expect(page.getByText('Enter a title for the plan.').first()).toBeVisible()
   await expect(page.getByRole('button', { name: /^Import "/ })).toBeDisabled()
   await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Template plan')
@@ -118,7 +118,7 @@ test('uploading the CSV template imports it', async ({ page }) => {
 test('uploading the XLSX template imports it', async ({ page }) => {
   await page.goto('/import')
   await page.locator('input[type=file]').first().setInputFiles(publicFile('kiln-plan-template.xlsx'))
-  await expect(page.getByText('Spreadsheet loaded: kiln-plan-template.xlsx')).toBeVisible()
+  await expect(page.getByText('Loaded kiln-plan-template.xlsx')).toBeVisible()
   await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Excel plan')
   await importIt(page)
 })
@@ -126,18 +126,22 @@ test('uploading the XLSX template imports it', async ({ page }) => {
 test.describe('clipboard', () => {
   test.use({ permissions: ['clipboard-read', 'clipboard-write'] })
 
-  for (const [button, mentions] of [
-    ['Copy prompt (Kiln assigns dates)', 'schemaVersion'],
-    ['Copy prompt (fixed dates)', 'fixedDate'],
+  for (const [index, description, mentions] of [
+    [0, 'Let Kiln assign dates based on your minutes per weekday.', '"schedulingMode": "auto"'],
+    [1, 'Assign the dates yourself. The AI will ask you.', '"schedulingMode": "fixed"'],
   ] as const) {
-    test(`${button} puts the prompt on the clipboard`, async ({ page }) => {
+    test(`Copy prompt ${index + 1} puts its prompt on the clipboard`, async ({ page }) => {
       await page.goto('/import')
-      await page.getByRole('button', { name: button }).click()
+      // The two buttons share a name; their descriptions tell them apart.
+      const button = page.getByRole('button', { name: 'Copy prompt' }).nth(index)
+      await expect(button).toHaveAccessibleDescription(description)
+      await button.click()
       await expect(page.getByRole('button', { name: 'Copied' })).toBeVisible()
       const text = await page.evaluate(() => navigator.clipboard.readText())
       expect(text.length).toBeGreaterThan(2000)
       expect(text).toContain(mentions)
       expect(text).not.toContain('{{SCHEMA_REFERENCE}}')
+      expect(text).toContain('Do you have a class calendar link? Paste it here, or say no.')
     })
   }
 
@@ -145,7 +149,7 @@ test.describe('clipboard', () => {
     await page.goto('/import')
     await page.evaluate((t) => navigator.clipboard.writeText(t), '{"hello": 1}')
     await page.getByRole('button', { name: 'Paste from clipboard' }).click()
-    await expect(page.getByLabel('Plan text')).toHaveValue('{"hello": 1}')
+    await expect(page.getByLabel('Paste the plan here')).toHaveValue('{"hello": 1}')
   })
 })
 
@@ -153,7 +157,7 @@ test('Paste from clipboard shows a hint when the browser refuses', async ({ page
   await page.goto('/import')
   await page.getByRole('button', { name: 'Paste from clipboard' }).click()
   await expect(page.getByText(/could not read the clipboard/)).toBeVisible()
-  await expect(page.getByLabel('Plan text')).toBeFocused()
+  await expect(page.getByLabel('Paste the plan here')).toBeFocused()
 })
 
 const QUICK_ADD = [
@@ -218,6 +222,67 @@ test('quick add: 12 lines become a plan that imports', async ({ page }) => {
   await expect(page.getByText(/^Fixed dates: a task has a due date/)).toBeVisible()
   await expect(page.getByLabel('Plan id')).toHaveValue('biology')
   await importIt(page)
+})
+
+test('quick add: Repeat counts up each 1, caps at 52, and a due cell takes typed dates', async ({ page }) => {
+  await page.goto('/import')
+  await page.getByRole('tab', { name: 'Quick add' }).click()
+  const panel = page.getByRole('tabpanel', { name: 'Quick add' })
+  await panel.getByRole('textbox', { name: 'Tasks, one per line' }).fill('# Week 1\nRead chapter 1 1h')
+  // The unit drawn in the box is part of the name.
+  const repeat = panel.getByRole('textbox', { name: 'Repeat, times', exact: true })
+  await expect(repeat).toHaveAccessibleDescription('')
+  await repeat.fill('3')
+  await expect(repeat).toHaveAccessibleDescription('Numbers like the 1 in Week 1 go up in each copy.')
+  await expect(panel.getByRole('status').first()).toHaveText('3 tasks in 3 modules')
+  await expect(panel.getByRole('textbox', { name: 'Task 3 title' })).toHaveValue('Read chapter 3')
+  await expect(panel.getByRole('textbox', { name: 'Task 3 minutes' })).toHaveValue('60')
+  await expect(panel.locator('th', { hasText: 'Week 3' })).toBeVisible()
+  await repeat.fill('60')
+  await expect(panel.getByText('Up to 52 times.')).toBeVisible()
+  // The help line and the error are both read out (React Aria puts the error first).
+  await expect(repeat).toHaveAccessibleDescription(/Numbers like the 1 in Week 1 go up in each copy\./)
+  await expect(repeat).toHaveAccessibleDescription(/Up to 52 times\./)
+  await expect(panel.getByRole('status').first()).toHaveText('52 tasks in 52 modules')
+  await repeat.fill('1')
+  const due = panel.getByRole('textbox', { name: 'Task 1 due' })
+  await due.fill('dec 24 2030')
+  await due.press('Enter')
+  await expect(due).toHaveValue('Tue, Dec 24, 2030')
+})
+
+test('quick add: changing how many identical lines there are drops their table edits', async ({ page }) => {
+  await page.goto('/import')
+  await page.getByRole('tab', { name: 'Quick add' }).click()
+  const panel = page.getByRole('tabpanel', { name: 'Quick add' })
+  const box = panel.getByRole('textbox', { name: 'Tasks, one per line' })
+  await box.fill('Read\nRead\nQuiz')
+  await panel.getByRole('textbox', { name: 'Task 2 minutes' }).fill('20')
+  await panel.getByRole('textbox', { name: 'Task 3 minutes' }).fill('5')
+  await box.fill('Read\nQuiz')
+  await expect(panel.getByText('1 table edit was dropped because identical lines were added or removed.')).toBeVisible()
+  await expect(panel.getByRole('textbox', { name: 'Task 1 minutes' })).toHaveValue('30')
+  await expect(panel.getByRole('textbox', { name: 'Task 2 minutes' })).toHaveValue('5')
+})
+
+test('quick add: clearing Repeat to type a new number keeps the copies and their edits', async ({ page }) => {
+  await page.goto('/import')
+  await page.getByRole('tab', { name: 'Quick add' }).click()
+  const panel = page.getByRole('tabpanel', { name: 'Quick add' })
+  await panel.getByRole('textbox', { name: 'Tasks, one per line' }).fill('Read chapter 1')
+  const repeat = panel.getByRole('textbox', { name: 'Repeat, times', exact: true })
+  await repeat.fill('3')
+  const minutes = panel.getByRole('textbox', { name: 'Task 2 minutes' })
+  await minutes.fill('50')
+  await repeat.fill('')
+  await expect(panel.getByRole('status').first()).toHaveText('3 tasks in 1 module')
+  await repeat.pressSequentially('3')
+  await expect(minutes).toHaveValue('50')
+  await expect(panel.getByText(/table edits? (was|were) dropped/)).toBeHidden()
+  // Left empty, the box shows the count still in use.
+  await repeat.fill('')
+  await repeat.press('Tab')
+  await expect(repeat).toHaveValue('3')
 })
 
 test('a changed study budget persists and offers a reschedule', async ({ page }) => {

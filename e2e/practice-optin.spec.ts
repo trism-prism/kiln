@@ -33,7 +33,7 @@ const plan = {
 
 test('a plan without daily practice shows no LeetCode UI, links its resources, and warns about videos without a link', async ({ page }) => {
   await page.goto('/import')
-  await page.getByLabel('Plan text').fill(JSON.stringify(plan))
+  await page.getByLabel('Paste the plan here').fill(JSON.stringify(plan))
   await expect(page.getByText(/1 video without a link/)).toBeVisible()
   const go = page.getByRole('button', { name: /^Import "/ })
   await expect(go).toBeEnabled()
