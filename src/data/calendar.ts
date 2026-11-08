@@ -137,37 +137,57 @@ async function importAll(db: KilnDB, input: CalendarImport): Promise<CalendarImp
 
   const feedId = input.feed ? await saveFeed(db, input.feed, res) : undefined
   for (const it of eventItems(input.items).filter((i) => input.courses.includes(i.course))) {
-    const ev = it.event
-    const fields = defined({
-      title: it.title.slice(0, 300),
-      date: ev.date,
-      endDate: ev.endDate,
-      allDay: ev.allDay,
-      start: ev.start,
-      end: ev.end,
-      course: it.course.slice(0, 120),
-      url: ev.url && ev.url.length <= 2048 ? ev.url : undefined,
-      notes: ev.description?.slice(0, 4000),
-      planId: planOf.get(it.course),
-      feedId,
-      uid: it.uid.slice(0, 1000),
-    }) as Omit<EventRecord, 'id' | 'updatedAt' | 'deleted' | 'deviceId'>
-    const old = (await db.events.where('uid').equals(fields.uid as string).toArray()).find((e) => !e.deleted)
+    const fields = eventFields(it, planOf.get(it.course), feedId)
+    const old = await liveEvent(db, it.uid.slice(0, 1000))
     if (!old) {
       await insertRecord(db, 'events', fields)
       res.eventsAdded++
-    } else {
-      const keys = ['title', 'date', 'endDate', 'allDay', 'start', 'end', 'course', 'url', 'notes'] as const
-      // planId and feedId are only compared when this import sets them (an upload sets no feed, and must not look like a change).
-      const kept = (['planId', 'feedId'] as const).filter((k) => fields[k] !== undefined)
-      if ([...keys, ...kept].some((k) => old[k] !== fields[k])) {
-        // Fields the feed no longer has are cleared.
-        await updateRecord(db, 'events', old.id, { endDate: undefined, start: undefined, end: undefined, url: undefined, notes: undefined, ...fields })
-        res.eventsUpdated++
-      }
+    } else if (eventChanged(old, fields)) {
+      // Fields the feed no longer has are cleared.
+      await updateRecord(db, 'events', old.id, { endDate: undefined, start: undefined, end: undefined, url: undefined, notes: undefined, ...fields })
+      res.eventsUpdated++
     }
   }
   return { ...res, ...(feedId ? { feedId } : {}) }
+}
+
+type EventFields = Omit<EventRecord, 'id' | 'updatedAt' | 'deleted' | 'deviceId'>
+
+function eventFields(it: CalendarItem, planId?: string, feedId?: string): EventFields {
+  const ev = it.event
+  return defined({
+    title: it.title.slice(0, 300),
+    date: ev.date,
+    endDate: ev.endDate,
+    allDay: ev.allDay,
+    start: ev.start,
+    end: ev.end,
+    course: it.course.slice(0, 120),
+    url: ev.url && ev.url.length <= 2048 ? ev.url : undefined,
+    notes: ev.description?.slice(0, 4000),
+    planId,
+    feedId,
+    uid: it.uid.slice(0, 1000),
+  }) as EventFields
+}
+
+const liveEvent = async (db: KilnDB, uid: string) => (await db.events.where('uid').equals(uid).toArray()).find((e) => !e.deleted)
+
+function eventChanged(old: EventRecord, fields: EventFields): boolean {
+  const keys = ['title', 'date', 'endDate', 'allDay', 'start', 'end', 'course', 'url', 'notes'] as const
+  // planId and feedId are only compared when this import sets them (an upload sets no feed, and must not look like a change).
+  const kept = (['planId', 'feedId'] as const).filter((k) => fields[k] !== undefined)
+  return [...keys, ...kept].some((k) => old[k] !== fields[k])
+}
+
+/** Class times and exams that importing would add or change, by UID (the review counts them like tasks). */
+export async function eventsToImport(db: KilnDB, items: CalendarItem[]): Promise<Set<string>> {
+  const out = new Set<string>()
+  for (const it of eventItems(items)) {
+    const old = await liveEvent(db, it.uid.slice(0, 1000))
+    if (!old || eventChanged(old, eventFields(it))) out.add(it.uid)
+  }
+  return out
 }
 
 async function saveFeed(db: KilnDB, feed: NonNullable<CalendarImport['feed']>, res: CalendarImportResult): Promise<string> {

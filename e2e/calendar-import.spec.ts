@@ -38,7 +38,7 @@ test('imports a Canvas calendar file: a plan per ticked course, tasks scheduled 
   await panel.getByLabel('Minutes for Problem Set 3').fill('45')
   await panel.getByLabel('Title of Reading: Chapter 6').fill('Read chapter 6')
 
-  await panel.getByRole('button', { name: 'Import 5 items' }).click()
+  await panel.getByRole('button', { name: 'Import 8 items' }).click() // 5 tasks and 3 class times or exams
   await expect(page).toHaveURL(/\/plans$/)
   await expect(page.getByText('Imported 2 courses')).toBeVisible()
   await expect(page.getByRole('main').getByText('MATH-221-001').first()).toBeVisible()
@@ -133,6 +133,48 @@ test('a Canvas file with past items: already due imports as completed, tests get
   // The feed still says Dec 10 for the Final Paper moved to Dec 12, so that date change is offered.
   await expect(panel.getByText(/^Final Paper: due date moved from/)).toBeVisible()
   await expect(panel.getByRole('button', { name: 'Import 1 item' })).toBeVisible()
+})
+
+test('a course with only class meetings can be imported: its events count like tasks', async ({ page }) => {
+  await page.clock.install({ time: DAY1 })
+  await page.goto('/import?tab=calendar')
+  const panel = page.getByRole('tabpanel', { name: 'From a course calendar' })
+  const meeting = (n: number, day: string) => [
+    'BEGIN:VEVENT',
+    `UID:event-calendar-event-90${n}`,
+    `DTSTART;TZID=America/New_York:${day}T100000`,
+    `DTEND;TZID=America/New_York:${day}T111500`,
+    `SUMMARY:Studio session ${n} [ART-100]`,
+    'END:VEVENT',
+  ]
+  const text = ['BEGIN:VCALENDAR', 'VERSION:2.0', ...meeting(1, '20261111'), ...meeting(2, '20261113'), 'END:VCALENDAR'].join('\n')
+  await panel.locator('input[type=file]').setInputFiles({ name: 'art.ics', mimeType: 'text/calendar', buffer: Buffer.from(text) })
+  await expect(panel.getByRole('checkbox', { name: 'ART-100: 0 assignments still due (0 in your calendar)' })).toBeChecked()
+  const button = panel.getByRole('button', { name: 'Import 2 items' })
+  await expect(button).toBeEnabled()
+  await expect(panel.getByText('Nothing new to import.')).toHaveCount(0)
+  await button.click()
+  await expect(page).toHaveURL(/\/plans$/)
+  await expect(page.getByText('2 calendar events', { exact: false })).toBeVisible()
+  const events = await page.evaluate(
+    () =>
+      new Promise<string[]>((resolve, reject) => {
+        const open = indexedDB.open('kiln')
+        open.onerror = () => reject(open.error)
+        open.onsuccess = () => {
+          const req = open.result.transaction('events').objectStore('events').getAll()
+          req.onsuccess = () => resolve((req.result as { title: string }[]).map((e) => e.title).sort())
+          req.onerror = () => reject(req.error)
+        }
+      }),
+  )
+  expect(events).toEqual(['Studio session 1', 'Studio session 2'])
+
+  // Again: nothing new.
+  await page.goto('/import?tab=calendar')
+  await panel.locator('input[type=file]').setInputFiles({ name: 'art.ics', mimeType: 'text/calendar', buffer: Buffer.from(text) })
+  await expect(panel.getByRole('button', { name: 'Import 0 items' })).toBeDisabled()
+  await expect(panel.getByText('Nothing new to import.')).toBeVisible()
 })
 
 test('a past item the feed marks completed comes pre-ticked and imports as done', async ({ page }) => {

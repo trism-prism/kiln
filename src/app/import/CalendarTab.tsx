@@ -6,7 +6,7 @@ import { useNavigate, useSearchParams } from 'react-router'
 import { CalendarDays, ChevronRight, FileUp, Link2 } from 'lucide-react'
 import { Disclosure, DisclosurePanel, FileTrigger, Heading } from 'react-aria-components'
 import { db, scheduleAll, type Lms } from '../../data'
-import { feedCourses, importCalendar, listFeeds, planTitles, readCalendar, rowStates, type RowState } from '../../data/calendar'
+import { eventsToImport, feedCourses, importCalendar, listFeeds, planTitles, readCalendar, rowStates, type RowState } from '../../data/calendar'
 import { courseKey, courses, displayNames, type TaskRow } from '../../domain/ics'
 import { formatDay, isRealISODate, toLocalISODate } from '../../lib/date'
 import { API_URL } from '../../pwa/env'
@@ -216,8 +216,11 @@ function CalendarReview({ loaded, lms }: { loaded: Loaded; lms: Lms }) {
   const [names, setNames] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<string>()
-  // One query for both, so the page has a single live querier on plans and tasks.
-  const known = useLiveQuery(async () => ({ states: await rowStates(db, rows), titles: await planTitles(db, list.map((c) => c.course)) }), [rows, list])
+  // One query for all three, so the page has a single live querier on plans, tasks and events.
+  const known = useLiveQuery(
+    async () => ({ states: await rowStates(db, rows), titles: await planTitles(db, list.map((c) => c.course)), events: await eventsToImport(db, items) }),
+    [rows, list, items],
+  )
   const states = known?.states
   const edit = (key: string, patch: Edit) => setEdits((all) => ({ ...all, [key]: { ...all[key], ...patch } }))
   const shown = (course: string) => display.get(course) ?? course
@@ -232,7 +235,9 @@ function CalendarReview({ loaded, lms }: { loaded: Loaded; lms: Lms }) {
   const pastChosen = pastNew.filter((r) => ticked.has(r.course) && pastOn.has(r.key))
   const problems = chosen.filter((r) => hasProblem(rowProblems(r, edits[r.key] ?? {}, today)))
   const unnamed = [...ticked].filter((c) => nameOf(c).trim() === '')
-  const count = chosen.length + pastChosen.length
+  // New or moved class times and exams count like tasks: a course of class meetings alone still imports.
+  const events = items.filter((it) => ticked.has(it.course) && known?.events.has(it.uid)).length
+  const count = chosen.length + pastChosen.length + events
   const renames = [...ticked].filter((c) => known?.titles.has(c) && nameOf(c).trim() !== known.titles.get(c))
   // Why the Import button is off, in words.
   const reason = !states

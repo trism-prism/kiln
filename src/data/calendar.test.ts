@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto'
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { courseKey } from '../domain/ics'
-import { importCalendar, readCalendar, rowStates, type CalendarImport } from './calendar'
+import { eventsToImport, importCalendar, readCalendar, rowStates, type CalendarImport } from './calendar'
 import { studyEvents } from './streaks'
 import { getPlanByKey, listPlans, softDelete } from './repo'
 import { scheduleAll } from './schedule'
@@ -202,6 +202,20 @@ describe('importCalendar', () => {
     expect((await getPlanByKey(db, courseKey(COB_A)))?.title).toBe('Strategy')
     expect((await getPlanByKey(db, courseKey(COB_D)))?.title).toBe('Business Policy')
     expect(res2).toMatchObject({ tasksAdded: 1, markedDone: 1 })
+  })
+
+  it('counts class times and exams that an import would add or move', async () => {
+    const db = newDb()
+    const all = input(CANVAS)
+    const uids = (s: Set<string>) => [...s].sort()
+    expect(uids(await eventsToImport(db, all.items))).toEqual(['event-calendar-event-2001', 'event-calendar-event-2002', 'event-calendar-event-2003'])
+    await importCalendar(db, all)
+    expect(uids(await eventsToImport(db, all.items))).toEqual([])
+    // A course of class meetings alone: no rows, still imported.
+    const moved = input(CANVAS.replace('Lecture: Limits', 'Lecture: Limits and continuity'))
+    expect(uids(await eventsToImport(db, moved.items))).toEqual(['event-calendar-event-2001'])
+    const res = await importCalendar(db, { ...moved, rows: [] })
+    expect(res).toMatchObject({ tasksAdded: 0, eventsUpdated: 1 })
   })
 
   it('marks every part of a long done row done', async () => {
