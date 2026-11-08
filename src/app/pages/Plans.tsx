@@ -4,7 +4,7 @@ import { Link } from '../../ui/button'
 import { Badge, EmptyState, ProgressBar, Skeleton } from '../../ui/surface'
 import { formatDay } from '../../lib/date'
 import { Page } from '../Page'
-import { minutesText, StudyWeekBar } from '../parts'
+import { minutesText, StudyPlanned, StudyWeekBar } from '../parts'
 import { FavoriteButton } from '../plan/PlanExtras'
 import { usePlanSummaries, useToday } from '../queries'
 
@@ -45,6 +45,7 @@ export default function PlansPage() {
                     .filter(Boolean)
                     .join(' · ')}
                 </p>
+                {s.study && <StudyPlanned week={s.study} minutesPerWeek={s.plan.studyMinutesPerWeek ?? 0} />}
               </div>
               {s.study ? (
                 <StudyWeekBar week={s.study} />

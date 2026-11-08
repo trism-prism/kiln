@@ -10,7 +10,7 @@ import { TextField } from '../../ui/form'
 import type { Draft, DraftTask } from './builder'
 import type { Input as ReviewInput } from './logic'
 import { minutesText } from '../parts'
-import { dropPastDue, keptEdits, MAX_REPEAT, parseQuickAdd, readStudyText } from './quick-add'
+import { capitalize, dropPastDue, keptEdits, MAX_REPEAT, parseQuickAdd, parseStudyLine, readStudyText } from './quick-add'
 import { Review } from './Review'
 
 const cell = 'h-9 w-full rounded-md border border-border-strong bg-surface-raised px-2 text-sm text-text'
@@ -33,9 +33,21 @@ export function BuildTab() {
   const [droppedEdits, setDroppedEdits] = useState({ changed: 0, recounted: 0 })
   const parsed = useMemo(() => parseQuickAdd(text, today, times), [text, today, times])
   // Past dates are cleared after the table edits apply, so a date typed in the table is checked too.
-  const { modules, dropped: pastDates } = useMemo(
+  const { modules: allModules, dropped: pastDates } = useMemo(
     () => dropPastDue(parsed.map((m) => ({ ...m, tasks: m.tasks.map((t) => ({ ...t, ...edits[t.uid] })) })), today),
     [parsed, today, edits],
+  )
+  // One line like "Psychology 3h a week" makes a Study time plan instead of a task list.
+  const studyText = useMemo(() => readStudyText(text), [text])
+  const study = studyText && 'study' in studyText ? studyText.study : undefined
+  const mixed = studyText && 'mixed' in studyText ? studyText.mixed : undefined
+  // With the mixed-lines warning showing, the study line is left out of the task table.
+  const modules = useMemo(
+    () =>
+      mixed
+        ? allModules.map((m) => ({ ...m, tasks: m.tasks.filter((t) => !parseStudyLine(t.uid.slice(0, t.uid.lastIndexOf('#')))) })).filter((m) => m.tasks.length > 0)
+        : allModules,
+    [allModules, mixed],
   )
   const taskCount = modules.reduce((n, m) => n + m.tasks.length, 0)
   // Edits belong to a line's text. When the text changes, edits whose line is gone are dropped, so an
@@ -46,12 +58,9 @@ export function BuildTab() {
     if (next.changed + next.recounted > 0) setEdits(next.edits)
     setDroppedEdits({ changed: next.changed, recounted: next.recounted })
   }
-  // One line like "Psychology 3h a week" makes a Study time plan instead of a task list.
-  const studyText = useMemo(() => readStudyText(text), [text])
-  const study = studyText && 'study' in studyText ? studyText.study : undefined
-  const mixed = studyText && 'mixed' in studyText ? studyText.mixed : undefined
-  const draft: Draft = study ? { title: title.trim() || study.subject, modules: [], study } : { title, modules }
-  const canReview = !mixed && (!!study || modules.length > 0)
+  const studyTitle = study && (title.trim() || capitalize(study.subject))
+  const draft: Draft = study ? { title: studyTitle!, modules: [], study: { subject: study.subject, minutesPerWeek: study.minutesPerWeek } } : { title, modules }
+  const canReview = !mixed && !study?.error && (!!study || modules.length > 0)
   const edit = (uid: string, patch: Partial<DraftTask>) => setEdits((e) => ({ ...e, [uid]: { ...e[uid], ...patch } }))
   let row = 0
 
@@ -103,11 +112,16 @@ export function BuildTab() {
 
       <p role="status" className="text-sm text-text-muted">
         {study
-          ? `Study time: ${study.subject}, ${minutesText(study.minutesPerWeek)} a week`
+          ? `Study time: ${studyTitle}, ${minutesText(study.minutesPerWeek)} a week`
           : taskCount === 0
             ? ''
             : `${taskCount} ${taskCount === 1 ? 'task' : 'tasks'} in ${modules.length} ${modules.length === 1 ? 'module' : 'modules'}`}
       </p>
+      {study?.error && (
+        <p id="study-time-error" className="text-sm text-warning">
+          {study.error}
+        </p>
+      )}
       {mixed && (
         <p id="study-mixed" className="text-sm text-warning">
           “{mixed}” is study time, which is its own plan. Remove that line or the others.
@@ -204,10 +218,10 @@ export function BuildTab() {
       )}
 
       <div>
-        <Button isDisabled={!canReview} aria-describedby={mixed ? 'study-mixed' : !canReview ? 'review-reason' : undefined} onPress={() => setReviewed((r) => ({ input: { kind: 'build', draft: structuredClone(draft) }, n: (r?.n ?? 0) + 1 }))}>
+        <Button isDisabled={!canReview} aria-describedby={mixed ? 'study-mixed' : study?.error ? 'study-time-error' : !canReview ? 'review-reason' : undefined} onPress={() => setReviewed((r) => ({ input: { kind: 'build', draft: structuredClone(draft) }, n: (r?.n ?? 0) + 1 }))}>
           Review plan
         </Button>
-        {!canReview && !mixed && (
+        {!canReview && !mixed && !study?.error && (
           <p id="review-reason" className="mt-2 text-sm text-text-muted">
             Type at least one task above to review the plan.
           </p>

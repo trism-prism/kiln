@@ -33,7 +33,7 @@ import { PlanEditor } from '../plan/PlanEditor'
 import { shareExample } from '../plan/share-example'
 import { FavoriteButton, History } from '../plan/PlanExtras'
 import { StudyTimeSheet } from '../plan/StudyTimeSheet'
-import { minutesText, StudyWeekBar, TitleLink } from '../parts'
+import { minutesText, StudyPlanned, StudyWeekBar, TitleLink } from '../parts'
 import { PRIORITY_LABEL } from '../priority'
 import { usePlanDetail, useStudyDetail, useToday, type PlanDetail } from '../queries'
 
@@ -161,7 +161,10 @@ function StudySessions({ plan, today }: { plan: PlanRecord; today: string }) {
   const ended = plan.deadline !== undefined && plan.deadline < today
   return (
     <div className="grid min-w-0 content-start gap-8">
-      <StudyWeekBar week={d.week} />
+      <div className="grid gap-2">
+        <StudyWeekBar week={d.week} />
+        <StudyPlanned week={d.week} minutesPerWeek={plan.studyMinutesPerWeek ?? 0} />
+      </div>
       <section aria-labelledby="sessions" className="grid gap-3">
         <h2 id="sessions" className="text-base font-medium">
           Sessions

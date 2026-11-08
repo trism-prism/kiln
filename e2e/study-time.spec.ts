@@ -70,6 +70,12 @@ test('the sheet explains its errors after Add and warns when the week cannot hol
   await expect(time).toHaveAccessibleDescription("That's more than the 14 h a week you have, so Kiln plans 14 h.")
   await time.fill('41h')
   await expect(sheet.getByText('Up to 40 h a week')).toBeVisible()
+  await time.fill('15m')
+  await expect(time).toHaveAccessibleDescription('One 15 min session a week.')
+  // An end before the start says so in the sheet's words, not the date field's default.
+  await sheet.getByLabel('Ends (optional)').fill('nov 5')
+  await sheet.getByLabel('Ends (optional)').blur()
+  await expect(sheet.getByText('Pick a day after it starts')).toBeVisible()
   await sheet.getByRole('button', { name: 'Cancel' }).click()
   await expect(sheet).toBeHidden()
   await expect(page).toHaveURL(/\/import$/)
@@ -83,6 +89,16 @@ test('Quick add: one study line reviews as study time and imports; mixed with ta
   await box.fill('Read chapter 1 45m\nPsychology 3h a week')
   await expect(panel.getByText('“Psychology 3h a week” is study time, which is its own plan. Remove that line or the others.')).toBeVisible()
   await expect(panel.getByRole('button', { name: 'Review plan' })).toBeDisabled()
+  // The study line is left out of the task table while the warning shows.
+  await expect(panel.getByRole('textbox', { name: /^Task \d+ title$/ })).toHaveCount(1)
+  await expect(panel.getByRole('textbox', { name: 'Task 1 title' })).toHaveValue('Read chapter 1')
+  // A time outside 15 min to 40 h is caught here, in the sheet's words.
+  await box.fill('psychology 10m a week')
+  await expect(panel.getByText('At least 15 min, like 3h or 90m')).toBeVisible()
+  await expect(panel.getByRole('button', { name: 'Review plan' })).toBeDisabled()
+  await box.fill('psychology 3h a week')
+  // The plan's title starts with a capital.
+  await expect(panel.getByRole('status').first()).toHaveText('Study time: Psychology, 3 h a week')
   await box.fill('Psychology 3h a week')
   await expect(panel.getByRole('status').first()).toHaveText('Study time: Psychology, 3 h a week')
   await expect(panel.getByRole('table')).toHaveCount(0)
@@ -131,4 +147,20 @@ test('editing the weekly time changes the sessions; deleting the plan removes th
   await page.goto('/todo')
   await expect(page.getByRole('heading', { level: 1, name: 'To Do' })).toBeVisible()
   await expect(page.getByRole('main').getByText('Study Psychology')).toHaveCount(0)
+})
+
+test('when study plans ask for more than the week holds, the Plans card and plan page say what is really planned', async ({ page }) => {
+  await addStudy(page, 'Psychology', '10h')
+  await expect(page.getByText(/^Planned:/)).toHaveCount(0)
+  await page.goto('/import')
+  await page.getByRole('button', { name: 'Add study time' }).click()
+  const sheet = page.getByRole('dialog', { name: 'Add Study Time' })
+  await sheet.getByLabel('Subject').fill('Spanish')
+  await sheet.getByLabel('Time per week').fill('10h')
+  await sheet.getByRole('button', { name: 'Add', exact: true }).click()
+  await expect(sheet).toBeHidden()
+  // 20 h asked of 14 h: each gets 7 h.
+  await expect(page.getByRole('main').getByText('Planned: 7 h of 10 h')).toBeVisible()
+  await page.goto('/plans')
+  await expect(page.getByRole('main').getByText('Planned: 7 h of 10 h')).toHaveCount(2)
 })

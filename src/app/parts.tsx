@@ -50,3 +50,9 @@ export function StudyWeekBar({ week }: { week: StudyWeek }) {
     />
   )
 }
+
+/** "Planned: 2 h 50 min of 3 h" when an ordinary week can't hold a study plan's whole weekly time; nothing otherwise. */
+export function StudyPlanned({ week, minutesPerWeek }: { week: StudyWeek; minutesPerWeek: number }) {
+  if (week.perWeek === undefined || week.perWeek >= minutesPerWeek) return null
+  return <p className="text-sm text-warning">{`Planned: ${minutesText(week.perWeek)} of ${minutesText(minutesPerWeek)}`}</p>
+}

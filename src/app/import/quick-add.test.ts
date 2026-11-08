@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { formatIssue, validatePlan } from '../../domain/plan-format'
 import { buildPlan } from './builder'
-import { dropPastDue, expandRepeat, keptEdits, kindFromUrl, MAX_REPEAT, parseLine, parseQuickAdd, parseStudyLine, parseStudyMinutes, readStudyText, type ParsedLine } from './quick-add'
+import { dropPastDue, expandRepeat, keptEdits, kindFromUrl, MAX_REPEAT, parseLine, parseQuickAdd, parseStudyLine, parseStudyMinutes, readStudyText, capitalize, type ParsedLine } from './quick-add'
 
 // Friday.
 const today = '2026-11-06'
@@ -218,5 +218,16 @@ describe('readStudyText', () => {
     const r = validatePlan(buildPlan({ title: 'Psych 101', modules: [], study: { subject: 'Psychology', minutesPerWeek: 180 } }, { id: 'psych-101' }))
     expect(r.issues.map(formatIssue)).toEqual([])
     expect(r.plan).toMatchObject({ title: 'Psych 101', subject: 'Psychology', schedulingMode: 'auto', studyMinutesPerWeek: 180, modules: [], tasks: [] })
+  })
+})
+
+describe('study line times and titles', () => {
+  it('flags a time outside 15 min to 40 h with the sheet wording', () => {
+    expect(parseStudyLine('Psychology 10m a week')).toEqual({ subject: 'Psychology', minutesPerWeek: 10, error: 'At least 15 min, like 3h or 90m' })
+    expect(parseStudyLine('Psychology 41h a week')).toEqual({ subject: 'Psychology', minutesPerWeek: 2460, error: 'Up to 40 h a week' })
+    expect(parseStudyLine('Psychology 40h a week')).toEqual({ subject: 'Psychology', minutesPerWeek: 2400 })
+  })
+  it('capitalizes the first letter for a title', () => {
+    expect(['psychology', 'Spanish', ''].map(capitalize)).toEqual(['Psychology', 'Spanish', ''])
   })
 })

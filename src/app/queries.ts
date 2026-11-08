@@ -5,6 +5,7 @@ import { badgeCount } from '../domain/badge'
 import { buildStudyDays, streakStats, type DayStudy, type StreakStats } from '../domain/streaks'
 import { buildTodoItems, parseTodoPrefs, type TodoItem, type TodoPrefs } from '../domain/todo'
 import { weekStartOf, type WeekStart } from '../domain/calendar'
+import { typicalStudyWeek } from '../domain/scheduler'
 import { getMeta, setMeta } from '../pwa/meta'
 import {
   db,
@@ -180,6 +181,16 @@ export interface StudyWeek {
   weekDone: number
   /** Done plus the open sessions from today to the end of the week. */
   weekPlanned: number
+  /** Minutes an ordinary week really plans for the plan: less than its weekly time when the study plans don't all fit. */
+  perWeek?: number
+}
+
+/** What each live study plan gets in an ordinary week (typicalStudyWeek), by plan id. */
+function perWeekByPlan(plans: PlanRecord[], minutesPerWeekday: number[], today: string): Map<string, number> {
+  const live = plans.filter((p) => isStudyPlan(p) && (!p.deadline || p.deadline >= today)).map((p) => ({ id: p.id, studyMinutesPerWeek: p.studyMinutesPerWeek! }))
+  const out = new Map<string, number>()
+  for (const s of typicalStudyWeek(live, minutesPerWeekday)) out.set(s.planId, (out.get(s.planId) ?? 0) + s.minutes)
+  return out
 }
 
 /** A study plan's week (per the week-start setting) from its live sessions. */
@@ -200,11 +211,12 @@ export function usePlanSummaries(today: string): PlanSummary[] | undefined {
     const tasks = alive(await db.tasks.toArray())
     const problems = alive(await db.practiceItems.toArray())
     const sessions = alive(await db.studyItems.toArray())
-    const { weekStartsOn } = await getSettings(db)
+    const { weekStartsOn, minutesPerWeekday } = await getSettings(db)
+    const perWeek = perWeekByPlan(plans, minutesPerWeekday, today)
     const mastery = await masteryByPlan(db, Date.now())
     return plans.map((plan): PlanSummary => {
       if (isStudyPlan(plan)) {
-        const study = studyWeek(sessions.filter((s) => s.planId === plan.id), today, weekStartsOn)
+        const study = { ...studyWeek(sessions.filter((s) => s.planId === plan.id), today, weekStartsOn), perWeek: perWeek.get(plan.id) }
         const todayCount = study.today && !study.today.done ? 1 : 0
         return { plan, todayCount, overdue: 0, coreDone: 0, coreTotal: 0, allDone: 0, allTotal: 0, mastery: 0, backlog: 0, study }
       }
@@ -292,8 +304,9 @@ export interface StudyDetail {
 export function useStudyDetail(planId: string, today: string): StudyDetail | undefined {
   return useLiveQuery(async () => {
     const sessions = alive(await db.studyItems.where('planId').equals(planId).toArray()).sort((a, b) => (a.date < b.date ? -1 : 1))
-    const { weekStartsOn } = await getSettings(db)
+    const { weekStartsOn, minutesPerWeekday } = await getSettings(db)
     const end = addDaysISO(today, 6)
-    return { week: studyWeek(sessions, today, weekStartsOn), next: sessions.filter((s) => s.date >= today && s.date <= end) }
+    const perWeek = perWeekByPlan(await listPlans(db), minutesPerWeekday, today).get(planId)
+    return { week: { ...studyWeek(sessions, today, weekStartsOn), perWeek }, next: sessions.filter((s) => s.date >= today && s.date <= end) }
   }, [planId, today])
 }
