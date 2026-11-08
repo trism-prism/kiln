@@ -3,7 +3,8 @@ import { addDaysISO } from '../lib/date'
 import { fixtureTexts, validateParts } from './fixtures'
 import { brushUp, completeTask, dueCards } from './mastery'
 import { completePractice } from './practice'
-import { importPlan, listTasks, softDeletePlan, updateRecord } from './repo'
+import { newCard } from '../domain/mastery'
+import { importPlan, insertRecord, listTasks, softDeletePlan, updateRecord } from './repo'
 import { scheduleAll } from './schedule'
 import { newDb } from './test-db'
 
@@ -128,6 +129,27 @@ describe('completePractice', () => {
     expect(await brushUp(db, r.card.due + 1)).toEqual([])
     await updateRecord(db, 'plans', planId, { reviewsOn: true })
     expect((await brushUp(db, r.card.due + 1)).map((e) => e.title)).toContain(item.title)
+  })
+
+  it('with reviews off, undo puts the problem and its log back (the hidden card goes too)', async () => {
+    const { db } = await seeded(false)
+    const item = (await live(db)).find((i) => i.date === TODAY)!
+    const r = await completePractice(db, item.id, 'good', NOON, NO_FUZZ)
+    expect((await db.practiceLog.toArray()).filter((l) => !l.deleted)).toHaveLength(1)
+    await r.undo()
+    expect((await db.practiceItems.get(item.id))!.status).toBe('open')
+    expect((await db.practiceLog.toArray()).filter((l) => !l.deleted)).toEqual([])
+    expect((await db.reviewCards.toArray()).filter((c) => !c.deleted)).toEqual([])
+  })
+
+  it('rates only the card of its own plan when another plan has a card for the same slug', async () => {
+    const { db } = await seeded()
+    const item = (await live(db)).find((i) => i.date === TODAY)!
+    const other = await insertRecord(db, 'reviewCards', { ...newCard(NOON), planId: 'other-plan', slug: item.slug, topics: [], minutes: 15 })
+    const r = await completePractice(db, item.id, 'good', NOON, NO_FUZZ)
+    expect(r.card.id).not.toBe(other.id)
+    expect(r.card.planId).toBe(item.planId)
+    expect(await db.reviewCards.get(other.id)).toMatchObject({ reps: 0 })
   })
 
   it('rates the same card again without a second practice log row', async () => {

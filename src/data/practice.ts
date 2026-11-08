@@ -106,7 +106,7 @@ export async function completePractice(
     const item = (await updateRecord(db, 'practiceItems', itemId, { status: 'done', rating: RATING_VALUE[rating], completedAt: now }))!
 
     const existing = (await db.reviewCards.toArray())
-      .filter((c) => !c.deleted && !c.taskId && c.slug === item.slug)
+      .filter((c) => !c.deleted && !c.taskId && c.planId === item.planId && c.slug === item.slug)
       .sort((a, b) => (a.id < b.id ? -1 : 1))[0]
     const { card, log } = rate(existing ?? newCard(now), rating, now, opts)
     const rec = existing
