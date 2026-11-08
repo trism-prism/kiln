@@ -106,6 +106,12 @@ test('an open select list sits on its own opaque surface above the card, in ligh
   }
 })
 
+test('Plans with no plans shows one import button', async ({ page }) => {
+  await page.goto('/plans')
+  await expect(page.getByRole('heading', { name: 'No plans yet' })).toBeVisible()
+  await expect(page.getByRole('main').getByRole('link', { name: 'Import a plan' })).toHaveCount(1)
+})
+
 test('focus moves to the page heading after navigation, not on first load', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).not.toBeFocused()
