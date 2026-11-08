@@ -1,4 +1,4 @@
-// The To Do list: turns tasks, generated daily problems, due reviews, personal to-dos and events into
+// The To Do list: turns tasks, generated daily problems, study sessions, due reviews, personal to-dos and events into
 // dated items, then filters them by the list preferences, cuts them into a range and groups them by
 // day. Pure; the data layer feeds it.
 import { addDaysISO } from '../../lib/date'
@@ -121,8 +121,8 @@ export interface TodoCard {
 export interface TodoItem {
   /** Unique in the list. */
   key: string
-  kind: 'task' | 'practice' | 'review' | 'personal' | 'event'
-  /** Id of the task, generated problem, review card, personal to-do or event. */
+  kind: 'task' | 'practice' | 'study' | 'review' | 'personal' | 'event'
+  /** Id of the task, generated problem, study session, review card, personal to-do or event. */
   id: string
   title: string
   /** Empty for personal to-dos and events. */
@@ -131,7 +131,7 @@ export interface TodoItem {
   planTitle: string
   /** Day the item is listed under. */
   date: string
-  /** Lesson, practice, review, project, assessment, milestone, "daily problem", "To-do" or "Event". */
+  /** Lesson, practice, review, project, assessment, milestone, "daily problem", "Study time", "To-do" or "Event". */
   typeLabel: string
   minutes: number
   done: boolean
@@ -144,11 +144,13 @@ export interface TodoItem {
   todo?: { date?: string; minutes?: number }
 }
 
-const KIND_RANK = { event: 0, review: 1, task: 2, personal: 3, practice: 4 }
+const KIND_RANK = { event: 0, review: 1, task: 2, study: 3, personal: 4, practice: 5 }
 
 export interface TodoSource {
   tasks: (TodoTask & { practice?: { provider: string; slug?: string; difficulty: 'easy' | 'medium' | 'hard' } })[]
   problems: TodoProblem[]
+  /** Sessions of live study time plans. */
+  studyItems?: { id: string; planId: string; date: string; minutes: number; status: 'open' | 'done' }[]
   /** Live review cards (not suspended). */
   cards: TodoCard[]
   personalTodos?: { id: string; title: string; date?: string; minutes?: number; done: boolean; completedAt?: number }[]
@@ -167,8 +169,9 @@ export interface TodoSource {
 }
 
 /**
- * Every item that has a day: scheduled tasks (open or done, not skipped), generated problems,
- * reviews, personal to-dos and events. A review due today or earlier is listed today (like the badge
+ * Every item that has a day: scheduled tasks (open or done, not skipped), generated problems, study
+ * sessions, reviews, personal to-dos and events. A study session is never overdue: an open one dated before
+ * today has expired (the scheduler moved its minutes) and is not listed. A review due today or earlier is listed today (like the badge
  * counts it); a later one on its due day. Reviews are never overdue. An undated to-do is listed today
  * (never overdue), and once done on the day it was finished. Events are listed on their first day.
  */
@@ -211,6 +214,24 @@ export function buildTodoItems(src: TodoSource, today: string): TodoItem[] {
       done: p.status === 'done',
       overdue: p.status === 'open' && p.date < today,
       leetcode: { slug: p.slug, difficulty: p.difficulty, language },
+      sort: 0,
+    })
+  }
+  for (const s of src.studyItems ?? []) {
+    if (s.status === 'open' && s.date < today) continue
+    items.push({
+      key: `study:${s.id}`,
+      kind: 'study',
+      id: s.id,
+      title: `Study ${planTitle(s.planId)}`,
+      planId: s.planId,
+      planTitle: planTitle(s.planId),
+      date: s.date,
+      typeLabel: 'Study time',
+      minutes: s.minutes,
+      done: s.status === 'done',
+      overdue: false,
+      href: `/plans/${s.planId}`,
       sort: 0,
     })
   }

@@ -33,6 +33,7 @@ export const minutesText = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h${m
 
 export const percent = (fraction: number) => `${Math.round(fraction * 100)}%`
 
-/** "Plan · Lesson · 30 min" under an item's title. Events and to-dos without minutes show no duration. */
+/** "Plan · Lesson · 30 min" under an item's title. Events and to-dos without minutes show no duration. A study
+ * session's title already names its plan ("Study Psychology"), so its line is "Study time · 45 min". */
 export const itemMeta = (item: TodoItem) =>
-  [item.planTitle, item.typeLabel, item.minutes > 0 || (item.kind !== 'event' && item.kind !== 'personal') ? minutesText(item.minutes) : ''].filter(Boolean).join(' · ')
+  [item.kind === 'study' ? '' : item.planTitle, item.typeLabel, item.minutes > 0 || (item.kind !== 'event' && item.kind !== 'personal') ? minutesText(item.minutes) : ''].filter(Boolean).join(' · ')

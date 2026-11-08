@@ -4,13 +4,14 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { badgeCount } from '../domain/badge'
 import { buildStudyDays, streakStats, type DayStudy, type StreakStats } from '../domain/streaks'
 import { buildTodoItems, parseTodoPrefs, type TodoItem, type TodoPrefs } from '../domain/todo'
-import type { WeekStart } from '../domain/calendar'
+import { weekStartOf, type WeekStart } from '../domain/calendar'
 import { getMeta, setMeta } from '../pwa/meta'
 import {
   db,
   dueCards,
   eventsBetween,
   getSettings,
+  isStudyPlan,
   listModules,
   listPersonalTodos,
   listPlans,
@@ -22,6 +23,7 @@ import {
   type ModuleRecord,
   type PlanRecord,
   type SettingsRecord,
+  type StudyItemRecord,
   type TaskRecord,
 } from '../data'
 import { addDaysISO, toLocalISODate, weekdayIndex } from '../lib/date'
@@ -55,15 +57,19 @@ export function useMinute(): number {
 
 const alive = <T extends { deleted: boolean }>(rows: T[]) => rows.filter((r) => !r.deleted)
 
-/** The badge: open tasks and daily problems today or overdue, plus reviews due. */
+/** The badge: open tasks and daily problems today or overdue, today's open study sessions, plus reviews due. */
 export function useBadgeCount(today: string): number {
   return (
     useLiveQuery(async () => {
       const tasks = await tasksScheduledBetween(db, '0000-01-01', today)
-      const on = new Set((await listPlans(db)).filter((p) => practiceConfig(p)).map((p) => p.id))
+      const plans = await listPlans(db)
+      const on = new Set(plans.filter((p) => practiceConfig(p)).map((p) => p.id))
+      const study = new Set(plans.filter(isStudyPlan).map((p) => p.id))
       const problems = alive(await db.practiceItems.where('date').belowOrEqual(today).toArray()).filter((p) => on.has(p.planId))
+      const sessions = alive(await db.studyItems.where('date').equals(today).toArray()).filter((s) => study.has(s.planId))
       const todos = await db.personalTodos.where('date').belowOrEqual(today).toArray()
-      return badgeCount([...tasks, ...problems.map((p) => ({ status: p.status, scheduledDate: p.date }))], await dueCards(db, today), today, todos)
+      const dated = [...problems, ...sessions].map((p) => ({ status: p.status, scheduledDate: p.date }))
+      return badgeCount([...tasks, ...dated], await dueCards(db, today), today, todos)
     }, [today]) ?? 0
   )
 }
@@ -72,6 +78,8 @@ async function loadTodo(today: string, horizonDays: number) {
   const plans = await listPlans(db)
   const allTasks = alive(await db.tasks.toArray())
   const problems = alive(await db.practiceItems.toArray())
+  const studyPlans = new Set(plans.filter(isStudyPlan).map((p) => p.id))
+  const studyItems = alive(await db.studyItems.toArray()).filter((s) => studyPlans.has(s.planId))
   const planLanguages = new Map(plans.map((p) => [p.id, practiceLanguage(p)]))
   const practiceLanguages = new Map(plans.filter((p) => practiceConfig(p)).map((p) => [p.id, practiceLanguage(p)]))
   const cards = await dueCards(db, addDaysISO(today, horizonDays))
@@ -81,6 +89,7 @@ async function loadTodo(today: string, horizonDays: number) {
     {
       tasks: allTasks,
       problems,
+      studyItems,
       cards,
       personalTodos: await listPersonalTodos(db),
       events: await eventsBetween(db, addDaysISO(today, -horizonDays), addDaysISO(today, horizonDays)),
@@ -161,6 +170,27 @@ export interface PlanSummary {
   /** Last date of the plan's open, scheduled tasks. */
   finish?: string
   backlog: number
+  /** Study time plans only: today's session and this week's minutes. */
+  study?: StudyWeek
+}
+
+export interface StudyWeek {
+  today?: { minutes: number; done: boolean }
+  /** Minutes of this week's done sessions. */
+  weekDone: number
+  /** Done plus the open sessions from today to the end of the week. */
+  weekPlanned: number
+}
+
+/** A study plan's week (per the week-start setting) from its live sessions. */
+export function studyWeek(sessions: StudyItemRecord[], today: string, weekStartsOn: WeekStart): StudyWeek {
+  const from = weekStartOf(today, weekStartsOn)
+  const to = addDaysISO(from, 6)
+  const week = sessions.filter((s) => s.date >= from && s.date <= to)
+  const sum = (rows: StudyItemRecord[]) => rows.reduce((n, s) => n + s.minutes, 0)
+  const weekDone = sum(week.filter((s) => s.status === 'done'))
+  const t = sessions.find((s) => s.date === today)
+  return { today: t && { minutes: t.minutes, done: t.status === 'done' }, weekDone, weekPlanned: weekDone + sum(week.filter((s) => s.status === 'open' && s.date >= today)) }
 }
 
 /** One summary per plan (skipped tasks are left out of the totals). */
@@ -169,8 +199,15 @@ export function usePlanSummaries(today: string): PlanSummary[] | undefined {
     const plans = await listPlans(db)
     const tasks = alive(await db.tasks.toArray())
     const problems = alive(await db.practiceItems.toArray())
+    const sessions = alive(await db.studyItems.toArray())
+    const { weekStartsOn } = await getSettings(db)
     const mastery = await masteryByPlan(db, Date.now())
     return plans.map((plan): PlanSummary => {
+      if (isStudyPlan(plan)) {
+        const study = studyWeek(sessions.filter((s) => s.planId === plan.id), today, weekStartsOn)
+        const todayCount = study.today && !study.today.done ? 1 : 0
+        return { plan, todayCount, overdue: 0, coreDone: 0, coreTotal: 0, allDone: 0, allTotal: 0, mastery: 0, backlog: 0, study }
+      }
       const mine = tasks.filter((t) => t.planId === plan.id && t.status !== 'skipped')
       const open = mine.filter((t) => t.status === 'open')
       const dated = open.filter((t) => t.scheduledDate).sort((a, b) => (a.scheduledDate! < b.scheduledDate! ? -1 : a.scheduledDate! > b.scheduledDate! ? 1 : a.order - b.order))
@@ -243,4 +280,20 @@ export function usePlanDetail(id: string | undefined): PlanDetail | null | undef
 /** Kiln's week start (Settings), for every date picker. */
 export function useWeekStart(): WeekStart {
   return useLiveQuery(async () => (await getSettings(db)).weekStartsOn, []) ?? 'monday'
+}
+
+export interface StudyDetail {
+  week: StudyWeek
+  /** Stored sessions from today for 7 days, by date. */
+  next: StudyItemRecord[]
+}
+
+/** A study time plan's week and its next 7 days of sessions. undefined while loading. */
+export function useStudyDetail(planId: string, today: string): StudyDetail | undefined {
+  return useLiveQuery(async () => {
+    const sessions = alive(await db.studyItems.where('planId').equals(planId).toArray()).sort((a, b) => (a.date < b.date ? -1 : 1))
+    const { weekStartsOn } = await getSettings(db)
+    const end = addDaysISO(today, 6)
+    return { week: studyWeek(sessions, today, weekStartsOn), next: sessions.filter((s) => s.date >= today && s.date <= end) }
+  }, [planId, today])
 }

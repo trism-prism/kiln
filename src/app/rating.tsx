@@ -1,13 +1,13 @@
 // The completion flow shared by To Do, the task page and brush-up: write with the default rating
 // ("good"), then toast with Undo. There is no rating step; reviews are opt-in per plan.
 import { useState } from 'react'
-import { completePractice, completeTask, db, reviewCard } from '../data'
+import { completePractice, completeStudy, completeTask, db, reviewCard } from '../data'
 import type { RatingName } from '../domain/mastery'
 import { toasts } from '../ui/overlay'
 
-/** What the completion flow needs from a task, a daily problem or a review. */
+/** What the completion flow needs from a task, a daily problem, a study session or a review. */
 export interface Completable {
-  kind: 'task' | 'practice' | 'review'
+  kind: 'task' | 'practice' | 'study' | 'review'
   id: string
   title: string
 }
@@ -21,6 +21,10 @@ async function run(item: Completable, rating: RatingName) {
   try {
     if (item.kind === 'practice') {
       const r = await completePractice(db, item.id, rating, now)
+      return { r, text: `Done: ${item.title}` }
+    }
+    if (item.kind === 'study') {
+      const r = await completeStudy(db, item.id, now)
       return { r, text: `Done: ${item.title}` }
     }
     if (item.kind === 'review') {

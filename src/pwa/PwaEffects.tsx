@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router'
 import { useTodoCount } from '../app/useTodoCount'
-import { db, getSettings } from '../data'
+import { db, getSettings, topUpStudy } from '../data'
 import { toLocalISODate } from '../lib/date'
 import { toasts } from '../ui/overlay'
 import { applyBadge } from './badge'
@@ -33,6 +33,7 @@ export function PwaEffects() {
     registerServiceWorker()
     void pingIfDue(db, fetch, API_URL, toLocalISODate(new Date()))
     void getSettings(db).then((s) => syncPush(db, s)).catch(() => undefined)
+    void topUpStudy(db, toLocalISODate(new Date())).catch(() => undefined)
     scheduleSync(0)
   }, [])
 
@@ -51,10 +52,13 @@ export function PwaEffects() {
     })
   }, [navigate])
 
-  // Sync again when the connection comes back or the app returns to the foreground.
+  // Sync again when the connection comes back or the app returns to the foreground. Coming back on a new day also
+  // plans that day's study session (study time plans), as nothing else runs the scheduler overnight.
   useEffect(() => {
     const onVisible = () => {
-      if (document.visibilityState === 'visible') scheduleSync()
+      if (document.visibilityState !== 'visible') return
+      scheduleSync()
+      void topUpStudy(db, toLocalISODate(new Date())).catch(() => undefined)
     }
     const onOnline = () => scheduleSync()
     window.addEventListener('online', onOnline)
