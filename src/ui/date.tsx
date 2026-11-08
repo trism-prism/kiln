@@ -164,7 +164,7 @@ export function DateField({
         setFocused(true)
         setBefore(value)
         // Tabbing in selects all the text, so one key would wipe the date; start with the cursor at the end.
-        const box = e.target as HTMLInputElement
+        const box = e.currentTarget as HTMLInputElement
         if (box.value !== '' && box.selectionStart === 0 && box.selectionEnd === box.value.length) box.setSelectionRange(box.value.length, box.value.length)
       }}
       onBlur={() => {
