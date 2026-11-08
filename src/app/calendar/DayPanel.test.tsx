@@ -23,7 +23,6 @@ const item: TodoItem = {
   done: false,
   overdue: false,
   href: '/task/a',
-  rates: true,
 }
 
 it('"Move to" flags the day field on Move, like the to-do form, and moves once it is fixed', async () => {

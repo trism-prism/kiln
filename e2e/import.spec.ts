@@ -171,6 +171,33 @@ const QUICK_ADD = [
   'Final exam tomorrow',
 ].join('\n')
 
+test('Schedule reviews is unticked at import, and ticking it switches reviews on for the new plan', async ({ page }) => {
+  await paste(page, fixture('system-design'))
+  const box = page.getByRole('checkbox', { name: 'Schedule reviews' })
+  await expect(box).not.toBeChecked()
+  await expect(box).toHaveAccessibleDescription('Finished lessons come back for a short review on later days.')
+  await box.check({ force: true })
+  await importIt(page)
+  await expect(page.getByRole('switch', { name: 'Schedule reviews' })).toBeChecked()
+})
+
+test('a plan imported with the box unticked has reviews off', async ({ page }) => {
+  await paste(page, fixture('system-design'))
+  await expect(page.getByRole('checkbox', { name: 'Schedule reviews' })).not.toBeChecked()
+  await importIt(page)
+  await expect(page.getByRole('switch', { name: 'Schedule reviews' })).not.toBeChecked()
+})
+
+test('Schedule reviews is hidden when the import updates a plan, and back for a copy', async ({ page }) => {
+  await paste(page, fixture('system-design'))
+  await importIt(page)
+  await paste(page, fixture('system-design'))
+  await expect(page.getByRole('radio', { name: /^Update/ })).toBeChecked()
+  await expect(page.getByRole('checkbox', { name: 'Schedule reviews' })).toBeHidden()
+  await page.getByRole('radio', { name: 'Import as a copy with a new id' }).check({ force: true })
+  await expect(page.getByRole('checkbox', { name: 'Schedule reviews' })).toBeVisible()
+})
+
 test('quick add: 12 lines become a plan that imports', async ({ page }) => {
   await page.goto('/import')
   await page.getByRole('tab', { name: 'Quick add' }).click()

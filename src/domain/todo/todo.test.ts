@@ -62,12 +62,11 @@ describe('buildTodoItems', () => {
       ['c2', TODAY, false],
       ['c3', '2026-11-14', false],
     ])
-    expect(items[0]).toMatchObject({ title: 'Review: Task t1', kind: 'review', href: '/task/t1', rates: true })
+    expect(items[0]).toMatchObject({ title: 'Review: Task t1', kind: 'review', href: '/task/t1' })
   })
 
-  it('asks for a rating only where a review card exists or will', () => {
+  it('lists a lesson, a milestone, a LeetCode task and a daily problem', () => {
     const items = build([task('t1', TODAY), task('t2', TODAY, { type: 'milestone' }), task('t3', TODAY, { type: 'practice', practice: { provider: 'leetcode', slug: 'two-sum', difficulty: 'easy' } })], [problem('a', TODAY)])
-    expect(Object.fromEntries(items.map((i) => [i.id, i.rates]))).toEqual({ t1: true, t2: false, t3: true, a: true })
     expect(items.find((i) => i.id === 't3')?.leetcode).toEqual({ slug: 'two-sum', difficulty: 'easy', language: 'Python' })
     expect(items.find((i) => i.id === 'a')).toMatchObject({ kind: 'practice', leetcode: { slug: 'slug-a', difficulty: 'easy', language: 'Python' } })
   })
@@ -167,7 +166,7 @@ describe('personal to-dos and events', () => {
   })
 
   it('lists an event on its day, with no minutes and no plan', () => {
-    expect(by('e1')).toMatchObject({ kind: 'event', date: TODAY, minutes: 0, planId: '', planTitle: 'BIO 101', done: false, rates: false })
+    expect(by('e1')).toMatchObject({ kind: 'event', date: TODAY, minutes: 0, planId: '', planTitle: 'BIO 101', done: false })
     expect(by('e1').typeLabel).toMatch(/^Event, /)
   })
 

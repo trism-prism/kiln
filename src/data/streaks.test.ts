@@ -15,7 +15,7 @@ const NO_FUZZ = { fuzz: false }
 async function seeded() {
   const db = newDb()
   let planId = ''
-  for (const p of validateParts([fixtureTexts.dsa1, fixtureTexts.dsa2, fixtureTexts.dsa3]).plans) planId = (await importPlan(db, p, { startDate: TODAY })).planId
+  for (const p of validateParts([fixtureTexts.dsa1, fixtureTexts.dsa2, fixtureTexts.dsa3]).plans) planId = (await importPlan(db, p, { startDate: TODAY, reviewsOn: true })).planId
   await scheduleAll(db, TODAY)
   return { db, planId }
 }

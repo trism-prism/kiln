@@ -16,7 +16,7 @@ const TODAY = toLocalISODate(NOW)
 async function seeded() {
   const db = newDb()
   const plan = validateParts([fixtureTexts.sd]).plans[0]!
-  const { planId } = await importPlan(db, plan, { startDate: TODAY })
+  const { planId } = await importPlan(db, plan, { startDate: TODAY, reviewsOn: true })
   const tasks = await listTasks(db, planId)
   // Three tasks today, one yesterday (overdue), one tomorrow (not counted).
   const at = (i: number, date: string) => db.tasks.update(tasks[i]!.id, { scheduledDate: date })
@@ -38,6 +38,16 @@ describe('readBreakdown (what the service worker counts)', () => {
     expect(r.overdue).toBe(1)
     expect(r.reviews).toBe(1)
     expect(r.total).toBe(5)
+  })
+
+  it('leaves out the due reviews of a plan with reviews off (kept, not counted)', async () => {
+    const { db, tasks, planId } = await seeded()
+    await completeTask(db, tasks[5]!.id, 'good', NOW.getTime() - 3 * 86_400_000, { fuzz: false })
+    await db.plans.update(planId, { reviewsOn: undefined })
+    expect((await readBreakdown(indexedDB, NOW, db.name)).reviews).toBe(0)
+    expect(await dueCards(db, TODAY)).toEqual([])
+    await db.plans.update(planId, { reviewsOn: true })
+    expect((await readBreakdown(indexedDB, NOW, db.name)).reviews).toBe(1)
   })
 
   it('matches the number the app puts on the badge, including deleted tasks', async () => {
