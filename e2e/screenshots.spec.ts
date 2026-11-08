@@ -165,3 +165,180 @@ for (const colorScheme of ['light', 'dark'] as const) {
     }
   }
 }
+
+// Study time plans. SHOTS_DIR overrides the folder. Clock fixed at Monday 9 Nov 2026, default budget (14 h a week).
+const shotsDir = process.env.SHOTS_DIR ?? 'docs/design'
+const MONDAY = new Date(2026, 10, 9, 9, 0, 0)
+
+async function studyStart(page: Page, path = '/import') {
+  await page.clock.install({ time: MONDAY })
+  await page.goto(path)
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+}
+async function openStudySheet(page: Page) {
+  await page.getByRole('button', { name: 'Add study time' }).click()
+  const sheet = page.getByRole('dialog', { name: 'Add Study Time' })
+  await expect(sheet).toBeVisible()
+  return sheet
+}
+/** Adds a study time plan through the sheet and lands on its page. */
+async function addStudyPlan(page: Page, subject: string, time: string, dates: { start?: string; end?: string } = {}) {
+  await page.goto('/import')
+  const sheet = await openStudySheet(page)
+  await sheet.getByLabel('Subject').fill(subject)
+  await sheet.getByLabel('Time per week').fill(time)
+  if (dates.start) await sheet.getByLabel('Starts').fill(dates.start)
+  if (dates.end) await sheet.getByLabel('Ends (optional)').fill(dates.end)
+  await sheet.getByLabel('Subject').click() // leaving a date field commits it
+  await sheet.getByRole('button', { name: 'Add', exact: true }).click()
+  await expect(sheet).toBeHidden()
+  await expect(page.getByRole('heading', { level: 2, name: 'Sessions' })).toBeVisible()
+}
+/** Sets every weekday to 0 minutes (raw IndexedDB, then a reload so the app reads it). */
+async function noStudyDays(page: Page) {
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const open = indexedDB.open('kiln')
+        open.onerror = () => reject(open.error)
+        open.onsuccess = () => {
+          const tx = open.result.transaction('settings', 'readwrite')
+          tx.objectStore('settings').put({ id: 'settings', updatedAt: Date.now(), deleted: false, deviceId: 'shots', minutesPerWeekday: [0, 0, 0, 0, 0, 0, 0], weekStartsOn: 'monday', reminderTime: '08:00', nudgeEnabled: false, nudgeTime: '20:00', theme: 'system', reviewCapPercent: 25, blackoutDates: [] })
+          tx.oncomplete = () => resolve()
+          tx.onerror = () => reject(tx.error)
+        }
+      }),
+  )
+  await page.reload()
+}
+async function quickAdd(page: Page, text: string) {
+  await studyStart(page)
+  await page.getByRole('tab', { name: 'Quick add' }).click()
+  const panel = page.getByRole('tabpanel', { name: 'Quick add' })
+  await panel.getByRole('textbox', { name: 'Tasks, one per line' }).fill(text)
+  return panel
+}
+
+const studyScenes: Record<string, (page: Page) => Promise<{ full?: boolean } | void>> = {
+  'study-import-card': async (page) => {
+    await studyStart(page)
+    await expect(page.getByRole('heading', { level: 2, name: 'Study time' })).toBeVisible()
+  },
+  'study-sheet-empty': async (page) => {
+    await studyStart(page)
+    await openStudySheet(page)
+  },
+  'study-sheet-errors': async (page) => {
+    await studyStart(page)
+    const sheet = await openStudySheet(page)
+    await sheet.getByRole('button', { name: 'Add', exact: true }).click()
+    await expect(sheet.getByText('Add a subject')).toBeVisible()
+  },
+  'study-sheet-no-days': async (page) => {
+    await studyStart(page)
+    await noStudyDays(page)
+    const sheet = await openStudySheet(page)
+    await expect(sheet.getByText(/You have no study days yet/)).toBeVisible()
+  },
+  'study-sheet-over': async (page) => {
+    await studyStart(page)
+    const sheet = await openStudySheet(page)
+    await sheet.getByLabel('Subject').fill('Psychology')
+    await sheet.getByLabel('Time per week').fill('20h')
+    await expect(sheet.getByText(/more than the 14 h a week you have/)).toBeVisible()
+  },
+  'study-sheet-shared': async (page) => {
+    await studyStart(page)
+    await addStudyPlan(page, 'Spanish', '10h')
+    await page.goto('/import')
+    const sheet = await openStudySheet(page)
+    await sheet.getByLabel('Subject').fill('Psychology')
+    await sheet.getByLabel('Time per week').fill('5h')
+    await expect(sheet.getByText(/Kiln shares the 14 h between them/)).toBeVisible()
+  },
+  'study-sheet-edit': async (page) => {
+    await studyStart(page)
+    await addStudyPlan(page, 'Psychology', '3h')
+    await page.getByRole('button', { name: 'Edit plan' }).click()
+    await expect(page.getByRole('dialog', { name: 'Edit Study Time' })).toBeVisible()
+  },
+  'study-plan': async (page) => {
+    await studyStart(page)
+    await addStudyPlan(page, 'Psychology', '3h')
+    return { full: true }
+  },
+  'study-plan-ended': async (page) => {
+    await studyStart(page)
+    await addStudyPlan(page, 'Psychology', '3h', { end: 'Nov 10' })
+    await page.clock.fastForward(2 * 24 * 3_600_000)
+    await page.reload()
+    await expect(page.getByText(/This plan ended on/)).toBeVisible()
+  },
+  'study-plan-none': async (page) => {
+    await studyStart(page)
+    await addStudyPlan(page, 'Psychology', '3h', { start: 'Dec 1' })
+    await expect(page.getByText('No sessions in the next 7 days.')).toBeVisible()
+  },
+  'study-todo': async (page) => {
+    await studyStart(page)
+    await addStudyPlan(page, 'Psychology', '3h')
+    await addStudyPlan(page, 'Spanish', '2h')
+    await page.goto('/todo')
+    const row = page.getByRole('main').getByRole('listitem').filter({ hasText: 'Study Spanish' })
+    await row.getByRole('checkbox').click({ force: true })
+    await expect(row.getByText('Done', { exact: true })).toBeVisible()
+    await page.getByRole('button', { name: 'Dismiss' }).click()
+  },
+  'study-dashboard': async (page) => {
+    await studyStart(page)
+    await addStudyPlan(page, 'Psychology', '3h', { end: 'Dec 12' })
+    await addStudyPlan(page, 'Spanish', '2h')
+    await page.goto('/')
+    await expect(page.getByText('Ends Dec 12')).toBeVisible()
+  },
+  'study-plans': async (page) => {
+    await studyStart(page)
+    await addStudyPlan(page, 'Psychology', '3h', { end: 'Dec 12' })
+    await addStudyPlan(page, 'Spanish', '2h')
+    await page.goto('/plans')
+    await expect(page.getByText('3 h a week · ends Dec 12')).toBeVisible()
+  },
+  'study-quick-add': async (page) => {
+    const panel = await quickAdd(page, 'Psychology 3h a week')
+    await expect(panel.getByRole('status').first()).toHaveText('Study time: Psychology, 3 h a week')
+  },
+  'study-quick-add-mixed': async (page) => {
+    const panel = await quickAdd(page, 'Read chapter 1 45m\nPsychology 3h a week')
+    await expect(panel.getByText(/is study time, which is its own plan/)).toBeVisible()
+    return { full: true }
+  },
+  'study-import-review': async (page) => {
+    const panel = await quickAdd(page, 'Psychology 3h a week')
+    await panel.getByRole('button', { name: 'Review plan' }).click()
+    await expect(panel.getByText('Study Psychology (25 min)').first()).toBeVisible()
+    return { full: true }
+  },
+  'study-calendar': async (page) => {
+    await studyStart(page)
+    await addStudyPlan(page, 'Psychology', '3h')
+    await page.goto('/calendar')
+    await expect(page.getByRole('grid')).toBeVisible()
+    // Phones show the day's count, not chip titles.
+    if ((page.viewportSize()?.width ?? 0) >= 768) await expect(page.getByText('Study Psychology').first()).toBeVisible()
+    return { full: true }
+  },
+}
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  for (const [size, viewport] of Object.entries(sizes)) {
+    for (const [name, scene] of Object.entries(studyScenes)) {
+      test(`${name} ${size} ${colorScheme}`, async ({ page }) => {
+        await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' })
+        await page.setViewportSize(viewport)
+        const shot = (await scene(page)) ?? {}
+        await page.evaluate(() => document.fonts.ready)
+        await page.screenshot({ path: `${shotsDir}/${name}-${size}-${colorScheme}.png`, fullPage: shot.full })
+      })
+    }
+  }
+}

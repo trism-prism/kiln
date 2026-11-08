@@ -90,3 +90,37 @@ for (const colorScheme of ['light', 'dark'] as const) {
     })
   })
 }
+
+// Study time plans: the Import page card, both sheets (with the warning line), the plan page and To Do.
+for (const colorScheme of ['light', 'dark'] as const) {
+  test.describe(`axe with a study time plan, ${colorScheme}`, () => {
+    test.use({ colorScheme })
+
+    test('Import card, Add and Edit Study Time, the plan page and To Do', async ({ page }) => {
+      await page.clock.install({ time: new Date(2026, 10, 9, 9, 0, 0) })
+      await page.goto('/import')
+      await expect(page.getByRole('heading', { level: 2, name: 'Study time' })).toBeVisible()
+      expect(await seriousViolations(page)).toEqual([])
+      await page.getByRole('button', { name: 'Add study time' }).click()
+      const sheet = page.getByRole('dialog', { name: 'Add Study Time' })
+      await sheet.getByRole('button', { name: 'Add', exact: true }).click()
+      await sheet.getByLabel('Time per week').fill('20h')
+      await expect(sheet.getByText(/more than the 14 h/)).toBeVisible()
+      await animationsDone(page)
+      expect(await seriousViolations(page)).toEqual([])
+      await sheet.getByLabel('Subject').fill('Psychology')
+      await sheet.getByLabel('Time per week').fill('3h')
+      await sheet.getByRole('button', { name: 'Add', exact: true }).click()
+      await expect(page.getByRole('heading', { level: 2, name: 'Sessions' })).toBeVisible()
+      expect(await seriousViolations(page)).toEqual([])
+      await page.getByRole('button', { name: 'Edit plan' }).click()
+      await expect(page.getByRole('dialog', { name: 'Edit Study Time' })).toBeVisible()
+      await animationsDone(page)
+      expect(await seriousViolations(page)).toEqual([])
+      await page.getByRole('button', { name: 'Cancel' }).click()
+      await page.goto('/todo')
+      await expect(page.getByRole('main').getByText('Study Psychology', { exact: true }).first()).toBeVisible()
+      expect(await seriousViolations(page)).toEqual([])
+    })
+  })
+}
