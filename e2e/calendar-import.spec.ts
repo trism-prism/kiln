@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { expect, test } from '@playwright/test'
 import { DAY1 } from './seed'
@@ -9,7 +10,7 @@ const real = fileURLToPath(new URL('../fixtures/calendars/real-canvas.ics', impo
 const readTasks = (page: import('@playwright/test').Page) =>
   page.evaluate(
     () =>
-      new Promise<{ title: string; deadline?: string; scheduledDate?: string; estimatedMinutes: number; deleted: boolean; status: string; completedAt?: number }[]>((resolve, reject) => {
+      new Promise<{ id: string; title: string; deadline?: string; scheduledDate?: string; estimatedMinutes: number; deleted: boolean; status: string; completedAt?: number }[]>((resolve, reject) => {
         const open = indexedDB.open('kiln')
         open.onerror = () => reject(open.error)
         open.onsuccess = () => {
@@ -26,10 +27,10 @@ test('imports a Canvas calendar file: a plan per ticked course, tasks scheduled 
   await expect(panel.getByText('Where to find the calendar link in Canvas')).toBeVisible()
   await panel.locator('input[type=file]').setInputFiles(canvas)
 
-  await expect(panel.getByRole('checkbox', { name: 'MATH-221-001: 3 in your calendar, 3 still due' })).toBeChecked()
-  await expect(panel.getByRole('checkbox', { name: 'HIST-110: 2 in your calendar, 2 still due' })).toBeChecked()
+  await expect(panel.getByRole('checkbox', { name: 'MATH-221-001: 3 assignments still due (3 in your calendar)' })).toBeChecked()
+  await expect(panel.getByRole('checkbox', { name: 'HIST-110: 2 assignments still due (2 in your calendar)' })).toBeChecked()
   // Untick a course: it gets no plan.
-  await panel.getByText('CS-150: 1 in your calendar, 1 still due').click()
+  await panel.getByText('CS-150: 1 assignment still due (1 in your calendar)').click()
   await expect(panel.getByRole('checkbox', { name: /^CS-150/ })).not.toBeChecked()
 
   await expect(panel.getByLabel('Minutes for Quiz 2')).toHaveValue('30')
@@ -63,8 +64,12 @@ test('imports a Canvas calendar file: a plan per ticked course, tasks scheduled 
   // Importing the same file again finds nothing new and keeps the edits.
   await page.goto('/import?tab=calendar')
   await panel.locator('input[type=file]').setInputFiles(canvas)
-  await expect(panel.getByText('3 already in Kiln (re-importing keeps your progress).')).toBeVisible()
+  await expect(panel.getByText('3 already in Kiln', { exact: true })).toBeVisible()
   await expect(panel.getByRole('button', { name: 'Import 1 item' })).toBeVisible() // CS-150 is ticked again by default
+  // With only courses already in Kiln, there is nothing to do.
+  await panel.getByText('CS-150: 1 assignment still due (1 in your calendar)').click()
+  await expect(panel.getByRole('button', { name: 'Import 0 items' })).toBeDisabled()
+  await expect(panel.getByText('Nothing new to import.')).toBeVisible()
 })
 
 test('a Canvas file with past items: already due imports as completed, tests get prep, a course can be renamed', async ({ page }) => {
@@ -73,8 +78,8 @@ test('a Canvas file with past items: already due imports as completed, tests get
   const panel = page.getByRole('tabpanel', { name: 'From a course calendar' })
   await panel.locator('input[type=file]').setInputFiles(real)
 
-  await expect(panel.getByRole('checkbox', { name: 'COB300A: 5 in your calendar, 2 still due', exact: true })).toBeChecked()
-  await expect(panel.getByRole('checkbox', { name: 'COB300D: 2 in your calendar, 1 still due', exact: true })).toBeChecked()
+  await expect(panel.getByRole('checkbox', { name: 'COB300A: 2 assignments still due (5 in your calendar)', exact: true })).toBeChecked()
+  await expect(panel.getByRole('checkbox', { name: 'COB300D: 1 assignment still due (2 in your calendar)', exact: true })).toBeChecked()
   await expect(panel.getByText('Canvas only lists assignments with a due date.')).toBeVisible()
   await expect(panel.getByText(/Section 0/)).toHaveCount(0)
   await expect(panel.getByLabel('Minutes for Test 4', { exact: true })).toHaveValue('60')
@@ -114,6 +119,12 @@ test('a Canvas file with past items: already due imports as completed, tests get
   for (const t of done) expect(t.completedAt, t.title).toBeUndefined()
   expect(tasks.find((t) => t.title === 'Final Paper (session 1 of 2)')?.deadline).toBe('2026-12-12')
 
+  // An imported done task reads "Completed" (no date: it wasn't done in Kiln) and has no Skip, which would reopen it.
+  await page.goto(`/task/${done.find((t) => t.title === 'Test 3')!.id}`)
+  await expect(page.getByText('Completed', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Skip', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Mark done' })).toHaveCount(0)
+
   // Again: everything is in Kiln, the new name is kept.
   await page.goto('/import?tab=calendar')
   await panel.locator('input[type=file]').setInputFiles(real)
@@ -122,6 +133,68 @@ test('a Canvas file with past items: already due imports as completed, tests get
   // The feed still says Dec 10 for the Final Paper moved to Dec 12, so that date change is offered.
   await expect(panel.getByText(/^Final Paper: due date moved from/)).toBeVisible()
   await expect(panel.getByRole('button', { name: 'Import 1 item' })).toBeVisible()
+})
+
+test('a past item the feed marks completed comes pre-ticked and imports as done', async ({ page }) => {
+  await page.clock.install({ time: DAY1 })
+  await page.goto('/import?tab=calendar')
+  const panel = page.getByRole('tabpanel', { name: 'From a course calendar' })
+  const text = readFileSync(real, 'utf8').replace('UID:event-assignment-3002', 'UID:event-assignment-3002\nSTATUS:COMPLETED')
+  await panel.locator('input[type=file]').setInputFiles({ name: 'feed.ics', mimeType: 'text/calendar', buffer: Buffer.from(text) })
+  await panel.getByText('COB300D: 1 assignment still due (2 in your calendar)').click()
+  await expect(panel.getByRole('button', { name: 'Import 4 items' })).toBeVisible()
+  await panel.getByRole('button', { name: 'Already due (3)' }).click()
+  await expect(panel.getByRole('checkbox', { name: 'Case Memo 2 · Oct 4' })).toBeChecked()
+  await expect(panel.getByRole('checkbox', { name: 'Case Memo 1 · Sep 6' })).not.toBeChecked()
+  await panel.getByRole('button', { name: 'Import 4 items' }).click()
+  await expect(page).toHaveURL(/\/plans$/)
+  const memo = (await readTasks(page)).find((t) => t.title === 'Case Memo 2')
+  expect(memo).toMatchObject({ status: 'done' })
+  expect(memo?.completedAt).toBeUndefined()
+})
+
+test('on a phone the review rows fit the card: nothing scrolls sideways', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.clock.install({ time: DAY1 })
+  await page.goto('/import?tab=calendar')
+  const panel = page.getByRole('tabpanel', { name: 'From a course calendar' })
+  await panel.locator('input[type=file]').setInputFiles(real)
+  await expect(panel.getByTestId('calendar-row').first()).toBeVisible()
+  const measured = await panel.evaluate((el) => {
+    const out: string[] = []
+    for (const row of el.querySelectorAll<HTMLElement>('[data-testid=calendar-row]')) {
+      const card = row.closest('table')!.parentElement!.parentElement!.getBoundingClientRect()
+      for (const box of row.querySelectorAll<HTMLElement>('input')) {
+        const r = box.getBoundingClientRect()
+        if (r.right > card.right + 0.5 || r.left < card.left - 0.5) out.push(`${box.getAttribute('aria-label')}: ${r.left}-${r.right} outside ${card.left}-${card.right}`)
+      }
+      const wrap = row.closest('table')!.parentElement!
+      if (wrap.scrollWidth > wrap.clientWidth) out.push(`table scrolls: ${wrap.scrollWidth} > ${wrap.clientWidth}`)
+    }
+    if (document.documentElement.scrollWidth > window.innerWidth) out.push(`page scrolls: ${document.documentElement.scrollWidth}`)
+    return out
+  })
+  expect(measured).toEqual([])
+  // Minutes and Due sit side by side on the row's second line, under the title.
+  const title = await panel.getByLabel('Title of Test 4').boundingBox()
+  const minutes = await panel.getByLabel('Minutes for Test 4').boundingBox()
+  const due = await panel.getByLabel('Due date of Test 4').boundingBox()
+  expect(minutes!.y).toBeGreaterThan(title!.y + title!.height - 1)
+  expect(Math.abs(due!.y - minutes!.y)).toBeLessThan(1)
+})
+
+test("date pickers start the week on Kiln's setting", async ({ page }) => {
+  await page.clock.install({ time: DAY1 })
+  await page.goto('/settings')
+  await page.getByRole('button', { name: /Week starts on/ }).click()
+  await page.getByRole('option', { name: 'Sunday' }).click()
+  await page.getByRole('button', { name: 'Save study time' }).click()
+  await expect(page.getByText('Study time saved')).toBeVisible()
+  await page.goto('/import?tab=calendar')
+  const panel = page.getByRole('tabpanel', { name: 'From a course calendar' })
+  await panel.locator('input[type=file]').setInputFiles(real)
+  await panel.getByRole('button', { name: 'Choose a date' }).first().click()
+  await expect(page.getByRole('grid').locator('th').first()).toHaveText('S')
 })
 
 test('a bad value is tied to its input and the disabled Import button says why', async ({ page }) => {
