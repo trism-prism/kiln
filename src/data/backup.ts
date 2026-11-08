@@ -255,8 +255,23 @@ async function planMerge(
   const take: Base[] = []
   let added = 0
   let replaced = 0
+  // Study sessions: a finished session beats an open copy (or an open copy's tombstone) whatever the stamps, so a
+  // device that wrote a stale open copy can't undo a completion made elsewhere. When the kept done row is older
+  // than the copy, it is stamped again so the next push sends it back out and every device ends up done.
+  const session = t.name === 'studyItems'
+  const isDone = (r: Base) => (r as Base & { status?: string }).status === 'done'
   incoming.forEach((r, i) => {
     const old = stored[i]
+    if (session && old && isDone(old) !== isDone(r)) {
+      if (isDone(r)) {
+        replaced++
+        take.push(r)
+      } else if (r.updatedAt >= old.updatedAt) {
+        replaced++
+        take.push({ ...old, updatedAt: Math.max(Date.now(), r.updatedAt + 1) })
+      }
+      return
+    }
     if (!old) added++
     else if (r.updatedAt > old.updatedAt || (opts.takeTies && r.updatedAt === old.updatedAt && r.deviceId !== old.deviceId)) replaced++
     else return

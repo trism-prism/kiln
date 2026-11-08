@@ -307,6 +307,10 @@ export async function importPlan(db: KilnDB, plan: Plan, opts: ImportOptions): P
     const existing = opts.planId ? await getPlan(db, opts.planId) : await getPlanByKey(db, plan.id)
     if (opts.planId && !existing) throw new Error('The plan is missing or deleted')
     if (!existing && part.index !== 1) throw new Error(`Part ${part.index} of "${plan.id}" needs part 1 imported first`)
+    // A plan never changes kind: study time plans and task plans sync and schedule differently (sync row version 2).
+    if (existing && (existing.studyMinutesPerWeek !== undefined) !== (plan.studyMinutesPerWeek !== undefined)) {
+      throw new Error(`"${existing.title}" is a different kind of plan; import this one as a copy`)
+    }
 
     const content = {
       title: plan.title,

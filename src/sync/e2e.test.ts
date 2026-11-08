@@ -323,6 +323,50 @@ describe('two devices', () => {
     expect((await b.studyItems.get(`${planId}:2026-11-09`))?.minutes).toBe(25)
   })
 
+  it('a finished study session stays finished when another device holds a newer open copy or tombstone of it', async () => {
+    const { a, b } = await twoDevices()
+    const study: Plan = { schemaVersion: 1, id: 'study-psychology', title: 'Psychology', subject: 'Psychology', schedulingMode: 'auto', studyMinutesPerWeek: 180, sources: [], modules: [], tasks: [] }
+    const { planId } = await importPlan(a, study, { startDate: '2026-11-09' })
+    const session = (date: string) => ({ id: `${planId}:${date}`, planId, date, minutes: 25, status: 'open' as const, updatedAt: Date.now(), deleted: false, deviceId: 'a' })
+    await a.studyItems.bulkPut([session('2026-11-09'), session('2026-11-10')])
+    ok(await sync(a))
+    ok(await sync(b))
+    // A finishes both (T1). B, not yet synced, writes a newer open copy of one and a tombstone of the other (T2 > T1).
+    for (const id of [`${planId}:2026-11-09`, `${planId}:2026-11-10`]) await updateRecord(a, 'studyItems', id, { status: 'done', completedAt: Date.now() })
+    await b.studyItems.update(`${planId}:2026-11-09`, { minutes: 30, updatedAt: NOW, deviceId: 'b' })
+    await b.studyItems.update(`${planId}:2026-11-10`, { deleted: true, updatedAt: NOW, deviceId: 'b' })
+    // B pushes first, so the server holds B's copies; then A pulls them, then B pulls again.
+    ok(await sync(b))
+    ok(await sync(a))
+    ok(await sync(b))
+    ok(await sync(a))
+    for (const db of [a, b]) {
+      for (const date of ['2026-11-09', '2026-11-10']) expect(await db.studyItems.get(`${planId}:${date}`)).toMatchObject({ status: 'done', deleted: false })
+    }
+  })
+
+  it('an older app gives up waiting session rows before the plan row, and skips old session tombstones', async () => {
+    const { a, b } = await twoDevices()
+    const study: Plan = { schemaVersion: 1, id: 'study-psychology', title: 'Psychology', subject: 'Psychology', schedulingMode: 'auto', studyMinutesPerWeek: 180, sources: [], modules: [], tasks: [] }
+    const { planId } = await importPlan(a, study, { startDate: '2026-11-09' })
+    ok(await sync(a)) // the plan row reaches the server first, so it is the oldest waiting row on B
+    const at = Date.now()
+    await a.studyItems.bulkPut(
+      Array.from({ length: 250 }, (_, i) => ({ id: `${planId}:s${i}`, planId, date: '2026-11-09', minutes: 25, status: 'open' as const, updatedAt: at + i, deleted: false, deviceId: 'a' })),
+    )
+    await a.studyItems.put({ id: `${planId}:2026-01-05`, planId, date: '2026-01-05', minutes: 25, status: 'open', updatedAt: at + 300, deleted: true, deviceId: 'a' })
+    ok(await sync(a))
+    clientVersion.v = 1
+    try {
+      expect((await sync(b)).error?.kind).toBe('update-required')
+    } finally {
+      clientVersion.v = undefined
+    }
+    ok(await sync(b))
+    expect((await b.plans.get(planId))?.studyMinutesPerWeek).toBe(180)
+    expect(await b.studyItems.get(`${planId}:2026-01-05`)).toBeUndefined()
+  })
+
   it('a row that fails validation today is applied when a later run can accept it', async () => {
     const { b, mnemonic } = await twoDevices()
     const keys = await deriveKeys(mnemonicToKey(mnemonic))

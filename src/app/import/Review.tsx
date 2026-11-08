@@ -137,7 +137,8 @@ export function Review({ input }: { input: Input }) {
       const parts = [`${result.tasksAdded} added`, ...(result.tasksUpdated > 0 ? [`${result.tasksUpdated} updated`] : [])]
       let scheduled = ''
       try {
-        await scheduleAll(db, toLocalISODate(new Date()))
+        // A study time plan takes time from every study day, so tasks already dated after today are placed again.
+        await scheduleAll(db, toLocalISODate(new Date()), { replanFuture: finalPlan.studyMinutesPerWeek !== undefined })
       } catch (e) {
         // The plan is saved; only the dates are missing, and Settings can reschedule.
         scheduled = ` Scheduling failed (${message(e)}); reschedule from Settings.`

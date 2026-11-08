@@ -18,6 +18,11 @@ export interface ScheduleAllOptions {
   skipOptional?: boolean
   /** Spaced reviews due per date. Default: the stored review cards (mastery.reviewsDue) from today for three years. */
   reviewsDue?: ScheduleInput['reviewsDue']
+  /**
+   * Place open, unpinned tasks dated after today again, as if they had no date. Used when study time plans change
+   * how much of each day is free: without it the tasks keep their dates and those days simply run over.
+   */
+  replanFuture?: boolean
 }
 
 /**
@@ -78,7 +83,7 @@ async function run(db: KilnDB, deviceId: string, today: string, opts: ScheduleAl
         pinnedDate: t.pinnedDate,
         deadline: t.deadline,
         status: t.status,
-        scheduledDate: t.scheduledDate,
+        scheduledDate: opts.replanFuture && t.status === 'open' && !t.pinnedDate && t.scheduledDate && t.scheduledDate > today ? undefined : t.scheduledDate,
         inBacklog: t.backlog,
         topics: t.topics,
         practice: t.practice?.provider === 'leetcode' && t.practice.slug ? { slug: t.practice.slug, difficulty: t.practice.difficulty } : undefined,
@@ -130,7 +135,7 @@ async function run(db: KilnDB, deviceId: string, today: string, opts: ScheduleAl
 
 /** Runs the scheduler when a study time plan exists, so its sessions follow a changed budget. */
 export async function refreshStudy(db: KilnDB, today: string): Promise<void> {
-  if (await hasStudyPlan(db)) await scheduleAll(db, today)
+  if (await hasStudyPlan(db)) await scheduleAll(db, today, { replanFuture: true })
 }
 
 const META_TOP_UP = 'studyTopUp'

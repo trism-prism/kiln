@@ -250,7 +250,7 @@ export async function addStudyPlan(f: StudyFields): Promise<string | undefined> 
     return undefined
   }
   try {
-    await scheduleAll(db, today())
+    await scheduleAll(db, today(), { replanFuture: true })
   } catch (e) {
     fail(e, 'Could not reschedule')
   }
@@ -267,7 +267,7 @@ export async function saveStudyPlan(planId: string, f: Omit<StudyFields, 'startD
     return false
   }
   try {
-    await scheduleAll(db, today())
+    await scheduleAll(db, today(), { replanFuture: true })
   } catch (e) {
     fail(e, 'Could not reschedule')
   }
