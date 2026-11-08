@@ -94,7 +94,7 @@ describe('studySessions', () => {
   it('scales every plan down together when they ask for more than a week holds', () => {
     const out = between({ plans: [study('a', 420), study('b', 420)] }, ...WEEK1, true)
     for (const id of ['a', 'b']) expect(Object.entries(out).filter(([k]) => k.startsWith(id)).reduce((n, [, m]) => n + m, 0)).toBe(210)
-    expect(out['a 2026-11-09'] + out['b 2026-11-09']).toBe(60)
+    expect(out['a 2026-11-09']! + out['b 2026-11-09']!).toBe(60)
   })
 
   it('caps a later plan (by id) at what is left of the day', () => {
