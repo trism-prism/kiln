@@ -285,6 +285,7 @@ const studyScenes: Record<string, (page: Page) => Promise<{ full?: boolean } | v
     await addStudyPlan(page, 'Spanish', '2h')
     await page.goto('/todo')
     const row = page.getByRole('main').getByRole('listitem').filter({ hasText: 'Study Spanish' })
+    await expect(row.getByRole('checkbox')).toBeEnabled()
     await row.getByRole('checkbox').click({ force: true })
     await expect(row.getByText('Done', { exact: true })).toBeVisible()
     await page.getByRole('button', { name: 'Dismiss' }).click()
@@ -306,6 +307,7 @@ const studyScenes: Record<string, (page: Page) => Promise<{ full?: boolean } | v
   'study-quick-add': async (page) => {
     const panel = await quickAdd(page, 'Psychology 3h a week')
     await expect(panel.getByRole('status').first()).toHaveText('Study time: Psychology, 3 h a week')
+    return { full: true }
   },
   'study-quick-add-mixed': async (page) => {
     const panel = await quickAdd(page, 'Read chapter 1 45m\nPsychology 3h a week')

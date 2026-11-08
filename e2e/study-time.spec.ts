@@ -44,7 +44,7 @@ test('Add study time makes a plan with sessions; To Do lists today and ticking i
   await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'To Do, 1 item due' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Streak: 0 days, not done today' })).toBeVisible()
   await row.getByRole('checkbox', { name: 'Mark done: Study Psychology' }).click({ force: true })
-  await expect(page.getByText('Done: Study Psychology')).toBeVisible()
+  await expect(page.getByText('Done: Study Psychology', { exact: true })).toBeVisible()
   await expect(row.getByText('Done', { exact: true })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Streak: 1 day, done today' })).toBeVisible()
   await page.getByRole('button', { name: 'Undo' }).click()
@@ -92,7 +92,7 @@ test('Quick add: one study line reviews as study time and imports; mixed with ta
   await expect(panel.getByText('Study Psychology (25 min)').first()).toBeVisible()
   await panel.getByRole('button', { name: 'Import "Psychology"' }).click()
   await expect(page).toHaveURL(/\/plans\/.+/)
-  await expect(page.getByText('3 h a week.')).toBeVisible()
+  await expect(page.getByText('3 h a week.', { exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { level: 2, name: 'Sessions' })).toBeVisible()
 })
 
