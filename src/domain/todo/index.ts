@@ -3,7 +3,7 @@
 // day. Pure; the data layer feeds it.
 import { addDaysISO } from '../../lib/date'
 import { weekStartOf, type WeekStart } from '../calendar'
-import { cardMinutes, localDate, type ReviewableTask } from '../mastery'
+import { localDate, type ReviewableTask } from '../mastery'
 import { DEFAULT_PRACTICE_LANGUAGE } from '../plan-format'
 
 export type FromAnchor = 'weeks4' | 'weeks3' | 'weeks2' | 'lastWeek' | 'thisWeek' | 'today'
@@ -140,8 +140,6 @@ export interface TodoItem {
   leetcode?: { slug: string; difficulty: 'easy' | 'medium' | 'hard'; language: string }
   /** In-app page of the item, when it has one. */
   href?: string
-  /** Completing it asks for a rating (it gets or has a review card). */
-  rates: boolean
   /** Personal to-dos only: the stored date and minutes (both optional), for the edit form. */
   todo?: { date?: string; minutes?: number }
 }
@@ -194,7 +192,6 @@ export function buildTodoItems(src: TodoSource, today: string): TodoItem[] {
       overdue: t.status === 'open' && t.scheduledDate < today,
       leetcode: lc,
       href: `/task/${t.id}`,
-      rates: cardMinutes(t) !== undefined,
       sort: t.order,
     })
   }
@@ -214,7 +211,6 @@ export function buildTodoItems(src: TodoSource, today: string): TodoItem[] {
       done: p.status === 'done',
       overdue: p.status === 'open' && p.date < today,
       leetcode: { slug: p.slug, difficulty: p.difficulty, language },
-      rates: true,
       sort: 0,
     })
   }
@@ -233,7 +229,6 @@ export function buildTodoItems(src: TodoSource, today: string): TodoItem[] {
       done: false,
       overdue: false,
       href: c.taskId ? `/task/${c.taskId}` : undefined,
-      rates: true,
       sort: c.due,
     })
   }
@@ -250,7 +245,6 @@ export function buildTodoItems(src: TodoSource, today: string): TodoItem[] {
       minutes: t.minutes ?? 0,
       done: t.done,
       overdue: !t.done && !!t.date && t.date < today,
-      rates: false,
       todo: { date: t.date, minutes: t.minutes },
       sort: 0,
     })
@@ -269,7 +263,6 @@ export function buildTodoItems(src: TodoSource, today: string): TodoItem[] {
       minutes: 0,
       done: false,
       overdue: false,
-      rates: false,
       sort: e.start ?? 0,
     })
   }

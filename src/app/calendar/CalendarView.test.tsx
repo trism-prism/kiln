@@ -23,7 +23,6 @@ const item = (id: string, date: string, over: Partial<TodoItem> = {}): TodoItem 
   done: false,
   overdue: false,
   href: `/task/${id}`,
-  rates: true,
   ...over,
 })
 

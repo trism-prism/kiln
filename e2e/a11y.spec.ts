@@ -29,16 +29,12 @@ for (const colorScheme of ['light', 'dark'] as const) {
   test.describe(`axe with sample plans, ${colorScheme}`, () => {
     test.use({ colorScheme })
 
-    test('/todo (with a done row and the rating sheet open)', async ({ page }) => {
+    test('/todo (with a done row)', async ({ page }) => {
       await openSeeded(page, '/todo')
       const lesson = page.getByRole('region', { name: 'Today' }).getByRole('listitem').filter({ hasText: '· Lesson ·' }).first()
       await expect(lesson).toBeVisible()
       expect(await seriousViolations(page)).toEqual([])
       await lesson.getByRole('checkbox').click({ force: true })
-      await expect(page.getByRole('dialog', { name: 'How did it go?' })).toBeVisible()
-      await animationsDone(page)
-      expect(await seriousViolations(page)).toEqual([])
-      await page.keyboard.press('3')
       await expect(lesson.getByText('Done', { exact: true })).toBeVisible()
       expect(await seriousViolations(page)).toEqual([])
     })
@@ -69,9 +65,6 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await expect(page.getByRole('navigation', { name: 'Breadcrumb' })).toBeVisible()
       expect(await seriousViolations(page)).toEqual([])
       await page.getByRole('button', { name: 'Mark done' }).click()
-      await expect(page.getByRole('dialog', { name: 'How did it go?' })).toBeVisible()
-      await animationsDone(page)
-      await page.keyboard.press('4')
       await expect(page.getByText(/^Completed /)).toBeVisible()
       await animationsDone(page) // the Undo toast and the status fade in; axe must read their final colors
       expect(await seriousViolations(page)).toEqual([])
@@ -87,10 +80,9 @@ for (const colorScheme of ['light', 'dark'] as const) {
     })
 
     test('/brush-up with a due review', async ({ page }) => {
-      await openSeeded(page, '/todo')
+      await openSeeded(page, '/todo', { reviews: true })
       const lesson = page.getByRole('region', { name: 'Today' }).getByRole('listitem').filter({ hasText: '· Lesson ·' }).first()
       await lesson.getByRole('checkbox').click({ force: true })
-      await page.keyboard.press('1')
       await expect(lesson.getByText('Done', { exact: true })).toBeVisible()
       await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Brush up' }).click()
       await expect(page.getByRole('heading', { level: 2, name: 'Mastery by topic' })).toBeVisible()

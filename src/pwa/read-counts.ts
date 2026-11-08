@@ -1,7 +1,7 @@
 // Today's counts straight from IndexedDB without Dexie or React, so the service worker stays small.
 // Reads the tables the app's own queries read (src/data/mastery.ts liveCards) and counts with domain/badge.
 import { badgeBreakdown, type BadgeBreakdown } from '../domain/badge'
-import { practiceOn } from '../data/plan-settings'
+import { practiceOn, reviewsOn } from '../data/plan-settings'
 import type { PlanRecord } from '../data/types'
 import { toLocalISODate } from '../lib/date'
 
@@ -13,7 +13,7 @@ interface TaskRow extends Row {
   status: string
   scheduledDate?: string
 }
-interface PlanRow extends Row, Pick<PlanRecord, 'dailyPractice' | 'dailyPracticeOn'> {}
+interface PlanRow extends Row, Pick<PlanRecord, 'dailyPractice' | 'dailyPracticeOn' | 'reviewsOn'> {}
 interface PracticeRow extends Row {
   planId: string
   status: string
@@ -68,13 +68,15 @@ export async function readBreakdown(idb: IDBFactory, now: Date, name = 'kiln'): 
     ])
     // Daily problems and their review cards count only for plans whose daily practice setting is on (as in the app).
     const practicePlans = new Set(plans.filter((p) => !p.deleted && practiceOn(p)).map((p) => p.id))
+    // Cards of plans with reviews off are kept but hidden (as in the app).
+    const reviewPlans = new Set(plans.filter((p) => !p.deleted && reviewsOn(p)).map((p) => p.id))
     const live = tasks.filter((t) => !t.deleted)
     const alive = new Set(live.map((t) => t.id))
     // One card per task (the smallest id), none for deleted tasks or suspended cards.
     const seen = new Set<string>()
     const due: { due: number }[] = []
     for (const c of cards.sort((a, b) => (a.id < b.id ? -1 : 1))) {
-      if (c.deleted) continue
+      if (c.deleted || !reviewPlans.has(c.planId)) continue
       if (c.taskId) {
         if (!alive.has(c.taskId) || seen.has(c.taskId)) continue
         seen.add(c.taskId)

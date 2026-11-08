@@ -216,7 +216,7 @@ describe('backup', () => {
   it('round-trips the new tables and plan fields', async () => {
     const a = newDb()
     const { planId } = await importPlan(a, sd(), { startDate: TODAY })
-    await updateRecord(a, 'plans', planId, { favorite: true, dailyPracticeOn: false })
+    await updateRecord(a, 'plans', planId, { favorite: true, dailyPracticeOn: false, reviewsOn: true })
     await insertRecord(a, 'personalTodos', { title: 'Call', date: TODAY, minutes: 15, done: false, notes: 'n' })
     await insertRecord(a, 'events', { title: 'Lab', date: TODAY, allDay: false, start: 1, end: 2, course: 'BIO 101', url: 'https://lms.example/e/1', feedId: 'f', uid: 'u@x', planId })
     await insertRecord(a, 'feeds', { lms: 'canvas', url: 'https://canvas.example/feeds/calendars/user_abc.ics', planIds: [planId], lastFetchedAt: 5, lastResult: { ok: true, added: 3, changed: 1 } })
@@ -231,6 +231,17 @@ describe('backup', () => {
       expect(await b.table(t).toArray()).toEqual(t === 'feeds' ? stored.map((f) => ({ ...f, url: '', needsLink: true })) : stored)
     }
     expect(await b.plans.get(planId)).toEqual(await a.plans.get(planId))
+    expect((await b.plans.get(planId))!.reviewsOn).toBe(true)
+  })
+
+  it('restores a backup made before reviews were optional with reviews off for every plan', async () => {
+    const a = newDb()
+    const { planId } = await importPlan(a, sd(), { startDate: TODAY })
+    const doc = JSON.parse(await exportBackup(a))
+    for (const p of doc.tables.plans) delete p.reviewsOn
+    const b = newDb()
+    await importBackup(b, JSON.stringify(doc))
+    expect((await b.plans.get(planId))!.reviewsOn).toBeUndefined()
   })
 
   it('rejects a feed that is not https', async () => {

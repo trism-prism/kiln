@@ -45,6 +45,13 @@ export interface PlanRecord extends Base {
   /** Day 1 of the plan. */
   startDate: string
   deadline?: string
+  /**
+   * Spaced reviews for this plan (opt-in). Unset means off, so plans from before the setting
+   * (and plans synced from older devices) start off with no rewrite. Their cards are still made and kept, but
+   * the card readers in mastery.ts (liveCards) and pwa/read-counts.ts hide them until this is true. Study
+   * streaks still count past review logs from a plan with reviews off: finished work is history.
+   */
+  reviewsOn?: boolean
   /** Keep this plan's optional tasks in the backlog. */
   skipOptional?: boolean
   // Part progress
