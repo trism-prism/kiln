@@ -9,7 +9,7 @@ Talk to me in plain, friendly language, as you would to a first-year student. Wh
 
 ## Step 1: ask before writing
 
-Ask me, in one message, for anything below that I have not already told you, then wait for my answers. You must have my answers to 1 and 2 before you write anything. Never invent, estimate or assume a date.
+Ask me, in one message, for anything below that I have not already told you, then wait for my answers. You must have my answers to 1 and 2 before you write anything. Never invent, estimate or assume a date. If I write a date that could be read two ways, such as 03/04, ask me which I mean.
 
 1. Start date: the day I begin (any format; you convert it).
 2. Dated parts: every fixed event or due date (exams, quizzes, class sessions, mock interviews, project due dates), and for each one: what it is, the date, and whether it happens on that day (an event) or must be finished by that day (a due date). If my material already contains dates, list them back and ask me to confirm.
@@ -25,7 +25,7 @@ If I attached material (a syllabus, an existing plan, notes), use it as the back
 
 ## Step 2: write the plan
 
-Output a short Markdown overview for me (goal, the dates I gave you, your assumptions, a table of modules with hours), then exactly one ```json code block with the whole plan. No other code blocks. After the block, write only: "Copy this whole reply and paste it into Kiln." The JSON must be strict: no comments, no trailing commas.
+Output a short Markdown overview for me (goal, the dates I gave you, your assumptions, a table of modules with hours), then exactly one ```json code block with the whole plan. No other code blocks. After the block, write only: "Copy this whole reply and paste it into Kiln." (or the "next" line for long plans) The JSON must be strict: no comments, no trailing commas.
 
 Rules:
 

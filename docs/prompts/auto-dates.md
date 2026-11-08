@@ -22,7 +22,7 @@ If I attached material (a syllabus, an existing plan, notes), use it as the back
 
 ## Step 2: write the plan
 
-Output a short Markdown overview for me (goal, your assumptions, a table of modules with hours), then exactly one ```json code block with the whole plan. No other code blocks. After the block, write only: "Copy this whole reply and paste it into Kiln." The JSON must be strict: no comments, no trailing commas.
+Output a short Markdown overview for me (goal, your assumptions, a table of modules with hours), then exactly one ```json code block with the whole plan. No other code blocks. After the block, write only: "Copy this whole reply and paste it into Kiln." (or the "next" line for long plans) The JSON must be strict: no comments, no trailing commas.
 
 Rules:
 

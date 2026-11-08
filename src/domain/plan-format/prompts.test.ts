@@ -39,6 +39,14 @@ describe.each(Object.entries(files))('prompt file %s', (_name, markdown) => {
     // The questions are relayed to me as written; the reference further down keeps its yyyy-mm-dd format for the AI.
     expect(prompt.slice(0, prompt.indexOf('## Step 2'))).not.toContain('yyyy-mm-dd')
     expect(prompt).not.toContain('reviews Kiln adds')
+    // The closing line agrees with the long-plan rule, which ends a part with "next".
+    expect(prompt).toContain('(or the "next" line for long plans)')
+  })
+})
+
+describe('fixed-dates prompt', () => {
+  it('has the AI confirm a date that reads two ways', () => {
+    expect(buildPrompt(fixedDates)).toContain('could be read two ways, such as 03/04, ask me which I mean')
   })
 })
 
