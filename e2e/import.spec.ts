@@ -240,6 +240,9 @@ test('quick add: Repeat counts up each 1, caps at 52, and a due cell takes typed
   await expect(panel.locator('th', { hasText: 'Week 3' })).toBeVisible()
   await repeat.fill('60')
   await expect(panel.getByText('Up to 52 times.')).toBeVisible()
+  // The help line and the error are both read out (React Aria puts the error first).
+  await expect(repeat).toHaveAccessibleDescription(/Numbers like the 1 in Week 1 go up in each copy\./)
+  await expect(repeat).toHaveAccessibleDescription(/Up to 52 times\./)
   await expect(panel.getByRole('status').first()).toHaveText('52 tasks in 52 modules')
   await repeat.fill('1')
   const due = panel.getByRole('textbox', { name: 'Task 1 due' })
@@ -257,9 +260,29 @@ test('quick add: changing how many identical lines there are drops their table e
   await panel.getByRole('textbox', { name: 'Task 2 minutes' }).fill('20')
   await panel.getByRole('textbox', { name: 'Task 3 minutes' }).fill('5')
   await box.fill('Read\nQuiz')
-  await expect(panel.getByText('1 table edit was dropped because its line changed.')).toBeVisible()
+  await expect(panel.getByText('1 table edit was dropped because identical lines were added or removed.')).toBeVisible()
   await expect(panel.getByRole('textbox', { name: 'Task 1 minutes' })).toHaveValue('30')
   await expect(panel.getByRole('textbox', { name: 'Task 2 minutes' })).toHaveValue('5')
+})
+
+test('quick add: clearing Repeat to type a new number keeps the copies and their edits', async ({ page }) => {
+  await page.goto('/import')
+  await page.getByRole('tab', { name: 'Quick add' }).click()
+  const panel = page.getByRole('tabpanel', { name: 'Quick add' })
+  await panel.getByRole('textbox', { name: 'Tasks, one per line' }).fill('Read chapter 1')
+  const repeat = panel.getByRole('textbox', { name: 'Repeat, times', exact: true })
+  await repeat.fill('3')
+  const minutes = panel.getByRole('textbox', { name: 'Task 2 minutes' })
+  await minutes.fill('50')
+  await repeat.fill('')
+  await expect(panel.getByRole('status').first()).toHaveText('3 tasks in 1 module')
+  await repeat.pressSequentially('3')
+  await expect(minutes).toHaveValue('50')
+  await expect(panel.getByText(/table edits? (was|were) dropped/)).toBeHidden()
+  // Left empty, the box shows the count still in use.
+  await repeat.fill('')
+  await repeat.press('Tab')
+  await expect(repeat).toHaveValue('3')
 })
 
 test('a changed study budget persists and offers a reschedule', async ({ page }) => {

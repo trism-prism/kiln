@@ -167,14 +167,16 @@ describe('keptEdits', () => {
   const at = (text: string) => parseQuickAdd(text, today)
   const edits = { 'Read#1': { minutes: '10' }, 'Read#2': { minutes: '20' }, 'Quiz#1': { minutes: '5' } }
   it('keeps every edit while each text has as many lines as before', () => {
-    expect(keptEdits(edits, at('Read\nRead\nQuiz'), at('# Week\nRead\nQuiz\nRead'))).toEqual({ edits, dropped: 0 })
+    expect(keptEdits(edits, at('Read\nRead\nQuiz'), at('# Week\nRead\nQuiz\nRead'))).toEqual({ edits, changed: 0, recounted: 0 })
   })
   it('drops all edits on a text whose number of lines changed, and only those', () => {
     // Deleting either "Read" line would otherwise give the other one "Read#1"'s edit.
-    expect(keptEdits(edits, at('Read\nRead\nQuiz'), at('Read\nQuiz'))).toEqual({ edits: { 'Quiz#1': { minutes: '5' } }, dropped: 2 })
-    expect(keptEdits(edits, at('Read\nRead\nQuiz'), at('Read\nRead\nRead\nQuiz'))).toEqual({ edits: { 'Quiz#1': { minutes: '5' } }, dropped: 2 })
+    expect(keptEdits(edits, at('Read\nRead\nQuiz'), at('Read\nQuiz'))).toEqual({ edits: { 'Quiz#1': { minutes: '5' } }, changed: 0, recounted: 2 })
+    expect(keptEdits(edits, at('Read\nRead\nQuiz'), at('Read\nRead\nRead\nQuiz'))).toEqual({ edits: { 'Quiz#1': { minutes: '5' } }, changed: 0, recounted: 2 })
   })
   it('drops the edits of a line that is gone', () => {
-    expect(keptEdits(edits, at('Read\nRead\nQuiz'), at('Read\nRead'))).toEqual({ edits: { 'Read#1': { minutes: '10' }, 'Read#2': { minutes: '20' } }, dropped: 1 })
+    expect(keptEdits(edits, at('Read\nRead\nQuiz'), at('Read\nRead'))).toEqual({ edits: { 'Read#1': { minutes: '10' }, 'Read#2': { minutes: '20' } }, changed: 1, recounted: 0 })
+    // Both lines of a pair gone: their line changed, so the usual notice.
+    expect(keptEdits(edits, at('Read\nRead\nQuiz'), at('Quiz'))).toEqual({ edits: { 'Quiz#1': { minutes: '5' } }, changed: 2, recounted: 0 })
   })
 })

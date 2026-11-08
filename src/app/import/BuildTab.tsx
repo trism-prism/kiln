@@ -25,9 +25,11 @@ export function BuildTab() {
   // The snapshot being reviewed: changes do not touch it until "Review plan" is pressed again.
   const [reviewed, setReviewed] = useState<{ input: ReviewInput; n: number }>()
 
-  const typedTimes = Number.parseInt(repeat, 10) || 1
-  const times = Math.min(Math.max(typedTimes, 1), MAX_REPEAT)
-  const [droppedEdits, setDroppedEdits] = useState(0)
+  // The count in use. It changes only when the box holds a whole number of 1 or more, so clearing the box
+  // to type a new number doesn't fall back to 1 on the way (which would drop the copies' edits).
+  const [times, setTimes] = useState(1)
+  const typedTimes = /^\s*[0-9]+\s*$/.test(repeat) ? Number(repeat) : undefined
+  const [droppedEdits, setDroppedEdits] = useState({ changed: 0, recounted: 0 })
   const parsed = useMemo(() => parseQuickAdd(text, today, times), [text, today, times])
   // Past dates are cleared after the table edits apply, so a date typed in the table is checked too.
   const { modules, dropped: pastDates } = useMemo(
@@ -40,8 +42,8 @@ export function BuildTab() {
   // their number changes, as there is no telling which copy was removed or added.
   function change(nextText: string, nextTimes: number) {
     const next = keptEdits(edits, parsed, parseQuickAdd(nextText, today, nextTimes))
-    if (next.dropped > 0) setEdits(next.edits)
-    setDroppedEdits(next.dropped)
+    if (next.changed + next.recounted > 0) setEdits(next.edits)
+    setDroppedEdits({ changed: next.changed, recounted: next.recounted })
   }
   const draft: Draft = { title, modules }
   const edit = (uid: string, patch: Partial<DraftTask>) => setEdits((e) => ({ ...e, [uid]: { ...e[uid], ...patch } }))
@@ -77,20 +79,34 @@ export function BuildTab() {
         inputMode="numeric"
         value={repeat}
         onChange={(v) => {
-          change(text, Math.min(Math.max(Number.parseInt(v, 10) || 1, 1), MAX_REPEAT))
           setRepeat(v)
+          const n = /^\s*[0-9]+\s*$/.test(v) ? Number(v) : 0
+          if (n < 1) return
+          const next = Math.min(n, MAX_REPEAT)
+          if (next !== times) change(text, next)
+          setTimes(next)
+        }}
+        // Leaving the box empty or unreadable shows the count still in use.
+        onBlur={() => {
+          if (typedTimes === undefined || typedTimes < 1) setRepeat(String(times))
         }}
         description={times > 1 ? 'Numbers like the 1 in Week 1 go up in each copy.' : undefined}
-        isInvalid={typedTimes > MAX_REPEAT}
+        isInvalid={(typedTimes ?? 0) > MAX_REPEAT}
         errorMessage={`Up to ${MAX_REPEAT} times.`}
       />
 
       <p role="status" className="text-sm text-text-muted">
         {taskCount === 0 ? '' : `${taskCount} ${taskCount === 1 ? 'task' : 'tasks'} in ${modules.length} ${modules.length === 1 ? 'module' : 'modules'}`}
       </p>
-      {droppedEdits > 0 && (
+      {droppedEdits.changed > 0 && (
         <p className="text-sm text-warning">
-          {droppedEdits} table {droppedEdits === 1 ? 'edit was' : 'edits were'} dropped because {droppedEdits === 1 ? 'its line' : 'their lines'} changed.
+          {droppedEdits.changed} table {droppedEdits.changed === 1 ? 'edit was' : 'edits were'} dropped because{' '}
+          {droppedEdits.changed === 1 ? 'its line' : 'their lines'} changed.
+        </p>
+      )}
+      {droppedEdits.recounted > 0 && (
+        <p className="text-sm text-warning">
+          {droppedEdits.recounted} table {droppedEdits.recounted === 1 ? 'edit was' : 'edits were'} dropped because identical lines were added or removed.
         </p>
       )}
       {pastDates > 0 && (

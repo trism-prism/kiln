@@ -201,16 +201,25 @@ function copies(modules: DraftModule[]): Map<string, number> {
 }
 
 /**
- * The table edits that still belong to a row after the text changes from `before` to `after`, and how many
- * were dropped. An edit goes when its line is gone, and when the number of lines with its text changes:
+ * The table edits that still belong to a row after the text changes from `before` to `after`. An edit goes
+ * when its line is gone (`changed`), and when the number of lines with its text changes (`recounted`):
  * identical lines can't be told apart, so no row ever shows an edit made on another.
  */
-export function keptEdits<T>(edits: Record<string, T>, before: DraftModule[], after: DraftModule[]): { edits: Record<string, T>; dropped: number } {
+export function keptEdits<T>(
+  edits: Record<string, T>,
+  before: DraftModule[],
+  after: DraftModule[],
+): { edits: Record<string, T>; changed: number; recounted: number } {
   const [was, now] = [copies(before), copies(after)]
   const live = new Set(after.flatMap((m) => m.tasks.map((t) => t.uid)))
-  const kept = Object.entries(edits).filter(([uid]) => {
+  const kept: [string, T][] = []
+  let [changed, recounted] = [0, 0]
+  for (const [uid, edit] of Object.entries(edits)) {
     const text = uid.slice(0, uid.lastIndexOf('#'))
-    return live.has(uid) && was.get(text) === now.get(text)
-  })
-  return { edits: Object.fromEntries(kept), dropped: Object.keys(edits).length - kept.length }
+    // A text that is gone altogether is a changed line, not a recount.
+    if (now.has(text) && was.get(text) !== now.get(text)) recounted++
+    else if (!live.has(uid)) changed++
+    else kept.push([uid, edit])
+  }
+  return { edits: Object.fromEntries(kept), changed, recounted }
 }
