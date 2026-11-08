@@ -106,14 +106,23 @@ describe('personal to-dos and events', () => {
     const done = await setPersonalTodoDone(db, first.id, true)
     expect(done).toMatchObject({ done: true, completedAt: expect.any(Number) })
     expect(done!.updatedAt).toBeGreaterThan(first.updatedAt)
-    // With minutes, the first completion time survives untick and re-tick (logged past study stays on its day).
-    expect(await setPersonalTodoDone(db, first.id, false)).toMatchObject({ done: false, completedAt: done!.completedAt })
-    vi.useFakeTimers({ toFake: ['Date'], now: done!.completedAt! + 86_400_000 })
+    expect(await setPersonalTodoDone(db, first.id, false)).toMatchObject({ done: false })
+    // A logged session (minutes, completed at noon of its own day) keeps its completion time through untick and re-tick.
+    const noon8 = new Date(2026, 10, 8, 12).getTime()
+    const logged = await insertRecord(db, 'personalTodos', { title: 'Psychology', date: '2026-11-08', minutes: 30, done: true, completedAt: noon8 })
+    const nextDay = new Date(2026, 10, 9, 18).getTime()
+    vi.useFakeTimers({ toFake: ['Date'], now: nextDay })
     try {
-      expect(await setPersonalTodoDone(db, first.id, true)).toMatchObject({ done: true, completedAt: done!.completedAt })
-      // Without minutes it clears and restamps.
+      expect(await setPersonalTodoDone(db, logged.id, false)).toMatchObject({ done: false, completedAt: noon8 })
+      expect(await setPersonalTodoDone(db, logged.id, true)).toMatchObject({ done: true, completedAt: noon8 })
+      // Minutes but not a logged session (done on another day than its date): re-tick restamps to now.
+      const session = await insertRecord(db, 'personalTodos', { title: 'Read ch. 3', date: '2026-11-07', minutes: 45, done: true, completedAt: noon8 })
+      expect(await setPersonalTodoDone(db, session.id, false)).toMatchObject({ done: false, completedAt: undefined })
+      expect(await setPersonalTodoDone(db, session.id, true)).toMatchObject({ done: true, completedAt: nextDay })
+      // Without minutes: clears, then restamps.
       await setPersonalTodoDone(db, later.id, true)
       expect(await setPersonalTodoDone(db, later.id, false)).toMatchObject({ done: false, completedAt: undefined })
+      expect(await setPersonalTodoDone(db, later.id, true)).toMatchObject({ done: true, completedAt: nextDay })
     } finally {
       vi.useRealTimers()
     }

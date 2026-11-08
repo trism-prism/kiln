@@ -3,6 +3,7 @@
 import type { Table } from 'dexie'
 import type { Plan } from '../domain/plan-format'
 import type { KilnDB } from './db'
+import { localDate } from '../domain/mastery'
 import { SHARE_WEIGHT } from './plan-settings'
 import type { Base, EventRecord, ModuleRecord, PersonalTodoRecord, PlanRecord, Records, SettingsRecord, Share, TableName, TaskRecord, TaskStatus } from './types'
 import { uuidv7 } from './uuid'
@@ -210,15 +211,17 @@ export async function listPersonalTodos(db: KilnDB): Promise<PersonalTodoRecord[
 }
 
 /**
- * Marks a personal to-do done (sets `completedAt`) or open again. A to-do with minutes keeps its first
- * `completedAt` through untick and re-tick, so study logged for a past day stays on that day in the streak
- * and heatmap; one without minutes counts nothing there, so it simply clears and restamps.
+ * Marks a personal to-do done (stamps `completedAt` now) or open again (clears it). A logged session (minutes,
+ * and completed on its own day, as "Log study time" stamps it) keeps its `completedAt` through untick and
+ * re-tick, so past study stays on its day in the streak and heatmap. Any other to-do restamps, so a session
+ * really done today counts today.
  */
 export async function setPersonalTodoDone(db: KilnDB, id: string, done: boolean) {
   await getDeviceId(db) // resolve before the transaction opens; updateRecord reuses it
   return db.transaction('rw', db.personalTodos, async () => {
     const old = await db.personalTodos.get(id)
-    const keep = (old?.minutes ?? 0) > 0 ? old?.completedAt : undefined
+    const logged = !!old && (old.minutes ?? 0) > 0 && old.completedAt !== undefined && localDate(old.completedAt) === old.date
+    const keep = logged ? old.completedAt : undefined
     return updateRecord(db, 'personalTodos', id, { done, completedAt: done ? (keep ?? Date.now()) : keep })
   })
 }
