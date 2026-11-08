@@ -84,7 +84,6 @@ export function BuildTab() {
           change(text, Math.min(Math.max(Number.parseInt(v, 10) || 1, 1), MAX_REPEAT))
           setRepeat(v)
         }}
-        className="max-w-40"
         description="Each copy counts up any 1: Week 1, Week 2, Week 3."
         isInvalid={typedTimes > MAX_REPEAT}
         errorMessage={`Up to ${MAX_REPEAT} times.`}
@@ -114,7 +113,7 @@ export function BuildTab() {
                   <th scope="col" className="p-1 font-medium">Title</th>
                   <th scope="col" className="w-32 p-1 font-medium">Type</th>
                   <th scope="col" className="w-20 p-1 font-medium">Minutes</th>
-                  <th scope="col" className="w-40 p-1 font-medium">Due</th>
+                  <th scope="col" className="w-48 p-1 font-medium">Due</th>
                   <th scope="col" className="w-36 p-1 font-medium">Priority</th>
                   <th scope="col" className="p-1 font-medium">Links</th>
                 </tr>
@@ -146,7 +145,7 @@ export function BuildTab() {
                           <input aria-label={`Task ${n} minutes`} inputMode="numeric" value={t.minutes} onChange={(e) => edit(t.uid, { minutes: e.target.value })} className={cell} />
                         </td>
                         <td className="p-1">
-                          <DateField size="sm" aria-label={`Task ${n} due`} value={t.due} min={today} onChange={(due) => edit(t.uid, { due })} />
+                          <DateField size="sm" placeholder="" aria-label={`Task ${n} due`} value={t.due} min={today} onChange={(due) => edit(t.uid, { due })} />
                         </td>
                         <td className="p-1">
                           <select aria-label={`Task ${n} priority`} value={t.priority} onChange={(e) => edit(t.uid, { priority: e.target.value as DraftTask['priority'] })} className={cell}>

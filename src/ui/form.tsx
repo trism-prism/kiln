@@ -84,7 +84,8 @@ export function TextField({
     <AriaTextField {...props} className={`${field} ${className}`}>
       <Label className="font-medium">{label}</Label>
       {suffix ? (
-        <div className="relative">
+        // A unit means a short number, so the box stays narrow while the description below can run wide.
+        <div className="relative max-w-40">
           <Input className={`${control} w-full pr-16 placeholder:text-text-muted`} />
           <span aria-hidden="true" className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-text-muted">
             {suffix}
