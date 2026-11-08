@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <title>Kiln</title>
-  <rect width="512" height="512" rx="114" fill="#1f1b16"/>
-  <path fill="#fffaf5" d="M120 396V252a136 136 0 0 1 272 0v144z"/>
-  <path fill="#e58a5c" d="M202 396v-91a54 54 0 0 1 108 0v91z"/>
+  <rect width="512" height="512" rx="114" fill="#a8481c"/>
+  <path fill="#f7f4ee" d="M120 396V252a136 136 0 0 1 272 0v144z"/>
+  <path fill="#161513" d="M202 396v-91a54 54 0 0 1 108 0v91z"/>
 </svg>
