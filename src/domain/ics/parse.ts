@@ -20,6 +20,8 @@ export interface IcsEvent {
   end?: number
   /** Zone of the times: the event's TZID, else the calendar's X-WR-TIMEZONE; none = the device's zone. */
   tz?: string
+  /** The feed says the item is done (Canvas sends no such field). */
+  completed?: boolean
 }
 
 /** Joins folded lines (CRLF or LF followed by a space or tab). */
@@ -188,6 +190,7 @@ function toEvent(p: Record<string, Line[]>, calTz?: string): IcsEvent | undefine
     url: url && /^https?:\/\//i.test(url) ? url : undefined,
     location: text('LOCATION'),
     categories: (p.CATEGORIES ?? []).flatMap((l) => l.value.split(/(?<!\\),/).map((c) => unescapeText(c).trim())).filter(Boolean),
+    ...(one('COMPLETED') || one('STATUS')?.value.trim().toUpperCase() === 'COMPLETED' || one('PERCENT-COMPLETE')?.value.trim() === '100' ? { completed: true } : {}),
   }
   if (start.allDay) {
     // DTEND of an all-day event is exclusive.

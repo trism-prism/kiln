@@ -239,3 +239,8 @@ export function usePlanDetail(id: string | undefined): PlanDetail | null | undef
     }
   }, [id])
 }
+
+/** Kiln's week start (Settings), for every date picker. */
+export function useWeekStart(): WeekStart {
+  return useLiveQuery(async () => (await getSettings(db)).weekStartsOn, []) ?? 'monday'
+}

@@ -4,10 +4,13 @@ import {
   OTHER_COURSE,
   classify,
   courseKey,
+  courseName,
   coursePlan,
   courses,
   defaultMinutes,
+  displayNames,
   eventItems,
+  examLike,
   parseIcs,
   parseLine,
   parseTime,
@@ -114,10 +117,10 @@ describe('LMS mapping', () => {
       ['MATH-221-001', 'Midterm Exam', 'exam'],
       ['HIST-110', 'Field trip', 'event'],
     ])
-    expect(courses(items)).toEqual([
-      { course: 'MATH-221-001', tasks: 3, events: 2 },
-      { course: 'HIST-110', tasks: 2, events: 1 },
-      { course: 'CS-150', tasks: 1, events: 0 },
+    expect(courses(items, '2030-02-16')).toEqual([
+      { course: 'MATH-221-001', total: 3, due: 2, classes: 1 },
+      { course: 'HIST-110', total: 2, due: 1, classes: 1 },
+      { course: 'CS-150', total: 1, due: 1, classes: 0 },
     ])
   })
 
@@ -166,7 +169,7 @@ describe('LMS mapping', () => {
     const by = (t: string) => rows.find((r) => r.title === t)
     expect(by('Problem Set 3')?.due).toBe(localDay(Date.UTC(2030, 1, 12, 4, 59) - 1))
     expect(by('Reading: Chapter 6')?.due).toBe('2030-02-15')
-    expect(by('Prepare for Midterm Exam')).toMatchObject({ minutes: 180, type: 'assessment', due: '2030-03-04' })
+    expect(by('Prepare for Midterm Exam')).toMatchObject({ minutes: 180, type: 'practice', due: '2030-03-04', prep: true })
     expect(by('Problem Set 3')?.url).toBe('https://canvas.example.edu/courses/11/assignments/1001')
     const midnight = taskRows(classify([ev({ uid: 'event-assignment-1', start: new Date(2030, 1, 3).getTime(), end: new Date(2030, 1, 3).getTime() })]))
     expect(midnight[0]?.due).toBe('2030-02-02')
@@ -243,5 +246,81 @@ describe('LMS mapping', () => {
   it('reports deadlines before the start date as errors', () => {
     const rows = taskRows(items).filter((r) => r.course === 'CS-150')
     expect(coursePlan('CS-150', rows, '2031-01-01').issues.length).toBeGreaterThan(0)
+  })
+
+  const real = classify(parseIcs(readFileSync(new URL('../../../fixtures/calendars/real-canvas.ics', import.meta.url), 'utf8')))
+
+  it('drops a section group from course names for display, but keeps the raw tag for the plan id', () => {
+    expect(courseName('COB300A (Section 02 Fall 2026)')).toBe('COB300A')
+    expect(courseName('BIO 101 (sec. 4)')).toBe('BIO 101')
+    expect(courseName('Intro (Honors)')).toBe('Intro (Honors)')
+    expect(courseName('(Section 1)')).toBe('(Section 1)')
+    expect(real[0]?.course).toBe('COB300A (Section 02 Fall 2026)')
+    expect(courseKey(real[0]!.course)).toBe(courseKey('COB300A (Section 02 Fall 2026)'))
+    const rows = taskRows(real).filter((r) => r.course === real[0]!.course)
+    expect(coursePlan(real[0]!.course, rows, '2026-09-01').plan).toMatchObject({ title: 'COB300A', id: courseKey('COB300A (Section 02 Fall 2026)') })
+  })
+
+  it('treats test-like assignment titles as tests, but not papers or corrections', () => {
+    for (const t of ['Test 4', 'Final Exam', 'Exam 2', 'Midterm', 'Unit tests', 'Test1', 'Exam2', 'Midterm1', 'Exam-3']) expect(examLike(t), t).toBe(true)
+    for (const t of [
+      'Final Paper',
+      'Test Corrections',
+      'Final Project',
+      'Exam review',
+      'Midterm Reflection Essay',
+      'Testing lab',
+      'Pre-test',
+      'Test-taking strategies',
+      'Midterm discussion post',
+      'Final deliverable',
+      'Exam summary',
+      'Final portfolio',
+      'Midterm analysis',
+      'Test answers',
+      'Quiz 3',
+      'Finals week quiz',
+    ])
+      expect(examLike(t), t).toBe(false)
+    const quiz = taskRows(classify([ev({ uid: 'event-assignment-7', summary: 'Quiz 3 [X-1]' })]))
+    expect(quiz.map((r) => [r.title, r.minutes, r.type])).toEqual([['Quiz 3', 30, 'assessment']])
+  })
+
+  it('turns a test-like assignment into the test itself and a prep row the day before', () => {
+    const rows = taskRows(real).filter((r) => r.title.endsWith('Test 4'))
+    expect(rows.map((r) => [r.title, r.minutes, r.type, r.due, r.key])).toEqual([
+      ['Prepare for Test 4', 180, 'practice', '2026-11-19', taskKey('event-assignment-3004#prep')],
+      ['Test 4', 60, 'assessment', '2026-11-20', taskKey('event-assignment-3004')],
+    ])
+    expect(sessions(rows[0]!).map((s) => s.minutes)).toEqual([90, 90])
+    expect(taskRows(real).find((r) => r.title === 'Final Paper')).toMatchObject({ minutes: 180, type: 'project' })
+    expect(courses(real, '2026-11-09')).toEqual([
+      { course: 'COB300A (Section 02 Fall 2026)', total: 5, due: 2, classes: 0 },
+      { course: 'COB300D (Section 01 Fall 2026)', total: 2, due: 1, classes: 0 },
+    ])
+  })
+
+  it('reads a completion field when a feed has one', () => {
+    const text = (extra: string) => ['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'UID:event-assignment-1', 'DTSTART:20300101T100000Z', 'SUMMARY:HW [X-1]', extra, 'END:VEVENT', 'END:VCALENDAR'].join('\n')
+    expect(parseIcs(text('STATUS:COMPLETED'))[0]?.completed).toBe(true)
+    expect(parseIcs(text('PERCENT-COMPLETE:100'))[0]?.completed).toBe(true)
+    expect(parseIcs(text('COMPLETED:20300101T120000Z'))[0]?.completed).toBe(true)
+    expect(parseIcs(text('STATUS:CONFIRMED'))[0]?.completed).toBeUndefined()
+    expect(taskRows(classify(parseIcs(text('STATUS:COMPLETED'))))[0]?.completed).toBe(true)
+  })
+
+  it('keeps the real minutes of a done row: one task, or parts of at most 180 minutes', () => {
+    const row = { uid: 'u', key: 'a-1', course: 'X', title: 'Essay', minutes: 150, due: '2030-01-05', type: 'project' as const, done: true }
+    const tasks = (r: typeof row) => coursePlan('X', [r], '2030-01-05').plan?.tasks.map((t) => [t.id, t.title, t.estimatedMinutes])
+    expect(tasks(row)).toEqual([['a-1', 'Essay', 150]])
+    expect(tasks({ ...row, title: 'Big project', minutes: 240 })).toEqual([
+      ['a-1', 'Big project (part 1 of 2)', 120],
+      ['a-1-2', 'Big project (part 2 of 2)', 120],
+    ])
+  })
+
+  it('keeps the section in the name when two courses would otherwise share one', () => {
+    const names = displayNames(['CS 101 (Section 01)', 'CS 101 (Section 02)', 'COB300A (Section 02 Fall 2026)'])
+    expect([...names.values()]).toEqual(['CS 101 (Section 01)', 'CS 101 (Section 02)', 'COB300A'])
   })
 })

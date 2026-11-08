@@ -1,13 +1,18 @@
 import 'fake-indexeddb/auto'
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { importCalendar, readCalendar, rowStates, type CalendarImport } from './calendar'
+import { courseKey } from '../domain/ics'
+import { eventsToImport, importCalendar, readCalendar, rowStates, type CalendarImport } from './calendar'
+import { studyEvents } from './streaks'
 import { getPlanByKey, listPlans, softDelete } from './repo'
 import { scheduleAll } from './schedule'
 import { newDb } from './test-db'
 import type { KilnDB } from './db'
 
 const CANVAS = readFileSync(new URL('../../fixtures/calendars/canvas.ics', import.meta.url), 'utf8')
+const REAL = readFileSync(new URL('../../fixtures/calendars/real-canvas.ics', import.meta.url), 'utf8')
+const COB_A = 'COB300A (Section 02 Fall 2026)'
+const COB_D = 'COB300D (Section 01 Fall 2026)'
 const START = '2030-01-07'
 const ALL = ['MATH-221-001', 'HIST-110', 'CS-150']
 
@@ -25,7 +30,7 @@ describe('importCalendar', () => {
   it('makes one plan per ticked course, assignments as tasks with deadlines, class times and exams as events', async () => {
     const db = newDb()
     const res = await importCalendar(db, input(CANVAS))
-    expect(res).toMatchObject({ tasksAdded: 9, datesChanged: 0, eventsAdded: 3, eventsUpdated: 0 })
+    expect(res).toMatchObject({ tasksAdded: 10, markedDone: 0, datesChanged: 0, eventsAdded: 3, eventsUpdated: 0 })
     const plans = await listPlans(db)
     expect(plans.map((p) => [p.key, p.title, p.schedulingMode]).sort()).toEqual([
       ['course-cs-150', 'CS-150', 'fixed'],
@@ -33,7 +38,7 @@ describe('importCalendar', () => {
       ['course-math-221-001', 'MATH-221-001', 'fixed'],
     ])
     const math = await tasksOf(db, 'course-math-221-001')
-    expect(math.map((t) => t.title)).toEqual(['Problem Set 3', 'Quiz 2', 'Prepare for Midterm Exam'])
+    expect(math.map((t) => t.title)).toEqual(['Problem Set 3', 'Quiz 2', 'Prepare for Midterm Exam (session 1 of 2)', 'Prepare for Midterm Exam (session 2 of 2)'])
     expect(math.every((t) => t.deadline !== undefined)).toBe(true)
     expect((await tasksOf(db, 'course-cs-150')).map((t) => t.estimatedMinutes)).toEqual([80, 80, 80])
 
@@ -96,7 +101,7 @@ describe('importCalendar', () => {
     const math = await tasksOf(db, 'course-math-221-001')
     const ps2 = math.find((t) => t.id === ps!.id)!
     expect(ps2).toMatchObject({ status: 'done', estimatedMinutes: 45, deadline: again.rows.find((r) => r.title === 'Problem Set 3')!.due })
-    expect(math.map((t) => t.title)).toEqual(['Problem Set 3', 'Quiz 2', 'Homework 5', 'Prepare for Midterm Exam'])
+    expect(math.map((t) => t.title)).toEqual(['Problem Set 3', 'Quiz 2', 'Homework 5', 'Prepare for Midterm Exam (session 1 of 2)', 'Prepare for Midterm Exam (session 2 of 2)'])
     expect(await getPlanByKey(db, 'course-math-221-001')).toMatchObject({ title: 'Calculus I', goal: 'Pass' })
     expect((await db.events.toArray()).filter((e) => !e.deleted).map((e) => e.title).sort()).toEqual(['Field trip', 'Lecture: Limits and continuity', 'Midterm Exam'])
   })
@@ -165,6 +170,64 @@ describe('importCalendar', () => {
     const feeds = await db.feeds.toArray()
     expect(feeds).toHaveLength(1)
     expect(feeds[0]).toMatchObject({ id: old!.id, url, needsLink: false })
+  })
+
+  it('imports ticked past rows as done without a completion time, starting the plan early enough', async () => {
+    const db = newDb()
+    const today = '2026-11-09'
+    const { items, rows } = readCalendar(REAL)
+    const past = rows.filter((r) => r.due < today && !r.prep && r.title !== 'Case Memo 2').map((r) => ({ ...r, done: true }))
+    const upcoming = rows.filter((r) => r.due >= today)
+    const res = await importCalendar(db, { items, rows: [...past, ...upcoming], courses: [COB_A, COB_D], startDate: today, names: { [COB_D]: 'Business Policy' } })
+    expect(res).toMatchObject({ tasksAdded: 9, markedDone: 3 })
+
+    const a = await getPlanByKey(db, courseKey(COB_A))
+    expect(a).toMatchObject({ title: 'COB300A', startDate: '2026-09-06' })
+    expect((await getPlanByKey(db, courseKey(COB_D)))?.title).toBe('Business Policy')
+    const done = (await db.tasks.toArray()).filter((t) => t.status === 'done')
+    expect(done.map((t) => t.title).sort()).toEqual(['Case Memo 1', 'Reflection 1', 'Test 3'])
+    expect(done.every((t) => t.completedAt === undefined && t.scheduledDate === undefined)).toBe(true)
+    // History from the import is not study done in Kiln: the streak and heatmap see none of it.
+    expect(await studyEvents(db)).toEqual([])
+    await scheduleAll(db, today)
+    expect((await db.tasks.toArray()).filter((t) => t.status === 'done').every((t) => t.scheduledDate === undefined)).toBe(true)
+
+    // Re-import: the raw course tag still finds the same plans; the rename is kept and nothing is duplicated.
+    const again = readCalendar(REAL)
+    const states = await rowStates(db, again.rows)
+    expect(again.rows.filter((r) => states.get(r.key)?.status === 'new').map((r) => r.title)).toEqual(['Case Memo 2', 'Prepare for Test 3'])
+    const rows2 = [...again.rows.filter((r) => r.due >= today), ...again.rows.filter((r) => r.title === 'Case Memo 2').map((r) => ({ ...r, done: true }))]
+    const res2 = await importCalendar(db, { items: again.items, rows: rows2, courses: [COB_A, COB_D], startDate: today, names: { [COB_A]: 'Strategy' } })
+    expect(await listPlans(db)).toHaveLength(2)
+    expect((await getPlanByKey(db, courseKey(COB_A)))?.title).toBe('Strategy')
+    expect((await getPlanByKey(db, courseKey(COB_D)))?.title).toBe('Business Policy')
+    expect(res2).toMatchObject({ tasksAdded: 1, markedDone: 1 })
+  })
+
+  it('counts class times and exams that an import would add or move', async () => {
+    const db = newDb()
+    const all = input(CANVAS)
+    const uids = (s: Set<string>) => [...s].sort()
+    expect(uids(await eventsToImport(db, all.items))).toEqual(['event-calendar-event-2001', 'event-calendar-event-2002', 'event-calendar-event-2003'])
+    await importCalendar(db, all)
+    expect(uids(await eventsToImport(db, all.items))).toEqual([])
+    // A course of class meetings alone: no rows, still imported.
+    const moved = input(CANVAS.replace('Lecture: Limits', 'Lecture: Limits and continuity'))
+    expect(uids(await eventsToImport(db, moved.items))).toEqual(['event-calendar-event-2001'])
+    const res = await importCalendar(db, { ...moved, rows: [] })
+    expect(res).toMatchObject({ tasksAdded: 0, eventsUpdated: 1 })
+  })
+
+  it('marks every part of a long done row done', async () => {
+    const db = newDb()
+    const { items, rows } = readCalendar(REAL)
+    const memo = rows.find((r) => r.title === 'Case Memo 1')!
+    const res = await importCalendar(db, { items, rows: [{ ...memo, minutes: 240, done: true }], courses: [COB_A], startDate: '2026-11-09' })
+    expect(res).toMatchObject({ tasksAdded: 2, markedDone: 2 })
+    expect((await tasksOf(db, courseKey(COB_A))).map((t) => [t.title, t.estimatedMinutes, t.status])).toEqual([
+      ['Case Memo 1 (part 1 of 2)', 120, 'done'],
+      ['Case Memo 1 (part 2 of 2)', 120, 'done'],
+    ])
   })
 
   it('refuses rows due before the start date with a clear error', async () => {
