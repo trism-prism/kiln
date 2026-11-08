@@ -7,6 +7,9 @@ const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 
 /** Index in `full` of a word that is a start of the full name, at least three letters ("fri", "nov", "novem"). */
 const nameIndex = (word: string, full: string[]) => (word.length >= 3 ? full.findIndex((f) => f.startsWith(word)) : -1)
 
+/** Whether the word names a month ("nov", "November"). */
+export const isMonthName = (word: string) => nameIndex(word.toLowerCase(), MONTHS) >= 0
+
 /** The next such weekday after today (1 to 7 days ahead); with `past`, the latest one up to today (0 to 6 back). */
 function nextWeekday(today: string, index: number, past = false): string {
   return past ? addDaysISO(today, -((weekdayIndex(today) - index + 7) % 7)) : addDaysISO(today, ((index - weekdayIndex(today) + 6) % 7) + 1)

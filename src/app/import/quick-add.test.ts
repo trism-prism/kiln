@@ -39,6 +39,11 @@ describe('parseLine', () => {
     ['Exam nov 1', { title: 'Exam', due: '2027-11-01' }],
     ['Exam jan 5', { title: 'Exam', due: '2027-01-05' }],
     ['Exam feb 30', { title: 'Exam feb 30', due: undefined }],
+    ['Exam nov 20 2027', { title: 'Exam', due: '2027-11-20' }],
+    ['Exam Nov 20, 2027 1h', { title: 'Exam', due: '2027-11-20', minutes: '60' }],
+    ['Exam nov 20 2025', { title: 'Exam', due: '2025-11-20' }],
+    ['Exam feb 29 2027', { title: 'Exam feb 29 2027', due: undefined }],
+    ['Exam nov 20 200 pages', { title: 'Exam 200 pages', due: '2026-11-20' }],
     ['May the force', { title: 'May the force', due: undefined }],
     ['Exam 2026-12-01', { title: 'Exam', due: '2026-12-01' }],
     ['Must do !', { title: 'Must do', priority: 'core' }],
@@ -107,6 +112,27 @@ describe('parseQuickAdd', () => {
     const m = parseQuickAdd('# Week {n}\nRead chapter {n}', today, 3)
     expect(m.map((x) => x.title)).toEqual(['Week 1', 'Week 2', 'Week 3'])
     expect(m.map((x) => x.tasks[0]!.title)).toEqual(['Read chapter 1', 'Read chapter 2', 'Read chapter 3'])
+  })
+  it.each([
+    ['# Week 1', ['# Week 1', '# Week 2', '# Week 3']],
+    ['Read chapter 1.', ['Read chapter 1.', 'Read chapter 2.', 'Read chapter 3.']],
+    ['Lab 1h', ['Lab 1h', 'Lab 1h', 'Lab 1h']],
+    ['Lab 1 hour', ['Lab 1 hour', 'Lab 1 hour', 'Lab 1 hour']],
+    ['Chapter 10', ['Chapter 10', 'Chapter 10', 'Chapter 10']],
+    ['Read pages 1-20', ['Read pages 1-20', 'Read pages 1-20', 'Read pages 1-20']],
+    ['Quiz nov 1', ['Quiz nov 1', 'Quiz nov 1', 'Quiz nov 1']],
+    ['Set {n}', ['Set 1', 'Set 2', 'Set 3']],
+  ])('repeat 3 counts up standalone 1s: %s', (line, want) => {
+    expect(expandRepeat(line, 3).split('\n')).toEqual(want)
+  })
+  it('a line of only a date, minutes or "!" keeps its text as the title', () => {
+    const m = parseQuickAdd(['fri', '45m', '!', '- nov 20'].join('\n'), today)
+    expect(m[0]!.tasks.map((t) => [t.title, t.due, t.minutes, t.priority])).toEqual([
+      ['fri', '2026-11-13', '30', 'core'],
+      ['45m', '', '45', 'core'],
+      ['!', '', '30', 'core'],
+      ['nov 20', '2026-11-20', '30', 'core'],
+    ])
   })
   it('builds a plan that validates: links become resources, a due date makes it fixed', () => {
     const modules = parseQuickAdd('# Bio\nRead 45m https://youtu.be/x\nExam nov 20 1h30m', today)
