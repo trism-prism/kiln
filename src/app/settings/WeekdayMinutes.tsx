@@ -43,7 +43,7 @@ export function WeekdayMinutes({ values, onChange }: { values: string[]; onChang
   }
   return (
     <div ref={root} className="grid gap-2">
-      <table className="w-full text-sm">
+      <table className="w-full max-w-lg text-sm">
         <caption className="sr-only">Study minutes per weekday. Press a day to change its minutes.</caption>
         <tbody>
           {WEEKDAYS.map((day, i) => {
@@ -51,7 +51,7 @@ export function WeekdayMinutes({ values, onChange }: { values: string[]; onChang
             const open = editing === i
             return (
               <tr key={day} className="border-b border-border last:border-0">
-                <th scope="row" className="w-28 py-1 pr-2 text-left font-normal">
+                <th scope="row" className="py-1 pr-2 text-left font-normal whitespace-nowrap">
                   {open ? (
                     day
                   ) : (
@@ -60,8 +60,8 @@ export function WeekdayMinutes({ values, onChange }: { values: string[]; onChang
                     </Button>
                   )}
                 </th>
-                <td className="w-44 py-1 pr-3">
-                  {open ? (
+                {open ? (
+                  <td colSpan={2} className="py-1">
                     <div
                       // On key up, not down: NumberField commits the typed text on Enter's key down, and closing on key down would
                       // move focus to the day button in time for the key up to press it and open the editor again.
@@ -93,15 +93,18 @@ export function WeekdayMinutes({ values, onChange }: { values: string[]; onChang
                         </Group>
                       </NumberField>
                     </div>
-                  ) : (
-                    <span className={`tabular-nums ${n === undefined ? 'text-danger' : ''}`}>{n === undefined ? '0 to 1440' : `${n} min`}</span>
-                  )}
-                </td>
-                <td className="py-1" aria-hidden="true">
-                  <div className="h-2 rounded-full bg-surface-muted">
-                    <div className="h-2 rounded-full bg-accent" style={{ width: `${Math.min(100, ((n ?? 0) / scale) * 100)}%` }} />
-                  </div>
-                </td>
+                  </td>
+                ) : (
+                  <>
+                    {/* A thin line with no track or round ends, so it reads as a chart and not as a slider to drag. */}
+                    <td className="w-full px-3 py-1" aria-hidden="true">
+                      <div className="h-1 bg-accent" style={{ width: `${Math.min(100, ((n ?? 0) / scale) * 100)}%` }} />
+                    </td>
+                    <td className={`py-1 text-right whitespace-nowrap tabular-nums ${n === undefined ? 'text-danger' : ''}`}>
+                      {n === undefined ? '0 to 1440' : `${n} min`}
+                    </td>
+                  </>
+                )}
               </tr>
             )
           })}
