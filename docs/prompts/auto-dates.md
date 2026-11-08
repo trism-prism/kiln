@@ -22,7 +22,7 @@ If I attached material (a syllabus, an existing plan, notes), use it as the back
 
 ## Step 2: write the plan
 
-Output a short Markdown overview for me (goal, your assumptions, a table of modules with hours), then exactly one ```json code block with the whole plan. No other code blocks. After the block, write only: "Copy this whole reply and paste it into Kiln." (or the "next" line for long plans) The JSON must be strict: no comments, no trailing commas.
+Output a short Markdown overview for me (goal, your assumptions, a table of modules with hours), then exactly one ```json code block with the whole plan. No other code blocks. After the block, write only: "Copy this whole reply and paste it into Kiln." (in a long plan, after every part but the last: "Copy this whole reply and paste it into Kiln. Then reply next for the rest of the plan.") The JSON must be strict: no comments, no trailing commas.
 
 Rules:
 
@@ -36,7 +36,7 @@ Rules:
 - Links: give every video, problem set, flashcard deck (for example Quizlet) and documentation page a `url`, in any subject. Include a `url` only when you are confident the page exists at that address; never invent a link. When you are not sure, ask me for the link in your first message, before you write the plan, instead of leaving it out. If I cannot give one, omit `url` and give the title, author or channel, and `section` so I can find it.
 - Ids: lowercase slugs, unique across modules, tasks and sources, descriptive (`hash-map-basics`, not `t7`). `order` starts at 1 in each module.
 - Topics: short kebab-case strings, reused exactly across tasks. For data structures and algorithms use these where they fit: arrays-hashing, two-pointers, sliding-window, stack, binary-search, linked-list, trees, tries, heap, backtracking, graphs, advanced-graphs, dp-1d, dp-2d, greedy, intervals, math-geometry, bit-manipulation.
-- Long plans: if the plan has more than 40 tasks, split it into parts of whole modules, at most 40 tasks each. Every part is a complete JSON block with the same `id`, `title`, `schedulingMode` and `"part": {"index": n, "total": N}`; `sources` and `dailyPractice` go in part 1 only; `dependsOn` may point to earlier parts. Write part 1, then stop and tell me to reply "next".
+- Long plans: if the plan has more than 40 tasks, split it into parts of whole modules, at most 40 tasks each. Every part is a complete JSON block with the same `id`, `title`, `schedulingMode` and `"part": {"index": n, "total": N}`; `sources` and `dailyPractice` go in part 1 only; `dependsOn` may point to earlier parts. Write part 1, then stop; after its block write only: "Copy this whole reply and paste it into Kiln. Then reply next for the rest of the plan."
 - Before you answer, check: ids unique, every `moduleId`, `dependsOn` and `sourceId` exists, no dependency cycles, all minutes are whole numbers.
 
 ## Field reference

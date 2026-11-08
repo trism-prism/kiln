@@ -39,8 +39,10 @@ describe.each(Object.entries(files))('prompt file %s', (_name, markdown) => {
     // The questions are relayed to me as written; the reference further down keeps its yyyy-mm-dd format for the AI.
     expect(prompt.slice(0, prompt.indexOf('## Step 2'))).not.toContain('yyyy-mm-dd')
     expect(prompt).not.toContain('reviews Kiln adds')
-    // The closing line agrees with the long-plan rule, which ends a part with "next".
-    expect(prompt).toContain('(or the "next" line for long plans)')
+    // The closing line for a long plan is the same, word for word, in the closing rule and the long-plan rule.
+    const long = '"Copy this whole reply and paste it into Kiln. Then reply next for the rest of the plan."'
+    expect(prompt).toContain(`(in a long plan, after every part but the last: ${long})`)
+    expect(prompt).toContain(`Write part 1, then stop; after its block write only: ${long}`)
   })
 })
 
