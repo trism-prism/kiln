@@ -106,12 +106,12 @@ export function BuildTab() {
               <caption className="pb-2 text-left font-medium">Preview: fix anything here</caption>
               <thead className="text-left text-text-muted">
                 <tr>
-                  <th scope="col" className="min-w-44 p-1 font-medium">Title</th>
+                  <th scope="col" className="min-w-40 p-1 font-medium">Title</th>
                   <th scope="col" className="w-32 p-1 font-medium">Type</th>
                   <th scope="col" className="w-20 p-1 font-medium">Minutes</th>
-                  <th scope="col" className="w-40 p-1 font-medium sm:w-48">Due</th>
+                  <th scope="col" className="w-40 p-1 font-medium sm:w-44">Due</th>
                   <th scope="col" className="w-36 p-1 font-medium">Priority</th>
-                  <th scope="col" className="p-1 font-medium">Links</th>
+                  <th scope="col" className="min-w-20 p-1 font-medium">Links</th>
                 </tr>
               </thead>
               {modules.map((m) => (
