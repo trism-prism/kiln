@@ -5,21 +5,9 @@ import { DateField } from '../../ui/date'
 import { TextField } from '../../ui/form'
 import { FormSheet } from '../../ui/overlay'
 import { logStudyTime } from '../actions'
-import { parseLine } from '../import/quick-add'
+import { parseStudyMinutes } from '../import/quick-add'
 
 export const MAX_LOG_MINUTES = 600
-
-/** Minutes as people type them: "30", "45m", "1h", "1h30", "1h 30m", "1.5 hours". Undefined for anything else. */
-export function parseStudyMinutes(text: string): number | undefined {
-  const t = text.trim()
-  if (/^[0-9]+$/.test(t)) return Number(t)
-  // "1h30": hours, then bare minutes.
-  const hm = /^([0-9]+)\s*h\s*([0-9]{1,2})$/i.exec(t)
-  if (hm) return Number(hm[2]) < 60 ? Number(hm[1]) * 60 + Number(hm[2]) : undefined
-  // Quick add reads durations; the text must be nothing but a duration.
-  const p = parseLine(t, '2000-01-01')
-  return p.title === '' && p.minutes !== undefined && !p.due && !p.priority && p.links.length === 0 ? Number(p.minutes) : undefined
-}
 
 /** The minutes a session may log, 1 to MAX_LOG_MINUTES, or undefined when the text isn't that. */
 export function loggableMinutes(text: string): number | undefined {

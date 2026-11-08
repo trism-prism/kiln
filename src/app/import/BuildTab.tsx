@@ -9,7 +9,8 @@ import { DateField } from '../../ui/date'
 import { TextField } from '../../ui/form'
 import type { Draft, DraftTask } from './builder'
 import type { Input as ReviewInput } from './logic'
-import { dropPastDue, keptEdits, MAX_REPEAT, parseQuickAdd } from './quick-add'
+import { minutesText } from '../parts'
+import { dropPastDue, keptEdits, MAX_REPEAT, parseQuickAdd, readStudyText } from './quick-add'
 import { Review } from './Review'
 
 const cell = 'h-9 w-full rounded-md border border-border-strong bg-surface-raised px-2 text-sm text-text'
@@ -45,7 +46,12 @@ export function BuildTab() {
     if (next.changed + next.recounted > 0) setEdits(next.edits)
     setDroppedEdits({ changed: next.changed, recounted: next.recounted })
   }
-  const draft: Draft = { title, modules }
+  // One line like "Psychology 3h a week" makes a Study time plan instead of a task list.
+  const studyText = useMemo(() => readStudyText(text), [text])
+  const study = studyText && 'study' in studyText ? studyText.study : undefined
+  const mixed = studyText && 'mixed' in studyText ? studyText.mixed : undefined
+  const draft: Draft = study ? { title: title.trim() || study.subject, modules: [], study } : { title, modules }
+  const canReview = !mixed && (!!study || modules.length > 0)
   const edit = (uid: string, patch: Partial<DraftTask>) => setEdits((e) => ({ ...e, [uid]: { ...e[uid], ...patch } }))
   let row = 0
 
@@ -70,7 +76,7 @@ export function BuildTab() {
           className="min-h-40 w-full rounded-md border border-border-strong bg-surface-raised p-3 text-sm text-text placeholder:text-text-muted"
         />
         <p id="quick-add-help" className="text-text-muted">
-          Start a line with # for a new module. Add a time (45m), a day (fri or nov 20), ! for Essential, ? for Optional, and any links.
+          Start a line with # for a new module. Add a time (45m), a day (fri or nov 20), ! for Essential, ? for Optional, and any links. For study time, type one line like Psychology 3h a week.
         </p>
       </div>
       <TextField
@@ -96,8 +102,17 @@ export function BuildTab() {
       />
 
       <p role="status" className="text-sm text-text-muted">
-        {taskCount === 0 ? '' : `${taskCount} ${taskCount === 1 ? 'task' : 'tasks'} in ${modules.length} ${modules.length === 1 ? 'module' : 'modules'}`}
+        {study
+          ? `Study time: ${study.subject}, ${minutesText(study.minutesPerWeek)} a week`
+          : taskCount === 0
+            ? ''
+            : `${taskCount} ${taskCount === 1 ? 'task' : 'tasks'} in ${modules.length} ${modules.length === 1 ? 'module' : 'modules'}`}
       </p>
+      {mixed && (
+        <p id="study-mixed" className="text-sm text-warning">
+          “{mixed}” is study time, which is its own plan. Remove that line or the others.
+        </p>
+      )}
       {droppedEdits.changed > 0 && (
         <p className="text-sm text-warning">
           {droppedEdits.changed} table {droppedEdits.changed === 1 ? 'edit was' : 'edits were'} dropped because{' '}
@@ -115,7 +130,7 @@ export function BuildTab() {
         </p>
       )}
 
-      {modules.length > 0 && (
+      {modules.length > 0 && !study && (
         <div className="grid gap-2">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[44rem] border-collapse text-sm">
@@ -189,10 +204,10 @@ export function BuildTab() {
       )}
 
       <div>
-        <Button isDisabled={modules.length === 0} aria-describedby={modules.length === 0 ? 'review-reason' : undefined} onPress={() => setReviewed((r) => ({ input: { kind: 'build', draft: structuredClone(draft) }, n: (r?.n ?? 0) + 1 }))}>
+        <Button isDisabled={!canReview} aria-describedby={mixed ? 'study-mixed' : !canReview ? 'review-reason' : undefined} onPress={() => setReviewed((r) => ({ input: { kind: 'build', draft: structuredClone(draft) }, n: (r?.n ?? 0) + 1 }))}>
           Review plan
         </Button>
-        {modules.length === 0 && (
+        {!canReview && !mixed && (
           <p id="review-reason" className="mt-2 text-sm text-text-muted">
             Type at least one task above to review the plan.
           </p>

@@ -98,6 +98,16 @@ export function Meter({ label, className = '', ...props }: Omit<AriaMeterProps, 
   )
 }
 
+/** A label and value row inside a `dl`, like "Time per week  3 h". */
+export function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-4 border-b border-border py-1">
+      <dt className="text-text-muted">{label}</dt>
+      <dd className="tabular-nums">{value}</dd>
+    </div>
+  )
+}
+
 /** Static placeholder block while data loads. No shimmer. */
 export function Skeleton({ className = '' }: { className?: string }) {
   return <div aria-hidden="true" className={`rounded-md bg-surface-muted ${className}`} />

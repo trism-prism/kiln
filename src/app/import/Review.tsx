@@ -11,8 +11,9 @@ import { addDaysISO, toLocalISODate } from '../../lib/date'
 import { Button } from '../../ui/button'
 import { Checkbox, TextField } from '../../ui/form'
 import { toasts } from '../../ui/overlay'
-import { Card } from '../../ui/surface'
+import { Card, Stat } from '../../ui/surface'
 import { META_START_DATE } from '../../pwa/onboarding'
+import { minutesText } from '../parts'
 import { PRIORITY_LABEL } from '../priority'
 import { Report } from './Report'
 import {
@@ -92,6 +93,8 @@ export function Review({ input }: { input: Input }) {
   const sheet = a?.detected === 'sheet' || input.kind === 'build'
   const startDate = userStart ?? plan?.startDate ?? tomorrow
   const deadlineValue = deadline ?? plan?.deadline ?? ''
+  // A study time plan: its deadline is when it ends.
+  const weekly = plan?.studyMinutesPerWeek
 
   const choice: Choice = chosen ?? defaultChoice(a?.existing, plan)
   const match = plan && a ? decideMatch(plan, a.existing, choice) : undefined
@@ -111,7 +114,9 @@ export function Review({ input }: { input: Input }) {
   const dateProblem = !/^\d{4}-\d{2}-\d{2}$/.test(startDate)
     ? 'Choose a start date.'
     : deadlineValue !== '' && deadlineValue < startDate
-      ? 'The deadline is before the start date.'
+      ? weekly !== undefined
+        ? 'The end date is before the start date.'
+        : 'The deadline is before the start date.'
       : undefined
   const titleProblem = a?.detected === 'sheet' && input.kind !== 'build' && title.trim() === '' ? 'Enter a title for the plan.' : undefined
   const ready = !!finalPlan && !!match && match.kind !== 'blocked' && !copyProblem && !dateProblem && !titleProblem && !startBad && !deadlineBad
@@ -137,7 +142,8 @@ export function Review({ input }: { input: Input }) {
         // The plan is saved; only the dates are missing, and Settings can reschedule.
         scheduled = ` Scheduling failed (${message(e)}); reschedule from Settings.`
       }
-      toasts.add({ title: `Imported "${finalPlan.title}"`, description: `${parts.join(', ')} tasks.${scheduled}` }, { timeout: 6000 })
+      const what = finalPlan.studyMinutesPerWeek !== undefined ? `${minutesText(finalPlan.studyMinutesPerWeek)} a week.` : `${parts.join(', ')} tasks.`
+      toasts.add({ title: `Imported "${finalPlan.title}"`, description: `${what}${scheduled}` }, { timeout: 6000 })
       void navigate(`/plans/${result.planId}`)
     } catch (e) {
       setFailure(message(e))
@@ -156,7 +162,11 @@ export function Review({ input }: { input: Input }) {
       {a && (
         <>
           <Report issues={issues} />
-          {errorCount === 0 && plan && <p className="text-sm text-text-muted" role="status">The plan is valid: {plan.tasks.length} tasks in {plan.modules.length} modules.</p>}
+          {errorCount === 0 && plan && (
+            <p className="text-sm text-text-muted" role="status">
+              {weekly !== undefined ? `The plan is valid: study time for ${plan.title}, ${minutesText(weekly)} a week.` : `The plan is valid: ${plan.tasks.length} tasks in ${plan.modules.length} modules.`}
+            </p>
+          )}
         </>
       )}
 
@@ -187,7 +197,7 @@ export function Review({ input }: { input: Input }) {
               description={match?.kind === 'update' || match?.kind === 'part' ? 'Not used: this plan already has a start date.' : undefined}
             />
             <TextField
-              label="Deadline (optional)"
+              label={weekly !== undefined ? 'Ends (optional)' : 'Deadline (optional)'}
               type="date"
               value={deadlineValue}
               onChange={setDeadline}
@@ -284,7 +294,8 @@ function PreviewCard({
   const backlog = preview?.tasks.filter((t) => t.backlog).length ?? 0
   const dated = preview?.tasks.filter((t) => t.scheduledDate !== undefined) ?? []
   const practiceDates = preview?.output.practice.filter((g) => g.planId === planId).map((g) => g.date) ?? []
-  const first = [...dated.map((t) => t.scheduledDate as string), ...practiceDates].sort()[0] ?? startDate
+  const study = preview?.output.study.filter((g) => g.planId === planId) ?? []
+  const first = [...dated.map((t) => t.scheduledDate as string), ...practiceDates, ...study.map((g) => g.date)].sort()[0] ?? startDate
   const last = addDaysISO(first, 13)
   const days = new Map<string, { title: string; minutes: number }[]>()
   for (const t of dated) {
@@ -296,42 +307,52 @@ function PreviewCard({
       days.set(g.date, [...(days.get(g.date) ?? []), { title: `LeetCode: ${g.title} (${g.difficulty})`, minutes: g.minutes }])
     }
   }
+  for (const g of study) if (g.date <= last) days.set(g.date, [...(days.get(g.date) ?? []), { title: `Study ${plan.title}`, minutes: g.minutes }])
+  const weekly = plan.studyMinutesPerWeek
 
   return (
     <Card className="grid gap-4">
       <h2 className="text-base font-medium">Preview</h2>
       <dl className="grid gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
-        <Stat label="Modules" value={String(s.modules)} />
-        <Stat label="Tasks" value={existing && existing.size > 0 ? `${s.tasks} (${added} new)` : String(s.tasks)} />
-        <Stat label="Total time" value={hours(s.totalMinutes)} />
-        {PRIORITIES.map((pr) => (
-          <Stat key={pr} label={`Time, ${PRIORITY_LABEL[pr].toLowerCase()}`} value={hours(s.minutesByPriority[pr])} />
-        ))}
+        {weekly !== undefined ? (
+          <Stat label="Time per week" value={minutesText(weekly)} />
+        ) : (
+          <>
+          <Stat label="Modules" value={String(s.modules)} />
+          <Stat label="Tasks" value={existing && existing.size > 0 ? `${s.tasks} (${added} new)` : String(s.tasks)} />
+          <Stat label="Total time" value={hours(s.totalMinutes)} />
+          {PRIORITIES.map((pr) => (
+            <Stat key={pr} label={`Time, ${PRIORITY_LABEL[pr].toLowerCase()}`} value={hours(s.minutesByPriority[pr])} />
+          ))}
+          </>
+        )}
       </dl>
       {error && <p role="alert" className="text-sm text-danger">Could not build the schedule: {error}</p>}
       {!preview && !error && <p className="text-sm text-text-muted" role="status">Building the schedule...</p>}
       {preview && (
         <div className="grid gap-4">
-          <div className="grid gap-1 text-sm" data-testid="projection">
-            {!preview.result.complete ? (
-              <p>Scheduling starts when every part of the plan is imported.</p>
-            ) : (
-              <>
-                <p>
-                  Expected finish: <strong className="font-medium">{finish ? dayLabel(finish) : 'none (nothing to schedule)'}</strong> at your current budget.
-                </p>
-                {deadline === '' && !plan.deadline ? (
-                  <p className="text-text-muted">No deadline set.</p>
-                ) : missed && missed.kind === 'plan-deadline' ? (
-                  <p className="text-danger">Misses the deadline of {dayLabel(missed.deadline)}: expected finish {dayLabel(missed.projectedFinish)}. Raise your minutes or move the deadline.</p>
-                ) : (
-                  <p className="text-success">On track for the deadline of {dayLabel(deadline || (plan.deadline as string))}.</p>
-                )}
-                {lateTasks > 0 && <p className="text-danger">{lateTasks} {lateTasks === 1 ? 'task is' : 'tasks are'} scheduled after {lateTasks === 1 ? 'its' : 'their'} own deadline.</p>}
-                {backlog > 0 && <p className="text-text-muted">{backlog} {backlog === 1 ? 'task is' : 'tasks are'} deferred to the backlog to make the deadline.</p>}
-              </>
-            )}
-          </div>
+          {weekly === undefined && (
+            <div className="grid gap-1 text-sm" data-testid="projection">
+              {!preview.result.complete ? (
+                <p>Scheduling starts when every part of the plan is imported.</p>
+              ) : (
+                <>
+                  <p>
+                    Expected finish: <strong className="font-medium">{finish ? dayLabel(finish) : 'none (nothing to schedule)'}</strong> at your current budget.
+                  </p>
+                  {deadline === '' && !plan.deadline ? (
+                    <p className="text-text-muted">No deadline set.</p>
+                  ) : missed && missed.kind === 'plan-deadline' ? (
+                    <p className="text-danger">Misses the deadline of {dayLabel(missed.deadline)}: expected finish {dayLabel(missed.projectedFinish)}. Raise your minutes or move the deadline.</p>
+                  ) : (
+                    <p className="text-success">On track for the deadline of {dayLabel(deadline || (plan.deadline as string))}.</p>
+                  )}
+                  {lateTasks > 0 && <p className="text-danger">{lateTasks} {lateTasks === 1 ? 'task is' : 'tasks are'} scheduled after {lateTasks === 1 ? 'its' : 'their'} own deadline.</p>}
+                  {backlog > 0 && <p className="text-text-muted">{backlog} {backlog === 1 ? 'task is' : 'tasks are'} deferred to the backlog to make the deadline.</p>}
+                </>
+              )}
+            </div>
+          )}
           {preview.result.complete && (
             <div className="grid gap-2">
               <h3 className="text-sm font-medium">First 14 days</h3>
@@ -360,15 +381,6 @@ function PreviewCard({
         </div>
       )}
     </Card>
-  )
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between gap-4 border-b border-border py-1">
-      <dt className="text-text-muted">{label}</dt>
-      <dd className="tabular-nums">{value}</dd>
-    </div>
   )
 }
 
