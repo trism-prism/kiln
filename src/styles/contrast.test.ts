@@ -21,7 +21,7 @@ function contrast(a: string, b: string): number {
   return (hi! + 0.05) / (lo! + 0.05)
 }
 
-const surfaces = ['surface', 'surface-raised', 'surface-muted']
+const surfaces = ['surface', 'surface-raised', 'surface-muted', 'surface-overlay', 'surface-overlay-hover']
 const textOnSurfaces = ['text', 'text-muted', 'accent', 'danger', 'success', 'warning']
 // [foreground, background, minimum ratio]: 4.5 for text, 3 for control outlines and focus rings.
 const pairs: [string, string, number][] = [

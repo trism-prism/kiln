@@ -83,6 +83,29 @@ test('To Do with no plans offers to import one', async ({ page }) => {
   await expect(page.getByRole('link', { name: 'Import a plan' })).toBeVisible()
 })
 
+test('an open select list sits on its own opaque surface above the card, in light and dark', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 })
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: scheme })
+    await page.goto('/settings')
+    const trigger = page.getByRole('button', { name: /Theme/ })
+    await trigger.click()
+    const list = page.getByRole('listbox')
+    await expect(list).toBeVisible()
+    const [popoverBg, cardBg] = await Promise.all([
+      list.evaluate((el) => getComputedStyle(el.parentElement!).backgroundColor),
+      trigger.evaluate((el) => getComputedStyle(el.closest('.shadow-sm')!).backgroundColor),
+    ])
+    expect(popoverBg).not.toBe('rgba(0, 0, 0, 0)')
+    expect(popoverBg).not.toBe(cardBg)
+    // The list covers the help line under the field instead of leaving it showing through a gap.
+    const help = page.getByText("System matches your device's light or dark setting")
+    const [l, h] = [await list.boundingBox(), await help.boundingBox()]
+    expect(l!.y).toBeLessThanOrEqual(h!.y)
+    await page.keyboard.press('Escape')
+  }
+})
+
 test('focus moves to the page heading after navigation, not on first load', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).not.toBeFocused()
