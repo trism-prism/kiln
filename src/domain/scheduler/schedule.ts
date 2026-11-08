@@ -3,7 +3,7 @@
 import { addDaysISO, weekdayIndex } from '../../lib/date'
 import { NEETCODE_TOPICS, normalizeTopic } from '../plan-format'
 import { NEETCODE_POOL, PRACTICE_MINUTES, pickProblem, roadmapTopic, targetDifficulty, type Solved } from '../practice'
-import { studySessions } from './study'
+import { STUDY_WINDOW_DAYS, studySessions } from './study'
 import {
   BACKLOG,
   type DayLoad,
@@ -151,7 +151,8 @@ function place(ctx: Ctx, deferred: ReadonlySet<string>): Result {
   }
   // Study sessions are reserved first on their day. Rule: they leave taskCount alone, so the day's first task
   // still always fits (a day full of study would otherwise keep a long task out for good).
-  for (const s of ctx.study) if (s.date >= input.today) getAcc(s.date).study += s.minutes
+  // Done sessions keep their minutes on their day, so ticking one off does not hand the time to tasks.
+  for (const s of [...ctx.study, ...(input.studyDone ?? [])]) if (s.date >= input.today) getAcc(s.date).study += s.minutes
 
   const openDeps = (t: SchedTask) =>
     t.dependsOn.map((k) => ctx.byKey.get(keyOf(t.planId, k))).filter((d): d is SchedTask => d !== undefined && d.status === 'open')
@@ -425,14 +426,17 @@ export function schedule(input: ScheduleInput): ScheduleOutput {
     const d = t.status === 'open' ? res.date.get(t.id) : undefined
     if (d && !res.backlog.has(t.id) && d > (projectedFinish[t.planId] ?? '')) projectedFinish[t.planId] = d
   }
+  // Study is reserved through the horizon, but reported only through the stored window: beyond it a day is listed
+  // only when it holds other work.
+  const studyEnd = addDaysISO(input.today, STUDY_WINDOW_DAYS)
   const days: DayLoad[] = [...res.acc.entries()]
-    .filter(([, a]) => a.review + a.practice + a.tasks + a.study > 0)
+    .filter(([d, a]) => a.review + a.practice + a.tasks + (d <= studyEnd ? a.study : 0) > 0)
     .sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0))
     .map(([d, a]) => ({ date: d, budget: budgetOn(ctx, d), reviewMinutes: a.review, practiceMinutes: a.practice, taskMinutes: a.tasks, studyMinutes: a.study }))
   return {
     assignments,
     practice: res.practice,
-    study: ctx.study,
+    study: ctx.study.filter((s) => s.date <= studyEnd),
     days,
     projectedFinish,
     violations: violationsOf(ctx, res),

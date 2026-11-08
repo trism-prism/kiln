@@ -58,6 +58,25 @@ describe('studySessions', () => {
     expect(out).toEqual({ '2026-11-10': 25, '2026-11-11': 25, '2026-11-12': 25, '2026-11-13': 25, '2026-11-14': 55 })
   })
 
+  it("counts every plan's done sessions against the day, so two plans never pass the day's minutes together", () => {
+    // Plan a finished 50 of Monday's 60 minutes; plan b gets at most the 10 left (under 15, so nothing on Monday).
+    const out = studySessions(input({ plans: [study('a', 300), study('b', 420)], minutesPerWeekday: Array(7).fill(60), studyDone: [{ planId: 'a', date: MON, minutes: 50 }] }))
+    expect(out.filter((s) => s.date === MON)).toEqual([])
+    const perDay = new Map<string, number>([[MON, 50]])
+    for (const s of out) perDay.set(s.date, (perDay.get(s.date) ?? 0) + s.minutes)
+    expect([...perDay.values()].every((m) => m <= 60)).toBe(true)
+  })
+
+  it('a plan that starts on Saturday asks only for its weekend, so it does not halve a full-week plan', () => {
+    // 7 h each over 60-minute days (7 h a week of room). Before: both asked 7 h, so each got half (3 h 30 min).
+    const plans = [study('a', 420), study('b', 420, { startDate: '2026-11-14' })]
+    const week = studySessions(input({ plans, minutesPerWeekday: Array(7).fill(60) })).filter((s) => s.date <= WEEK1[1])
+    const sum = (id: string) => week.filter((s) => s.planId === id).reduce((n, s) => n + s.minutes, 0)
+    // Asks: a 420, b 120 (two of seven days); room 420, so both scale by 420/540: a 325, b 95.
+    expect(sum('a')).toBe(325)
+    expect(sum('b')).toBeLessThanOrEqual(95)
+  })
+
   it('merges sessions under 15 minutes into fewer days', () => {
     // 50 min over 7 equal days would be 5-10 min each.
     expect(between({ plans: [study('p', 50)], minutesPerWeekday: Array(7).fill(60) }, ...WEEK1)).toEqual({ '2026-11-09': 20, '2026-11-10': 15, '2026-11-11': 15 })

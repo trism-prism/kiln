@@ -556,3 +556,21 @@ describe('study time plans', () => {
     expect(out.violations).toEqual([])
   })
 })
+
+describe('study time plans: reservation of finished sessions and the reported window', () => {
+  it('keeps a done session reserved on its day, so tasks do not take its minutes', () => {
+    const p = [plan('p'), plan('s', { studyMinutesPerWeek: 210 })]
+    const t = tasks('p', [['a', 30], ['b', 30]])
+    // Today's 30-minute session is done: the day still has 30 minutes of study, so only one task fits today.
+    const out = run({ plans: p, tasks: t, studyDone: [{ planId: 's', date: MON, minutes: 30 }] })
+    expect(dates(out, ['a', 'b'])).toEqual(['2026-11-02', '2026-11-03'])
+    expect(out.days.find((d) => d.date === MON)?.studyMinutes).toBe(30)
+  })
+
+  it('reports sessions and study-only days only through the stored window (today + 34 days)', () => {
+    const out = run({ plans: [plan('s', { studyMinutesPerWeek: 420 })], tasks: [] })
+    const end = '2026-12-06'
+    expect(out.study.at(-1)!.date).toBe(end)
+    expect(out.days.at(-1)!.date).toBe(end)
+  })
+})
