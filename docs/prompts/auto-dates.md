@@ -1,9 +1,11 @@
 # Prompt: Kiln assigns the dates
 
-The "Copy prompt (Kiln assigns dates)" button copies everything between the `prompt:start` and `prompt:end` HTML comment markers below (each appears exactly once), with `{{SCHEMA_REFERENCE}}` replaced by the field reference generated from the plan schema, so the prompt and the schema cannot drift. The generated copy of that reference at the bottom of this file is for reading only and is not copied; `npm run schema` refreshes it. The user pastes the prompt into any chat LLM together with their goal or source material. Spec: `docs/plan-format.md`.
+The first "Copy prompt" button (Kiln assigns the dates) copies everything between the `prompt:start` and `prompt:end` HTML comment markers below (each appears exactly once), with `{{SCHEMA_REFERENCE}}` replaced by the field reference generated from the plan schema, so the prompt and the schema cannot drift. The generated copy of that reference at the bottom of this file is for reading only and is not copied; `npm run schema` refreshes it. The user pastes the prompt into any chat LLM together with their goal or source material. Spec: `docs/plan-format.md`.
 
 <!-- prompt:start -->
 You are helping me create a study plan that I will import into Kiln, a study-plan tracker. Kiln puts the tasks on my calendar from my daily time budget, so you write no dates at all.
+
+Talk to me in plain, friendly language, as you would to a first-year student. When you speak to me, don't mention JSON, code blocks, schemas, ids or field names; call the block 'your Kiln plan'. After the plan, tell me: 'Copy this whole reply and paste it into Kiln.'
 
 ## Step 1: ask before writing
 
@@ -12,19 +14,20 @@ Ask me, in one message, for anything below that I have not already told you, the
 1. Goal: what I want to be able to do at the end, and how I will know I am done.
 2. Current level: what I already know, specifically (not just "beginner").
 3. Time: about how many minutes per day I can study, and whether I have a deadline (I enter dates in Kiln; you only use them to size the plan).
-4. Resources: anything I want to use or avoid, and whether everything must be free, and links to any videos, problem sets, flashcards (Quizlet) or docs I already have.
-5. Programming subjects: which language. Coding interview prep: whether I want one practice problem a day.
+4. Class calendar: Do you have a class calendar link? Paste it here, or say no. If I paste a calendar link, open it and use the classes, exams and due dates in it to build the plan around my class schedule. If you can't open it, say so and ask me to paste the upcoming dates instead. Never guess dates. Use the calendar only to order the modules so each topic comes before the class needs it; still write no dates.
+5. Resources: anything I want to use or avoid, and whether everything must be free, and links to any videos, problem sets, flashcards (Quizlet) or docs I already have.
+6. Programming subjects: which language. Coding interview prep: whether I want one practice problem a day.
 
 If I attached material (a syllabus, an existing plan, notes), use it as the backbone and still ask about anything missing.
 
 ## Step 2: write the plan
 
-Output a short Markdown overview for me (goal, your assumptions, a table of modules with hours), then exactly one ```json code block with the whole plan. No other code blocks, nothing after it. The JSON must be strict: no comments, no trailing commas.
+Output a short Markdown overview for me (goal, your assumptions, a table of modules with hours), then exactly one ```json code block with the whole plan. No other code blocks. After the block, write only: "Copy this whole reply and paste it into Kiln." The JSON must be strict: no comments, no trailing commas.
 
 Rules:
 
 - `"schedulingMode": "auto"`. No dates anywhere: no `startDate`, `deadline` or `fixedDate`. Use `notBeforeDay` only to hold work back (for example one mock interview per day).
-- Size: total `estimatedMinutes` should be about my daily minutes times the days I have, minus 20% for the reviews Kiln adds. If the material does not fit, keep it but mark the least essential work `recommended` or `optional`, and say so in the overview.
+- Size: total `estimatedMinutes` should be about 90% of my daily minutes times the days I have, leaving about 10% of the time free for catching up. If the material does not fit, keep it but mark the least essential work `recommended` or `optional`, and say so in the overview.
 - Sessions: every task is one sitting of 20 to 90 minutes. Split longer work into tasks ("Part 1 of 3") chained with `dependsOn`. Expand every day or week of a source plan into concrete tasks; never one task for a whole week.
 - Realistic minutes for my level: include reading or watching (about 1.5x video length for a beginner, who pauses and rewinds), notes and exercises. Beginner coding problems: easy 30-45, medium 45-75, hard 75-90.
 - Fill every task completely. `description` says exactly what to do (which chapter, which video section, which exercises). Lessons get 2-4 `objectives`, `keyConcepts`, 2-4 `verificationQuestions`, `topics` and at least one resource. Add `tradeoffs` wherever the topic involves real choices. Every resource gets `minutes`.
