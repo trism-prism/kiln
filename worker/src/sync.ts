@@ -26,7 +26,7 @@ const DAY_MS = 86_400_000
 const B64U = /^[A-Za-z0-9_-]+$/
 
 /** 32 bytes as 43 base64url characters: space id, token and record key. */
-const isId = (v: unknown): v is string => typeof v === 'string' && v.length === 43 && b64uDecode(v)?.length === 32
+export const isId = (v: unknown): v is string => typeof v === 'string' && v.length === 43 && b64uDecode(v)?.length === 32
 
 interface Row {
   recordKey: string
@@ -35,7 +35,7 @@ interface Row {
   ciphertext: string
 }
 
-function object(body: unknown, allowed: string[]): Record<string, unknown> {
+export function object(body: unknown, allowed: string[]): Record<string, unknown> {
   if (typeof body !== 'object' || body === null || Array.isArray(body)) throw new HttpError(400, 'body must be an object')
   const b = body as Record<string, unknown>
   for (const k of Object.keys(b)) if (!allowed.includes(k)) throw new HttpError(400, `unknown field: ${k}`)
@@ -63,6 +63,7 @@ interface Space {
   seq: number
   record_count: number
   bytes: number
+  closed_at: string | null
 }
 
 export async function handleSync(kind: 'push' | 'pull', body: unknown, env: SyncEnv): Promise<Response> {
@@ -74,7 +75,7 @@ export async function handleSync(kind: 'push' | 'pull', body: unknown, env: Sync
   const tokenHash = await sha256Hex(b.token)
   const db = env.DB
 
-  const find = () => db.prepare('SELECT token_hash, seq, record_count, bytes FROM sync_spaces WHERE space_id = ?').bind(spaceId).first<Space>()
+  const find = () => db.prepare('SELECT token_hash, seq, record_count, bytes, closed_at FROM sync_spaces WHERE space_id = ?').bind(spaceId).first<Space>()
 
   if (kind === 'pull') {
     const cursor = b.cursor
@@ -87,6 +88,7 @@ export async function handleSync(kind: 'push' | 'pull', body: unknown, env: Sync
     // A space nobody has pushed to yet is empty (its token is set by the first push).
     if (!space) return json({ rows: [], cursor, more: false }, 200)
     if (!safeEqual(space.token_hash, tokenHash)) throw new HttpError(403, 'wrong sync key')
+    if (space.closed_at !== null) throw new HttpError(410, 'sync was disconnected')
     // A cursor ahead of the space (for example a restored server) starts over.
     const from = cursor > space.seq ? 0 : cursor
     const found = await db
@@ -121,7 +123,7 @@ export async function handleSync(kind: 'push' | 'pull', body: unknown, env: Sync
 
   let space = await find()
   if (!space) {
-    const n = await db.prepare('SELECT COUNT(*) AS n FROM sync_spaces').first<{ n: number }>()
+    const n = await db.prepare('SELECT COUNT(*) AS n FROM sync_spaces WHERE closed_at IS NULL').first<{ n: number }>()
     if ((n?.n ?? 0) >= cap(env.MAX_SYNC_SPACES, DEFAULT_MAX_SPACES)) throw new HttpError(503, 'sync capacity reached')
     // OR IGNORE: if two first pushes race, the first token wins and the other is rejected below.
     await db
@@ -131,6 +133,7 @@ export async function handleSync(kind: 'push' | 'pull', body: unknown, env: Sync
     space = await find()
   }
   if (!space || !safeEqual(space.token_hash, tokenHash)) throw new HttpError(403, 'wrong sync key')
+  if (space.closed_at !== null) throw new HttpError(410, 'sync was disconnected')
 
   // One version per record: the newest in the request (the first on a tie).
   const newest = new Map<string, Row>()
@@ -193,9 +196,42 @@ export async function handleSync(kind: 'push' | 'pull', body: unknown, env: Sync
   return json({ accepted: accepted.length, stale: sent.length - accepted.length }, 200)
 }
 
+/**
+ * Disconnect: deletes the space's records and marks it closed, so every other device that still holds the key
+ * is told (410) on its next run instead of silently recreating the space. Idempotent. A space nobody pushed to
+ * is closed too (a row is made), so a device that was offline when its peer disconnected still learns of it.
+ * The row stays (token hash and counters only); cleanup keeps closed rows.
+ */
+export async function handleClose(body: unknown, env: SyncEnv): Promise<Response> {
+  const b = object(body, ['spaceId', 'token'])
+  if (!isId(b.spaceId)) throw new HttpError(400, 'spaceId must be 32 base64url bytes')
+  if (!isId(b.token)) throw new HttpError(400, 'token must be 32 base64url bytes')
+  const spaceId = b.spaceId
+  const tokenHash = await sha256Hex(b.token)
+  const now = new Date().toISOString()
+  const db = env.DB
+  const find = () => db.prepare('SELECT token_hash FROM sync_spaces WHERE space_id = ?').bind(spaceId).first<{ token_hash: string }>()
+  let space = await find()
+  if (!space) {
+    await db
+      .prepare('INSERT OR IGNORE INTO sync_spaces (space_id, token_hash, created_at, closed_at) VALUES (?, ?, ?, ?)')
+      .bind(spaceId, tokenHash, now, now)
+      .run()
+    space = await find()
+  }
+  if (!space || !safeEqual(space.token_hash, tokenHash)) throw new HttpError(403, 'wrong sync key')
+  await db.batch([
+    db.prepare('DELETE FROM sync_records WHERE space_id = ?').bind(spaceId),
+    db
+      .prepare('UPDATE sync_spaces SET closed_at = COALESCE(closed_at, ?2), record_count = 0, bytes = 0 WHERE space_id = ?1')
+      .bind(spaceId, now),
+  ])
+  return new Response(null, { status: 204 })
+}
+
 /** Cron: drops spaces that were created more than a day ago and never stored a record. */
 export async function cleanupSyncSpaces(db: D1Database, now: Date): Promise<number> {
   const cutoff = new Date(now.getTime() - DAY_MS).toISOString()
-  const r = await db.prepare('DELETE FROM sync_spaces WHERE record_count = 0 AND created_at < ?').bind(cutoff).run()
+  const r = await db.prepare('DELETE FROM sync_spaces WHERE record_count = 0 AND closed_at IS NULL AND created_at < ?').bind(cutoff).run()
   return r.meta.changes
 }

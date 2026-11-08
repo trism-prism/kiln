@@ -314,3 +314,81 @@ describe('http', () => {
     expect(evil.status).toBe(403)
   })
 })
+
+describe('POST /sync/close', () => {
+  const close = (spaceId: string, token: string) => call('/sync/close', { spaceId, token })
+
+  it('deletes the records, closes the space and keeps only hash and counters', async () => {
+    const s = space()
+    await s.push([row(id(), 1), row(id(), 2)])
+    const other = space()
+    await other.push([row(id(), 1)])
+    const r = await close(s.spaceId, s.token)
+    expect(r.status).toBe(204)
+    expect(await count('sync_records')).toBe(1)
+    const sp = await env.DB.prepare('SELECT * FROM sync_spaces WHERE space_id = ?').bind(s.spaceId).first<Record<string, unknown>>()
+    expect(sp).toMatchObject({ record_count: 0, bytes: 0 })
+    expect(sp!.closed_at).toEqual(expect.any(String))
+    expect(JSON.stringify(sp)).not.toContain(s.token)
+    // The other space is untouched.
+    expect((await other.pull()).status).toBe(200)
+  })
+
+  it('is idempotent and keeps the first closing time', async () => {
+    const s = space()
+    await s.push([row(id(), 1)])
+    await close(s.spaceId, s.token)
+    const first = await env.DB.prepare('SELECT closed_at FROM sync_spaces WHERE space_id = ?').bind(s.spaceId).first('closed_at')
+    expect((await close(s.spaceId, s.token)).status).toBe(204)
+    expect(await env.DB.prepare('SELECT closed_at FROM sync_spaces WHERE space_id = ?').bind(s.spaceId).first('closed_at')).toBe(first)
+  })
+
+  it('refuses a wrong token (403) and changes nothing', async () => {
+    const s = space()
+    await s.push([row(id(), 1)])
+    expect((await close(s.spaceId, id())).status).toBe(403)
+    expect(await count('sync_records')).toBe(1)
+    expect((await s.pull()).status).toBe(200)
+  })
+
+  it('push and pull of a closed space answer 410, with the right token only', async () => {
+    const s = space()
+    await s.push([row(id(), 1)])
+    await close(s.spaceId, s.token)
+    expect((await s.pull()).status).toBe(410)
+    const push = await s.push([row(id(), 5)])
+    expect(push.status).toBe(410)
+    expect(await push.json()).toEqual({ error: 'sync was disconnected' })
+    expect(await count('sync_records')).toBe(0)
+    expect((await call('/sync/pull', { spaceId: s.spaceId, token: id(), cursor: 0, limit: 10 })).status).toBe(403)
+  })
+
+  it('closing a space nobody pushed to still gives 410 later (an offline device learns of it)', async () => {
+    const s = space()
+    expect((await close(s.spaceId, s.token)).status).toBe(204)
+    expect((await s.pull()).status).toBe(410)
+    expect((await s.push([row(id(), 1)])).status).toBe(410)
+    // The row keeps the closer's token: someone else cannot reopen or probe it.
+    expect((await close(s.spaceId, id())).status).toBe(403)
+  })
+
+  it('validates the body (400) and needs POST', async () => {
+    expect((await call('/sync/close', { spaceId: 'x', token: id() })).status).toBe(400)
+    expect((await call('/sync/close', { spaceId: id(), token: 'x' })).status).toBe(400)
+    expect((await call('/sync/close', { spaceId: id(), token: id(), extra: 1 })).status).toBe(400)
+    expect((await call('/sync/close', {}, {}, {}, 'GET')).status).toBe(405)
+  })
+
+  it('cleanup keeps closed rows, and closed rows do not count toward the space cap', async () => {
+    const s = space()
+    await close(s.spaceId, s.token)
+    // Make the closed row old and empty: the cleanup must still keep it.
+    await env.DB.prepare('UPDATE sync_spaces SET created_at = ? WHERE space_id = ?')
+      .bind(new Date(Date.now() - 3 * 86_400_000).toISOString(), s.spaceId)
+      .run()
+    expect(await cleanupSyncSpaces(env.DB, new Date())).toBe(0)
+    expect((await s.pull()).status).toBe(410)
+    expect((await space().push([row(id(), 1)], { MAX_SYNC_SPACES: '1' })).status).toBe(200)
+    expect((await space().push([row(id(), 1)], { MAX_SYNC_SPACES: '1' })).status).toBe(503)
+  })
+})
