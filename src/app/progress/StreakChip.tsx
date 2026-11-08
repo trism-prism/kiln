@@ -1,8 +1,8 @@
 // The streak in the top bar of the tab pages: a flame and the current streak. Outline and muted until
 // today counts, then filled in the accent. Opens Streak & progress.
 import { useEffect, useRef } from 'react'
-import { Link } from 'react-aria-components'
 import { Flame } from 'lucide-react'
+import { Link } from '../../ui/button'
 import { useStudy, useToday } from '../queries'
 
 const days = (n: number) => `${n} ${n === 1 ? 'day' : 'days'}`
@@ -36,9 +36,12 @@ export function StreakChip() {
       href="/progress"
       aria-label={`Streak: ${days(n)}, ${counted ? 'done today' : 'not done today'}`}
       data-counted={counted || undefined}
-      className="inline-flex h-9 shrink-0 cursor-default items-center gap-1.5 rounded-full px-2.5 text-sm font-medium text-text tabular-nums no-underline transition-colors data-hovered:bg-surface-muted"
+      variant="quiet"
+      // A hairline pill, 44px tall on phones. Done today: filled flame, accent-tinted outline, heavier number.
+      // The ! is needed: the button base's h-10, px-4, gap-2 and rounded-md otherwise win the cascade.
+      className={`h-11! gap-1.5! rounded-full! border px-3! tabular-nums md:h-9! md:px-2.5! ${counted ? 'border-[color-mix(in_oklab,var(--kiln-accent)_55%,var(--kiln-border))] font-semibold!' : 'border-border'}`}
     >
-      <Flame ref={icon} aria-hidden="true" className={counted ? 'text-accent' : 'text-text-muted'} fill={counted ? 'currentColor' : 'none'} />
+      <Flame ref={icon} aria-hidden="true" className={counted ? 'text-accent' : 'text-text-muted'} fill={counted ? 'currentColor' : 'none'} strokeWidth={counted ? 2.25 : 1.75} />
       <span className={counted ? 'text-text' : 'text-text-muted'}>{n}</span>
     </Link>
   )
