@@ -67,11 +67,13 @@ export function parseLine(line: string, today: string): ParsedLine {
     // A weekday: the next one after today. All capitals is an acronym ("SAT prep"), and "sat" / "sun" are ordinary words.
     else if (/^[a-z]{3,}$/.test(lower) && w !== w.toUpperCase() && lower !== 'sat' && lower !== 'sun' && lower !== 'yesterday' && readDate(lower, today))
       out.due = readDate(lower, today)
-    // "nov 20", or "nov 20 2027" with a year.
+    // "nov 20", or "nov 20 2027" with a year from last year to 10 years ahead; any other number stays
+    // in the title ("Essay nov 20 2000 words").
     else if (isMonthName(lower) && /^[0-9]{1,2}$/.test(clean(words[i + 1] ?? ''))) {
       const day = clean(words[i + 1]!)
       const year = clean(words[i + 2] ?? '')
-      const typed = /^[0-9]{4}$/.test(year)
+      const thisYear = Number(today.slice(0, 4))
+      const typed = /^[0-9]{4}$/.test(year) && Number(year) >= thisYear - 1 && Number(year) <= thisYear + 10
       const due = readDate(`${lower} ${day}${typed ? ` ${year}` : ''}`, today)
       if (due) {
         out.due = due
@@ -93,13 +95,21 @@ export const hostOf = (url: string) => {
 }
 
 /**
- * The line with each standalone 1 ("Week 1", "chapter 1.") made `n`. A day after a month name ("nov 1")
- * and a number before a unit word ("1 hour") stay; "1h", "10" and "1-20" are other words.
+ * The line with each standalone 1 ("Week 1", "chapter 1.") made `n`. A 1 stays when it is part of a date or
+ * time ("nov 1", "1 nov", "1 pm"), a duration ("1 hour") or a count ("Part 1 of 3", "1 / 3"); "1h", "1st",
+ * "1.5", "10" and "1-20" are other words.
  */
 function countUp(line: string, n: number): string {
   // Words at even indexes, the whitespace between them at odd ones.
   const parts = line.split(/(\s+)/)
-  const keep = (i: number) => isMonthName(clean(parts[i - 2] ?? '')) || UNIT.test(clean(parts[i + 2] ?? '').toLowerCase())
+  const word = (i: number) => clean(parts[i] ?? '').toLowerCase()
+  const keep = (i: number) =>
+    isMonthName(word(i - 2)) ||
+    isMonthName(word(i + 2)) ||
+    UNIT.test(word(i + 2)) ||
+    /^(?:am|pm|a\.m|p\.m)$/.test(word(i + 2)) ||
+    ['of', '/'].includes(word(i - 2)) ||
+    ['of', '/'].includes(word(i + 2))
   return parts.map((p, i) => (i % 2 === 0 && clean(p) === '1' && !keep(i) ? String(n) + p.slice(1) : p)).join('')
 }
 
@@ -118,9 +128,8 @@ export function expandRepeat(text: string, times: number): string {
 /**
  * The draft modules for the text. Lines starting with # or ## start a module; tasks before the
  * first heading go into "Tasks". A task's uid is its line text plus how often that text came
- * before, so edits made in the preview stay on their row while other lines change. Identical lines
- * are told apart only by order: deleting the first of two "Read" lines leaves the other one as
- * "Read#1" with the first one's edits, and the "Read#2" edits are dropped.
+ * before ("Read#2"), so edits made in the preview stay on their row while other lines change.
+ * Identical lines can't be told apart, so `keptEdits` drops their edits when their number changes.
  */
 export function parseQuickAdd(text: string, today: string, times = 1): DraftModule[] {
   const modules: DraftModule[] = []
@@ -179,4 +188,29 @@ export function dropPastDue(modules: DraftModule[], today: string): { modules: D
     }),
   }))
   return { modules: out, dropped }
+}
+
+/** How many lines of each text, from the uids ("Read#2" is the second "Read"). */
+function copies(modules: DraftModule[]): Map<string, number> {
+  const out = new Map<string, number>()
+  for (const t of modules.flatMap((m) => m.tasks)) {
+    const text = t.uid.slice(0, t.uid.lastIndexOf('#'))
+    out.set(text, (out.get(text) ?? 0) + 1)
+  }
+  return out
+}
+
+/**
+ * The table edits that still belong to a row after the text changes from `before` to `after`, and how many
+ * were dropped. An edit goes when its line is gone, and when the number of lines with its text changes:
+ * identical lines can't be told apart, so no row ever shows an edit made on another.
+ */
+export function keptEdits<T>(edits: Record<string, T>, before: DraftModule[], after: DraftModule[]): { edits: Record<string, T>; dropped: number } {
+  const [was, now] = [copies(before), copies(after)]
+  const live = new Set(after.flatMap((m) => m.tasks.map((t) => t.uid)))
+  const kept = Object.entries(edits).filter(([uid]) => {
+    const text = uid.slice(0, uid.lastIndexOf('#'))
+    return live.has(uid) && was.get(text) === now.get(text)
+  })
+  return { edits: Object.fromEntries(kept), dropped: Object.keys(edits).length - kept.length }
 }

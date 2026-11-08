@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { formatIssue, validatePlan } from '../../domain/plan-format'
 import { buildPlan } from './builder'
-import { dropPastDue, expandRepeat, kindFromUrl, parseLine, parseQuickAdd, type ParsedLine } from './quick-add'
+import { dropPastDue, expandRepeat, keptEdits, kindFromUrl, MAX_REPEAT, parseLine, parseQuickAdd, type ParsedLine } from './quick-add'
 
 // Friday.
 const today = '2026-11-06'
@@ -44,6 +44,12 @@ describe('parseLine', () => {
     ['Exam nov 20 2025', { title: 'Exam', due: '2025-11-20' }],
     ['Exam feb 29 2027', { title: 'Exam feb 29 2027', due: undefined }],
     ['Exam nov 20 200 pages', { title: 'Exam 200 pages', due: '2026-11-20' }],
+    // A year counts from last year to 10 years ahead; any other number is part of the title.
+    ['Essay nov 20 2000 words', { title: 'Essay 2000 words', due: '2026-11-20' }],
+    ['Exam nov 20 2036', { title: 'Exam', due: '2036-11-20' }],
+    ['Exam nov 20 2037', { title: 'Exam 2037', due: '2026-11-20' }],
+    ['Exam jan 5 2025', { title: 'Exam', due: '2025-01-05' }],
+    ['Exam jan 5 2024', { title: 'Exam 2024', due: '2027-01-05' }],
     ['May the force', { title: 'May the force', due: undefined }],
     ['Exam 2026-12-01', { title: 'Exam', due: '2026-12-01' }],
     ['Must do !', { title: 'Must do', priority: 'core' }],
@@ -122,8 +128,20 @@ describe('parseQuickAdd', () => {
     ['Read pages 1-20', ['Read pages 1-20', 'Read pages 1-20', 'Read pages 1-20']],
     ['Quiz nov 1', ['Quiz nov 1', 'Quiz nov 1', 'Quiz nov 1']],
     ['Set {n}', ['Set 1', 'Set 2', 'Set 3']],
+    ['Part 1 of 3', ['Part 1 of 3', 'Part 1 of 3', 'Part 1 of 3']],
+    ['Page 1 / 3', ['Page 1 / 3', 'Page 1 / 3', 'Page 1 / 3']],
+    ['Standup 1 pm', ['Standup 1 pm', 'Standup 1 pm', 'Standup 1 pm']],
+    ['Exam 1 nov', ['Exam 1 nov', 'Exam 1 nov', 'Exam 1 nov']],
+    ['Read the 1st essay', ['Read the 1st essay', 'Read the 1st essay', 'Read the 1st essay']],
+    ['Lab 1.5 hours', ['Lab 1.5 hours', 'Lab 1.5 hours', 'Lab 1.5 hours']],
+    ['Unit 1.5 review', ['Unit 1.5 review', 'Unit 1.5 review', 'Unit 1.5 review']],
   ])('repeat 3 counts up standalone 1s: %s', (line, want) => {
     expect(expandRepeat(line, 3).split('\n')).toEqual(want)
+  })
+  it(`repeats at most ${MAX_REPEAT} times`, () => {
+    const lines = expandRepeat('Week 1', 100).split('\n')
+    expect(lines).toHaveLength(MAX_REPEAT)
+    expect(lines.at(-1)).toBe(`Week ${MAX_REPEAT}`)
   })
   it('a line of only a date, minutes or "!" keeps its text as the title', () => {
     const m = parseQuickAdd(['fri', '45m', '!', '- nov 20'].join('\n'), today)
@@ -142,5 +160,21 @@ describe('parseQuickAdd', () => {
     expect(r.plan).toMatchObject({ schedulingMode: 'fixed', startDate: '2026-11-07' })
     expect(r.plan?.tasks[0]?.resources).toMatchObject([{ title: 'youtu.be', url: 'https://youtu.be/x', kind: 'video' }])
     expect(r.plan?.tasks[1]).toMatchObject({ type: 'assessment', estimatedMinutes: 90, deadline: '2026-11-20' })
+  })
+})
+
+describe('keptEdits', () => {
+  const at = (text: string) => parseQuickAdd(text, today)
+  const edits = { 'Read#1': { minutes: '10' }, 'Read#2': { minutes: '20' }, 'Quiz#1': { minutes: '5' } }
+  it('keeps every edit while each text has as many lines as before', () => {
+    expect(keptEdits(edits, at('Read\nRead\nQuiz'), at('# Week\nRead\nQuiz\nRead'))).toEqual({ edits, dropped: 0 })
+  })
+  it('drops all edits on a text whose number of lines changed, and only those', () => {
+    // Deleting either "Read" line would otherwise give the other one "Read#1"'s edit.
+    expect(keptEdits(edits, at('Read\nRead\nQuiz'), at('Read\nQuiz'))).toEqual({ edits: { 'Quiz#1': { minutes: '5' } }, dropped: 2 })
+    expect(keptEdits(edits, at('Read\nRead\nQuiz'), at('Read\nRead\nRead\nQuiz'))).toEqual({ edits: { 'Quiz#1': { minutes: '5' } }, dropped: 2 })
+  })
+  it('drops the edits of a line that is gone', () => {
+    expect(keptEdits(edits, at('Read\nRead\nQuiz'), at('Read\nRead'))).toEqual({ edits: { 'Read#1': { minutes: '10' }, 'Read#2': { minutes: '20' } }, dropped: 1 })
   })
 })
