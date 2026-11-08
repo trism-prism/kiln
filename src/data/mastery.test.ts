@@ -301,8 +301,7 @@ describe('opt-in reviews', () => {
     expect((await dueCards(db, '2030-01-01')).map((c) => c.id).sort()).toEqual(ids)
     expect((await brushUp(db, far)).map((i) => i.card.id).sort()).toEqual(ids)
     expect(Object.values(await reviewsDue(db, '2026-11-09', '2030-01-01')).reduce((n, e) => n + e.count, 0)).toBe(2)
-    const mastery = await masteryByTopic(db, far)
-    expect(Object.values(mastery).reduce((n, s) => n + s.studied, 0)).toBeGreaterThanOrEqual(2)
+    expect((await masteryByPlan(db, far))[planId]).toMatchObject({ studied: 2 })
     await expect(reviewCard(db, done.card!.id, 'good', far, NO_FUZZ)).resolves.toBeTruthy()
   })
 

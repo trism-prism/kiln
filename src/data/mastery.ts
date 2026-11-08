@@ -59,13 +59,15 @@ export async function completeTask(
 ): Promise<CompleteResult> {
   await getDeviceId(db) // resolve before the transaction opens; the writes below reuse it
   // The callback must be an async function: Dexie keeps the transaction open across native awaits only then.
-  return db.transaction('rw', db.tasks, db.reviewCards, db.reviewLogs, async () => {
+  return db.transaction('rw', db.tasks, db.plans, db.reviewCards, db.reviewLogs, async () => {
     const before = await db.tasks.get(taskId)
     const task = await setTaskStatus(db, taskId, 'done')
     if (!task || !before) throw new Error(`Task ${taskId} not found`)
     const restoreTask: ['tasks', TaskRecord, number] = ['tasks', before, task.updatedAt]
     const minutes = cardMinutes(task)
-    if (minutes === undefined) return { task, undo: () => revertWrite(db, { restore: [restoreTask] }) }
+    // No card for a task of a plan that is gone.
+    const plan = await db.plans.get(task.planId)
+    if (minutes === undefined || !plan || plan.deleted) return { task, undo: () => revertWrite(db, { restore: [restoreTask] }) }
 
     const existing = await liveCardForTask(db, taskId)
     const { card, log } = rate(existing ?? newCard(now), rating, now, opts)
