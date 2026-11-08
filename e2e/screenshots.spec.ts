@@ -304,6 +304,13 @@ const studyScenes: Record<string, (page: Page) => Promise<{ full?: boolean } | v
     await page.goto('/plans')
     await expect(page.getByText('3 h a week · ends Dec 12')).toBeVisible()
   },
+  'study-plans-planned': async (page) => {
+    await studyStart(page)
+    await addStudyPlan(page, 'Psychology', '10h')
+    await addStudyPlan(page, 'Spanish', '10h')
+    await page.goto('/plans')
+    await expect(page.getByText('Planned: 7 h of 10 h').first()).toBeVisible()
+  },
   'study-quick-add': async (page) => {
     const panel = await quickAdd(page, 'Psychology 3h a week')
     await expect(panel.getByRole('status').first()).toHaveText('Study time: Psychology, 3 h a week')
