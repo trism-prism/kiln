@@ -84,6 +84,14 @@ describe('decideMatch', () => {
     expect(decideMatch(plan, existing, 'update')).toMatchObject({ kind: 'update', choices: ['update', 'copy'] })
     expect(decideMatch(plan, existing, 'copy')).toMatchObject({ kind: 'copy', choices: ['update', 'copy'] })
   })
+  it('never updates a stored plan of the other kind: a study time plan and a task plan with one id is a copy', async () => {
+    const existing = (await stored(fixtureTexts.sd))!
+    const study = { ...planOf(fixtureTexts.sd), modules: [], tasks: [], sources: [], studyMinutesPerWeek: 180 }
+    for (const choice of ['update', 'copy'] as const) {
+      expect(decideMatch(study, existing, choice)).toEqual({ kind: 'copy', choices: [], label: `"${existing.title}" in Kiln is a different kind of plan. This one is added as a copy.` })
+    }
+    expect(decideMatch(planOf(fixtureTexts.sd), { ...existing, studyMinutesPerWeek: 180 }, 'update')).toMatchObject({ kind: 'copy', choices: [] })
+  })
   it('adds a part, and updates a part that is already in', async () => {
     const existing = await stored(fixtureTexts.dsa1)
     const part2 = decideMatch(planOf(fixtureTexts.dsa2), existing, 'copy')

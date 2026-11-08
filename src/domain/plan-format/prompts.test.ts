@@ -96,3 +96,11 @@ describe('docs/plan-schema.json', () => {
     expect(JSON.parse(schemaFile)).toEqual(planJsonSchema())
   })
 })
+
+describe('study time plans in the prompts', () => {
+  it.each(Object.entries(files))('%s describes a study time plan', (_name, markdown) => {
+    const prompt = buildPrompt(markdown)
+    expect(prompt).toContain('"studyMinutesPerWeek": 180')
+    expect(prompt).toContain('If I only want regular study time for a subject')
+  })
+})

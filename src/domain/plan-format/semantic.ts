@@ -105,6 +105,20 @@ export function checkMeaning(root: Obj, opts: SemanticOptions = {}): RawIssue[] 
       prevModule = { i: m.i, nbd: m.nbd }
     })
 
+  // Study time plans have no modules or tasks; every other plan needs at least one of each.
+  const listOk = (v: unknown) => v === undefined || Array.isArray(v)
+  if (root.studyMinutesPerWeek === undefined) {
+    if (listOk(root.modules) && modules.length === 0) err([], 'modules', 'must have at least 1 item')
+    if (listOk(root.tasks) && tasks.length === 0) err([], 'tasks', 'must have at least 1 item')
+  } else {
+    if (modules.length > 0) err([], 'modules', 'must be empty in a study time plan')
+    if (tasks.length > 0) err([], 'tasks', 'must be empty in a study time plan')
+    if (sources.length > 0) err([], 'sources', 'is not allowed in a study time plan')
+    if (root.dailyPractice !== undefined) err([], 'dailyPractice', 'is not allowed in a study time plan')
+    if (root.part !== undefined) err([], 'part', 'is not allowed in a study time plan')
+    if (mode === 'fixed') err([], 'schedulingMode', 'must be "auto" in a study time plan')
+  }
+
   // Mode and plan-level dates
   const anyTaskDate = tasks.some((t) => t.fixedDate !== undefined || t.deadline !== undefined)
   if (mode === 'auto') {

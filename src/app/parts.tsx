@@ -5,7 +5,8 @@ import { leetcodeUrl } from '../data'
 import { DEFAULT_PRACTICE_LANGUAGE } from '../domain/plan-format'
 import { Link } from '../ui/button'
 import type { TodoItem } from '../domain/todo'
-import { Badge } from '../ui/surface'
+import { Badge, ProgressBar } from '../ui/surface'
+import type { StudyWeek } from './queries'
 
 const TONE = { easy: 'success', medium: 'warning', hard: 'danger' } as const
 
@@ -33,6 +34,25 @@ export const minutesText = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h${m
 
 export const percent = (fraction: number) => `${Math.round(fraction * 100)}%`
 
-/** "Plan · Lesson · 30 min" under an item's title. Events and to-dos without minutes show no duration. */
+/** "Plan · Lesson · 30 min" under an item's title. Events and to-dos without minutes show no duration. A study
+ * session's title already names its plan ("Study Psychology"), so its line is "Study time · 45 min". */
 export const itemMeta = (item: TodoItem) =>
-  [item.planTitle, item.typeLabel, item.minutes > 0 || (item.kind !== 'event' && item.kind !== 'personal') ? minutesText(item.minutes) : ''].filter(Boolean).join(' · ')
+  [item.kind === 'study' ? '' : item.planTitle, item.typeLabel, item.minutes > 0 || (item.kind !== 'event' && item.kind !== 'personal') ? minutesText(item.minutes) : ''].filter(Boolean).join(' · ')
+
+/** "1 h 15 min of 3 h": a study time plan's week (done of planned), on the plan page and the plan cards. */
+export function StudyWeekBar({ week }: { week: StudyWeek }) {
+  const { weekDone, weekPlanned } = week
+  return (
+    <ProgressBar
+      label="This week"
+      value={weekPlanned ? Math.min(100, Math.round((weekDone / weekPlanned) * 100)) : 0}
+      valueLabel={weekPlanned ? `${minutesText(weekDone)} of ${minutesText(weekPlanned)}` : 'Nothing planned this week'}
+    />
+  )
+}
+
+/** "Planned: 2 h 50 min of 3 h" when an ordinary week can't hold a study plan's whole weekly time; nothing otherwise. */
+export function StudyPlanned({ week, minutesPerWeek }: { week: StudyWeek; minutesPerWeek: number }) {
+  if (week.perWeek === undefined || week.perWeek >= minutesPerWeek) return null
+  return <p className="text-sm text-warning">{`Planned: ${minutesText(week.perWeek)} of ${minutesText(minutesPerWeek)}`}</p>
+}

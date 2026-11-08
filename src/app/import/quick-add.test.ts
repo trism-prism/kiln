@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { formatIssue, validatePlan } from '../../domain/plan-format'
 import { buildPlan } from './builder'
-import { dropPastDue, expandRepeat, keptEdits, kindFromUrl, MAX_REPEAT, parseLine, parseQuickAdd, type ParsedLine } from './quick-add'
+import { dropPastDue, expandRepeat, keptEdits, kindFromUrl, MAX_REPEAT, parseLine, parseQuickAdd, parseStudyLine, parseStudyMinutes, readStudyText, capitalize, type ParsedLine } from './quick-add'
 
 // Friday.
 const today = '2026-11-06'
@@ -178,5 +178,56 @@ describe('keptEdits', () => {
     expect(keptEdits(edits, at('Read\nRead\nQuiz'), at('Read\nRead'))).toEqual({ edits: { 'Read#1': { minutes: '10' }, 'Read#2': { minutes: '20' } }, changed: 1, recounted: 0 })
     // Both lines of a pair gone: their line changed, so the usual notice.
     expect(keptEdits(edits, at('Read\nRead\nQuiz'), at('Quiz'))).toEqual({ edits: { 'Quiz#1': { minutes: '5' } }, changed: 2, recounted: 0 })
+  })
+})
+
+describe('parseStudyMinutes', () => {
+  it('reads minutes the way people type them', () => {
+    expect(['30', ' 45m ', '1h', '1h 30m', '1 h 30 min', '1.5 hours', '90 minutes', '1h30', '2H05', '1 h 30', '3h', '180'].map(parseStudyMinutes)).toEqual([30, 45, 60, 90, 90, 90, 90, 90, 125, 90, 180, 180])
+  })
+  it('refuses anything that is not only a duration', () => {
+    expect(['', 'abc', '30 psych', 'fri', '-5', '1,5h', '1h75', '1h60'].map(parseStudyMinutes)).toEqual([undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined])
+  })
+})
+
+describe('parseStudyLine', () => {
+  it('reads a subject and a time per week', () => {
+    expect(['Psychology 3h a week', 'Study psychology 90m per week', 'Spanish 2h weekly', 'Biology 3h/week', 'Chemistry 3 hours a week', '- Art 45m every week', 'Music 1h /wk'].map(parseStudyLine)).toEqual([
+      { subject: 'Psychology', minutesPerWeek: 180 },
+      { subject: 'psychology', minutesPerWeek: 90 },
+      { subject: 'Spanish', minutesPerWeek: 120 },
+      { subject: 'Biology', minutesPerWeek: 180 },
+      { subject: 'Chemistry', minutesPerWeek: 180 },
+      { subject: 'Art', minutesPerWeek: 45 },
+      { subject: 'Music', minutesPerWeek: 60 },
+    ])
+  })
+  it('leaves task lines alone', () => {
+    expect(['Read chapter 1 45m', 'Week 1 review 1h', '3h a week', 'Psychology a week fri', 'Psychology a week', 'Study 3h a week', 'Lab 2h fri a week', 'Notes 1h ! weekly', 'Psychology 3h aweek'].map(parseStudyLine)).toEqual(Array(9).fill(undefined))
+  })
+})
+
+describe('readStudyText', () => {
+  it('makes a study time draft from a lone study line, and flags one mixed with other lines', () => {
+    expect(readStudyText('\n  Psychology 3h a week \n')).toEqual({ study: { subject: 'Psychology', minutesPerWeek: 180 } })
+    expect(readStudyText('Read chapter 1 45m\nPsychology 3h a week')).toEqual({ mixed: 'Psychology 3h a week' })
+    expect(readStudyText('Read chapter 1 45m')).toBeUndefined()
+  })
+
+  it('builds a valid study time plan with no modules or tasks', () => {
+    const r = validatePlan(buildPlan({ title: 'Psych 101', modules: [], study: { subject: 'Psychology', minutesPerWeek: 180 } }, { id: 'psych-101' }))
+    expect(r.issues.map(formatIssue)).toEqual([])
+    expect(r.plan).toMatchObject({ title: 'Psych 101', subject: 'Psychology', schedulingMode: 'auto', studyMinutesPerWeek: 180, modules: [], tasks: [] })
+  })
+})
+
+describe('study line times and titles', () => {
+  it('flags a time outside 15 min to 40 h with the sheet wording', () => {
+    expect(parseStudyLine('Psychology 10m a week')).toEqual({ subject: 'Psychology', minutesPerWeek: 10, error: 'At least 15 min, like 3h or 90m' })
+    expect(parseStudyLine('Psychology 41h a week')).toEqual({ subject: 'Psychology', minutesPerWeek: 2460, error: 'Up to 40 h a week' })
+    expect(parseStudyLine('Psychology 40h a week')).toEqual({ subject: 'Psychology', minutesPerWeek: 2400 })
+  })
+  it('capitalizes the first letter for a title', () => {
+    expect(['psychology', 'Spanish', ''].map(capitalize)).toEqual(['Psychology', 'Spanish', ''])
   })
 })

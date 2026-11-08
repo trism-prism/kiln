@@ -3,10 +3,12 @@
 import { addDaysISO, weekdayIndex } from '../../lib/date'
 import { NEETCODE_TOPICS, normalizeTopic } from '../plan-format'
 import { NEETCODE_POOL, PRACTICE_MINUTES, pickProblem, roadmapTopic, targetDifficulty, type Solved } from '../practice'
+import { STUDY_WINDOW_DAYS, studySessions } from './study'
 import {
   BACKLOG,
   type DayLoad,
   type GeneratedPractice,
+  type GeneratedStudy,
   type SchedPlan,
   type SchedTask,
   type ScheduleInput,
@@ -35,6 +37,8 @@ interface Ctx {
   pending: SchedTask[]
   blackout: Set<string>
   start: string
+  /** Study sessions (study.ts), computed once: the deadline search runs place() many times. */
+  study: GeneratedStudy[]
 }
 
 const keyOf = (planId: string, key: string) => `${planId}|${key}`
@@ -79,7 +83,7 @@ function buildCtx(input: ScheduleInput): Ctx {
   const planStarts = pending.map((t) => planStart.get(t.planId) as string).sort()
   const first = planStarts[0] ?? input.today
   const start = first > input.today ? first : input.today
-  return { input, plans, tasks, byKey, orderIndex, earliest, fixed, baseBacklog, pending, blackout: new Set(input.blackoutDates), start }
+  return { input, plans, tasks, byKey, orderIndex, earliest, fixed, baseBacklog, pending, blackout: new Set(input.blackoutDates), start, study: studySessions(input) }
 }
 
 const budgetOn = (ctx: Ctx, date: string) => (ctx.blackout.has(date) ? 0 : (ctx.input.minutesPerWeekday[weekdayIndex(date)] ?? 0))
@@ -89,6 +93,8 @@ interface DayAcc {
   practice: number
   tasks: number
   taskCount: number
+  /** Study sessions of study time plans (not tasks: they do not count for the first-task rule). */
+  study: number
   /** Practice problems already on the day, per plan (counts toward perDay). */
   practiceCount: Map<string, number>
 }
@@ -118,7 +124,7 @@ function place(ctx: Ctx, deferred: ReadonlySet<string>): Result {
   const acc = new Map<string, DayAcc>()
   const getAcc = (d: string): DayAcc => {
     let a = acc.get(d)
-    if (!a) acc.set(d, (a = { review: 0, practice: 0, tasks: 0, taskCount: 0, practiceCount: new Map() }))
+    if (!a) acc.set(d, (a = { review: 0, practice: 0, tasks: 0, taskCount: 0, study: 0, practiceCount: new Map() }))
     return a
   }
 
@@ -143,6 +149,10 @@ function place(ctx: Ctx, deferred: ReadonlySet<string>): Result {
     a.tasks += minutes
     a.taskCount++
   }
+  // Study sessions are reserved first on their day. Rule: they leave taskCount alone, so the day's first task
+  // still always fits (a day full of study would otherwise keep a long task out for good).
+  // Done sessions keep their minutes on their day, so ticking one off does not hand the time to tasks.
+  for (const s of [...ctx.study, ...(input.studyDone ?? [])]) if (s.date >= input.today) getAcc(s.date).study += s.minutes
 
   const openDeps = (t: SchedTask) =>
     t.dependsOn.map((k) => ctx.byKey.get(keyOf(t.planId, k))).filter((d): d is SchedTask => d !== undefined && d.status === 'open')
@@ -212,7 +222,7 @@ function place(ctx: Ctx, deferred: ReadonlySet<string>): Result {
     const budget = budgetOn(ctx, d)
     if (budget === 0) continue
     const a = getAcc(d)
-    let room = budget - a.tasks
+    let room = budget - a.tasks - a.study
 
     // Spaced reviews, capped. Stage 5 supplies the due minutes.
     const due = input.reviewsDue?.[d]?.minutes ?? 0
@@ -416,13 +426,17 @@ export function schedule(input: ScheduleInput): ScheduleOutput {
     const d = t.status === 'open' ? res.date.get(t.id) : undefined
     if (d && !res.backlog.has(t.id) && d > (projectedFinish[t.planId] ?? '')) projectedFinish[t.planId] = d
   }
+  // Study is reserved through the horizon, but reported only through the stored window: beyond it a day is listed
+  // only when it holds other work.
+  const studyEnd = addDaysISO(input.today, STUDY_WINDOW_DAYS)
   const days: DayLoad[] = [...res.acc.entries()]
-    .filter(([, a]) => a.review + a.practice + a.tasks > 0)
+    .filter(([d, a]) => a.review + a.practice + a.tasks + (d <= studyEnd ? a.study : 0) > 0)
     .sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0))
-    .map(([d, a]) => ({ date: d, budget: budgetOn(ctx, d), reviewMinutes: a.review, practiceMinutes: a.practice, taskMinutes: a.tasks }))
+    .map(([d, a]) => ({ date: d, budget: budgetOn(ctx, d), reviewMinutes: a.review, practiceMinutes: a.practice, taskMinutes: a.tasks, studyMinutes: a.study }))
   return {
     assignments,
     practice: res.practice,
+    study: ctx.study.filter((s) => s.date <= studyEnd),
     days,
     projectedFinish,
     violations: violationsOf(ctx, res),

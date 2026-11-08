@@ -3,7 +3,8 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router'
 import { useTodoCount } from '../app/useTodoCount'
-import { db, getSettings } from '../data'
+import { db, getSettings, topUpStudy } from '../data'
+import { getSyncStatus } from '../sync'
 import { toLocalISODate } from '../lib/date'
 import { toasts } from '../ui/overlay'
 import { applyBadge } from './badge'
@@ -13,6 +14,15 @@ import { pingIfDue } from './ping'
 import { syncPush } from './push-client'
 import { registerServiceWorker } from './register'
 import { scheduleSync } from './sync-runner'
+
+/** Plans today's study session now when sync is off; with sync on, the sync runner does it after its pull. */
+const topUpUnlessSyncing = async () => {
+  try {
+    if (API_URL === '' || !(await getSyncStatus(db)).enabled) await topUpStudy(db, toLocalISODate(new Date()))
+  } catch {
+    // Nothing to tell: the next open tries again.
+  }
+}
 
 // StrictMode runs effects twice in development; the once-per-open work happens once.
 let opened = false
@@ -33,6 +43,7 @@ export function PwaEffects() {
     registerServiceWorker()
     void pingIfDue(db, fetch, API_URL, toLocalISODate(new Date()))
     void getSettings(db).then((s) => syncPush(db, s)).catch(() => undefined)
+    void topUpUnlessSyncing()
     scheduleSync(0)
   }, [])
 
@@ -51,10 +62,13 @@ export function PwaEffects() {
     })
   }, [navigate])
 
-  // Sync again when the connection comes back or the app returns to the foreground.
+  // Sync again when the connection comes back or the app returns to the foreground. Coming back on a new day also
+  // plans that day's study session (study time plans), as nothing else runs the scheduler overnight.
   useEffect(() => {
     const onVisible = () => {
-      if (document.visibilityState === 'visible') scheduleSync()
+      if (document.visibilityState !== 'visible') return
+      scheduleSync()
+      void topUpUnlessSyncing()
     }
     const onOnline = () => scheduleSync()
     window.addEventListener('online', onOnline)

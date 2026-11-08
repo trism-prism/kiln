@@ -54,7 +54,8 @@ export function TextField({
   ...props
 }: Omit<TextFieldProps, 'className'> & {
   label: string
-  description?: string
+  /** Read with the field (aria-describedby). Text fields take a node (a line with a link); date fields text only. */
+  description?: ReactNode
   errorMessage?: string
   className?: string
   /** A unit drawn inside the box on the right ("times", "min"). */
@@ -77,7 +78,7 @@ export function TextField({
         min={min}
         isInvalid={props.isInvalid}
         errorMessage={errorMessage}
-        description={description}
+        description={typeof description === 'string' ? description : undefined}
         className={className}
       />
     )
