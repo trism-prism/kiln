@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useEffectEvent, useRef, useState } from 'react'
 import { parseDate } from '@internationalized/date'
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
 import {
@@ -48,6 +48,9 @@ export interface DateFieldProps {
   className?: string
 }
 
+/** The day each picker's week starts on. The shell provides Kiln's setting; without it, Monday (Kiln's default). */
+export const WeekStartContext = createContext<'monday' | 'sunday'>('monday')
+
 const display = (value: string) => (isRealISODate(value) ? formatDay(value, true) : '')
 
 /**
@@ -73,6 +76,7 @@ export function DateField({
   className = '',
 }: DateFieldProps) {
   const { locale } = useLocale()
+  const weekStart = useContext(WeekStartContext)
   const [text, setText] = useState(() => display(value))
   const [focused, setFocused] = useState(false)
   const [problem, setProblem] = useState('')
@@ -193,6 +197,7 @@ export function DateField({
               <Calendar
                 // Focus starts on the chosen day (or today), so the arrow keys pick a day straight away.
                 autoFocus
+                firstDayOfWeek={weekStart === 'sunday' ? 'sun' : 'mon'}
                 value={isRealISODate(value) ? parseDate(value) : null}
                 minValue={min ? parseDate(min) : undefined}
                 maxValue={max ? parseDate(max) : undefined}

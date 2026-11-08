@@ -4,7 +4,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { I18nProvider } from 'react-aria-components'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DateField } from './date'
+import { DateField, WeekStartContext } from './date'
 import { TextField } from './form'
 import { Sheet } from './overlay'
 
@@ -127,6 +127,20 @@ describe('DateField', () => {
     expect(value()).toBe('2026-11-24')
     expect(box()).toHaveProperty('value', 'Tue, Nov 24, 2026')
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it("starts the calendar's weeks on Kiln's week start, not the locale's", async () => {
+    const user = userEvent.setup()
+    const first = async (start?: 'monday' | 'sunday') => {
+      const field = <DateField label="Deadline" value="2026-11-20" onChange={() => {}} />
+      render(<I18nProvider locale="en-US">{start ? <WeekStartContext value={start}>{field}</WeekStartContext> : field}</I18nProvider>)
+      await user.click(screen.getByRole('button', { name: 'Choose a date' }))
+      const head = screen.getByRole('grid').querySelector('th')?.textContent
+      cleanup()
+      return head
+    }
+    expect(await first()).toBe('M') // en-US starts on Sunday; Kiln's default is Monday
+    expect(await first('sunday')).toBe('S')
   })
 
   it('lets Escape close a sheet around it', async () => {
