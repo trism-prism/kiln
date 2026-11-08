@@ -98,12 +98,12 @@ export async function softDelete(db: KilnDB, name: TableName, id: string): Promi
 
 /**
  * Tombstones a plan with its modules, tasks, review cards and logs, its practice log rows, its
- * generated daily problems, its events and its versions (whose snapshots are emptied).
+ * generated daily problems, its study sessions, its events and its versions (whose snapshots are emptied).
  */
 export async function softDeletePlan(db: KilnDB, planId: string): Promise<void> {
   const deviceId = await getDeviceId(db)
   const tomb = <T extends Base>(rows: T[]) => rows.filter((r) => !r.deleted).map((r) => ({ ...r, deleted: true, updatedAt: stampAfter(r.updatedAt), deviceId }))
-  const tables = [db.plans, db.modules, db.tasks, db.reviewCards, db.reviewLogs, db.practiceLog, db.practiceItems, db.events, db.planVersions]
+  const tables = [db.plans, db.modules, db.tasks, db.reviewCards, db.reviewLogs, db.practiceLog, db.practiceItems, db.studyItems, db.events, db.planVersions]
   await db.transaction('rw', tables, async () => {
     await db.events.bulkPut(tomb(await db.events.where('planId').equals(planId).toArray()))
     await db.planVersions.bulkPut(tomb(await db.planVersions.where('planId').equals(planId).toArray()).map((v) => ({ ...v, snapshot: '' })))
@@ -117,6 +117,7 @@ export async function softDeletePlan(db: KilnDB, planId: string): Promise<void> 
     // ponytail: practiceLog has no planId index; a scan is fine at one row per study day.
     await db.practiceLog.bulkPut(tomb(await db.practiceLog.filter((r) => r.planId === planId).toArray()))
     await db.practiceItems.bulkPut(tomb(await db.practiceItems.where('planId').equals(planId).toArray()))
+    await db.studyItems.bulkPut(tomb(await db.studyItems.where('planId').equals(planId).toArray()))
   })
 }
 
@@ -317,6 +318,7 @@ export async function importPlan(db: KilnDB, plan: Plan, opts: ImportOptions): P
       schedulingMode: plan.schedulingMode,
       sources: plan.sources,
       dailyPractice: plan.dailyPractice,
+      studyMinutesPerWeek: plan.studyMinutesPerWeek,
     }
     // An edit or restore of a split plan is not a part: it keeps the parts already in.
     const keepParts = !!(opts.replace && existing)

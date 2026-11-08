@@ -3,6 +3,7 @@ import { exportBackup, importBackup } from './backup'
 import { fixtureTexts, validateParts } from './fixtures'
 import { importPlan, insertRecord, listTasks, setTaskStatus, softDelete, updateSettings } from './repo'
 import { newDb } from './test-db'
+import type { Plan } from '../domain/plan-format'
 
 const sd = validateParts([fixtureTexts.sd]).plans[0]!
 
@@ -40,7 +41,7 @@ describe('backup', () => {
     const { db } = await seeded()
     const text = await exportBackup(db)
     const parsed = JSON.parse(text)
-    expect(parsed).toMatchObject({ app: 'kiln', schemaVersion: 4 })
+    expect(parsed).toMatchObject({ app: 'kiln', schemaVersion: 5 })
     expect(parsed.tables.meta).toBeUndefined()
 
     const other = newDb()
@@ -51,6 +52,27 @@ describe('backup', () => {
       expect(JSON.parse(JSON.stringify(b))).toEqual(JSON.parse(JSON.stringify(a)))
     }
     expect(await other.tasks.filter((t) => t.deleted).count()).toBe(1)
+  })
+
+  it('round-trips a study time plan and its sessions; a backup from before schema 5 (no studyItems) still reads', async () => {
+    const db = newDb()
+    const plan: Plan = { schemaVersion: 1, id: 'study-psychology', title: 'Psychology', subject: 'Psychology', schedulingMode: 'auto', studyMinutesPerWeek: 180, sources: [], modules: [], tasks: [] }
+    const { planId } = await importPlan(db, plan, { startDate: '2026-11-09' })
+    await db.studyItems.bulkPut([
+      { id: `${planId}:2026-11-09`, planId, date: '2026-11-09', minutes: 25, status: 'done', completedAt: 5, updatedAt: 7, deleted: false, deviceId: 'd' },
+      { id: `${planId}:2026-11-10`, planId, date: '2026-11-10', minutes: 30, status: 'open', updatedAt: 7, deleted: true, deviceId: 'd' },
+    ])
+    const text = await exportBackup(db)
+    const other = newDb()
+    expect((await importBackup(other, text)).studyItems).toMatchObject({ added: 2 })
+    expect((await other.plans.get(planId))?.studyMinutesPerWeek).toBe(180)
+    expect(await other.studyItems.orderBy('id').toArray()).toEqual(await db.studyItems.orderBy('id').toArray())
+
+    const old = JSON.parse(text)
+    delete old.tables.studyItems
+    old.schemaVersion = 4
+    const third = newDb()
+    expect((await importBackup(third, JSON.stringify(old))).studyItems).toEqual({ added: 0, replaced: 0, kept: 0 })
   })
 
   it('merges last-write-wins on updatedAt', async () => {

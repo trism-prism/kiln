@@ -10,6 +10,7 @@ import {
   mnemonicToKey,
   qrPayloadToKey,
   recordKey,
+  rowVersion,
   SYNC_VERSION,
 } from './crypto'
 
@@ -92,13 +93,24 @@ describe('record encryption', () => {
     expect(w.updatedAt).toBe(1000)
     expect(JSON.stringify(w)).not.toContain('Secret')
     expect(JSON.stringify(w)).not.toContain('id-1')
-    expect(await decryptRow(k, w)).toEqual({ v: SYNC_VERSION, table: 'plans', row: r })
+    expect(await decryptRow(k, w)).toEqual({ v: 1, table: 'plans', row: r })
   })
 
   it('puts a protocol version inside the encrypted payload', async () => {
     const k = await deriveKeys(generateSyncKey())
-    expect((await decryptRow(k, await encryptRow(k, 'plans', row('a')))).v).toBe(SYNC_VERSION)
+    expect((await decryptRow(k, await encryptRow(k, 'plans', row('a')))).v).toBe(1)
     expect((await decryptRow(k, await encryptRow(k, 'plans', row('a'), 7))).v).toBe(7)
+  })
+
+  it('sends study time plans and their sessions as version 2, the rest as version 1', async () => {
+    expect(SYNC_VERSION).toBe(2)
+    expect(rowVersion('studyItems', row('p:2026-11-09'))).toBe(2)
+    expect(rowVersion('plans', row('a', { studyMinutesPerWeek: 180 }))).toBe(2)
+    expect(rowVersion('plans', row('a'))).toBe(1)
+    expect(rowVersion('tasks', row('a', { studyMinutesPerWeek: 180 }))).toBe(1)
+    const k = await deriveKeys(generateSyncKey())
+    const w = await encryptRow(k, 'studyItems', row('p:2026-11-09'))
+    expect((await decryptRow(k, w)).v).toBe(2)
   })
 
   it('uses a fresh IV every time', async () => {

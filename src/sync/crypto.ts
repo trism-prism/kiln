@@ -4,8 +4,20 @@ import { wordlist } from '@scure/bip39/wordlists/english.js'
 import type { TableName } from '../data'
 
 export const KEY_BYTES = 32
-/** Version of the encrypted payload format (`v` inside the ciphertext). Raise it when old clients must not read new rows. */
-export const SYNC_VERSION = 1
+/**
+ * Version of the encrypted payload format (`v` inside the ciphertext): the highest row version this app reads.
+ * Raise it when old clients must not read new rows. A client defers rows above its own version ("update this app").
+ * 2: study time plans (schema 5). An older client would strip `studyMinutesPerWeek` and could write the plan back as
+ * an empty task plan, so study plans and their sessions travel as version 2 (rowVersion) and older clients wait.
+ */
+export const SYNC_VERSION = 2
+
+/** The version a row is sent with: 2 for study sessions and study time plans, 1 for everything an older client can read. */
+export function rowVersion(table: TableName, row: object): number {
+  if (table === 'studyItems') return 2
+  if (table === 'plans' && (row as { studyMinutesPerWeek?: unknown }).studyMinutesPerWeek !== undefined) return 2
+  return 1
+}
 export const QR_PREFIX = 'kiln-sync:'
 
 const enc = new TextEncoder()
@@ -113,7 +125,7 @@ export async function encryptRow(
   keys: SyncKeys,
   table: TableName,
   row: { id: string; updatedAt: number },
-  version = SYNC_VERSION,
+  version = rowVersion(table, row),
 ): Promise<WireRow> {
   const key = await recordKey(keys, table, row.id)
   const iv = crypto.getRandomValues(new Uint8Array(12))

@@ -10,8 +10,21 @@ import { getSettings, importPlan, insertRecord, setPersonalTodoDone, setPlanShar
 import { readSnapshot, snapshotPlan } from '../data/versions'
 import { newDb } from '../data/test-db'
 import type { PracticeLogRecord } from '../data/types'
+import type { Plan } from '../domain/plan-format'
 import { deriveKeys, encryptRow, generateSyncKey, keyToMnemonic, mnemonicToKey } from './crypto'
 import { disableSync, enableSync, enableSyncFromQr, getSyncSecret, getSyncStatus, syncNow, type SyncSummary } from './index'
+
+// SYNC_VERSION as this test's client sees it: set `clientVersion.v` to act as an older app.
+const clientVersion = vi.hoisted(() => ({ v: undefined as number | undefined }))
+vi.mock('./crypto', async (importOriginal) => {
+  const m = await importOriginal<typeof import('./crypto')>()
+  return {
+    ...m,
+    get SYNC_VERSION() {
+      return clientVersion.v ?? m.SYNC_VERSION
+    },
+  }
+})
 
 const migrations = import.meta.glob('../../worker/migrations/*.sql', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 
@@ -285,6 +298,29 @@ describe('two devices', () => {
     await put({ id: 'fut-1', updatedAt: Date.now() + 5, ...base }, 1)
     expect(ok(await sync(b))).toMatchObject({ applied: 1, retrying: 0 })
     expect(await slugs(b)).toEqual(['future'])
+  })
+
+  it('an older app holds study time plans and sessions back (version 2), keeps syncing the rest, and applies them once updated', async () => {
+    const { a, b } = await twoDevices()
+    const study: Plan = { schemaVersion: 1, id: 'study-psychology', title: 'Psychology', subject: 'Psychology', schedulingMode: 'auto', studyMinutesPerWeek: 180, sources: [], modules: [], tasks: [] }
+    const { planId } = await importPlan(a, study, { startDate: '2026-11-09' })
+    await a.studyItems.put({ id: `${planId}:2026-11-09`, planId, date: '2026-11-09', minutes: 25, status: 'open', updatedAt: Date.now(), deleted: false, deviceId: 'a' })
+    await add(a, 'two-sum')
+    ok(await sync(a))
+    clientVersion.v = 1
+    try {
+      const s = await sync(b)
+      expect(s.error?.kind).toBe('update-required')
+      expect(s).toMatchObject({ retrying: 2, invalid: 0 })
+      expect(await b.plans.count()).toBe(0)
+      expect(await b.studyItems.count()).toBe(0)
+      expect(await slugs(b)).toEqual(['two-sum'])
+    } finally {
+      clientVersion.v = undefined
+    }
+    expect(ok(await sync(b))).toMatchObject({ retrying: 0 })
+    expect((await b.plans.get(planId))?.studyMinutesPerWeek).toBe(180)
+    expect((await b.studyItems.get(`${planId}:2026-11-09`))?.minutes).toBe(25)
   })
 
   it('a row that fails validation today is applied when a later run can accept it', async () => {

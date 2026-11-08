@@ -54,6 +54,11 @@ export interface PlanRecord extends Base {
   reviewsOn?: boolean
   /** Keep this plan's optional tasks in the backlog. */
   skipOptional?: boolean
+  /**
+   * Study time plan (schema 5): minutes per week, planned as one session a day (studyItems). Set exactly on
+   * study time plans, which have no modules or tasks; a plan never changes kind. Synced as row version 2.
+   */
+  studyMinutesPerWeek?: number
   // Part progress
   /** How many files the plan is split into (1 when not split). */
   partTotal: number
@@ -160,6 +165,17 @@ export interface PracticeItemRecord extends Base {
   status: 'open' | 'done'
   /** 1-4 as for reviews, set on completion. */
   rating?: number
+  completedAt?: number
+}
+
+/** A study session the scheduler planned for a day (schema 5). One per plan and day. */
+export interface StudyItemRecord extends Base {
+  /** `${planId}:${date}`, so two devices that generate the same session write the same record. */
+  id: string
+  planId: string
+  date: string
+  minutes: number
+  status: 'open' | 'done'
   completedAt?: number
 }
 
@@ -284,6 +300,7 @@ export interface Records {
   events: EventRecord
   planVersions: PlanVersionRecord
   feeds: FeedRecord
+  studyItems: StudyItemRecord
 }
 export type TableName = keyof Records
 export const TABLE_NAMES: TableName[] = [
@@ -299,4 +316,5 @@ export const TABLE_NAMES: TableName[] = [
   'events',
   'planVersions',
   'feeds',
+  'studyItems',
 ]

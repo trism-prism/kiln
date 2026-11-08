@@ -20,9 +20,9 @@ export const planWeight = (p: Pick<PlanRecord, 'share' | 'weight'>): number => (
 /** Used when daily practice is switched on for a plan whose file has no `dailyPractice`. */
 export const DEFAULT_DAILY_PRACTICE: DailyPractice = { source: 'neetcode', perDay: 1, startDifficulty: 'easy', topicFollowsLessons: true }
 
-/** The plan's daily practice config, or undefined when daily practice is off for it. */
-export function practiceConfig(p: Pick<PlanRecord, 'dailyPractice' | 'dailyPracticeOn'>): DailyPractice | undefined {
-  if (p.dailyPracticeOn === false) return undefined
+/** The plan's daily practice config, or undefined when daily practice is off for it (always off for a study time plan). */
+export function practiceConfig(p: Pick<PlanRecord, 'dailyPractice' | 'dailyPracticeOn' | 'studyMinutesPerWeek'>): DailyPractice | undefined {
+  if (p.dailyPracticeOn === false || p.studyMinutesPerWeek !== undefined) return undefined
   return p.dailyPractice ?? (p.dailyPracticeOn ? DEFAULT_DAILY_PRACTICE : undefined)
 }
 
@@ -39,4 +39,4 @@ export function practiceLanguage(p: Pick<PlanRecord, 'dailyPractice'>): string {
 export const reviewsOn = (p: Pick<PlanRecord, 'reviewsOn'>): boolean => p.reviewsOn === true
 
 /** Whether daily practice is on for the plan (the toggle's state). */
-export const practiceOn = (p: Pick<PlanRecord, 'dailyPractice' | 'dailyPracticeOn'>): boolean => practiceConfig(p) !== undefined
+export const practiceOn = (p: Pick<PlanRecord, 'dailyPractice' | 'dailyPracticeOn' | 'studyMinutesPerWeek'>): boolean => practiceConfig(p) !== undefined

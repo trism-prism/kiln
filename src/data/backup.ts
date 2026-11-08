@@ -10,7 +10,7 @@ const DAY_MS = 86_400_000
 
 const ps = planSchema.shape
 // Plan task content (title, type, minutes, resources...) is the plan format's own task schema.
-const taskContent = ps.tasks.element.omit({ id: true, moduleId: true })
+const taskContent = ps.tasks.unwrap().element.omit({ id: true, moduleId: true })
 
 const str = z.string()
 const int = z.number().int()
@@ -55,13 +55,15 @@ export function rowSchemas(now: number) {
         favorite: z.boolean().optional(),
         dailyPracticeOn: z.boolean().optional(),
         reviewsOn: z.boolean().optional(),
+        // Added in schema 5.
+        studyMinutesPerWeek: ps.studyMinutesPerWeek,
         partTotal: int.min(1).max(20),
         partsIn: z.array(int.min(1).max(20)),
       }),
       modules: rows({
         planId: str,
         key: str,
-        title: ps.modules.element.shape.title,
+        title: ps.modules.unwrap().element.shape.title,
         order: int,
         summary: str.optional(),
         notBeforeDay: int.optional(),
@@ -183,6 +185,14 @@ export function rowSchemas(now: number) {
           .object({ ok: z.boolean(), added: int.min(0).optional(), changed: int.min(0).optional(), removed: int.min(0).optional(), moved: int.min(0).optional(), error: str.max(500).optional() })
           .optional(),
       }),
+      // Added in schema 5; older backups have none.
+      studyItems: rows({
+        planId: str,
+        date: day,
+        minutes: int.min(1).max(600),
+        status: z.enum(['open', 'done']),
+        completedAt: num.optional(),
+      }),
   } satisfies Record<TableName, z.ZodType>
 }
 
@@ -206,6 +216,7 @@ function backupSchema(now: number) {
       events: list(r.events),
       planVersions: list(r.planVersions),
       feeds: list(r.feeds),
+      studyItems: list(r.studyItems),
     }),
   })
 }

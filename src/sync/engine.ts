@@ -10,6 +10,7 @@ import {
   decryptRow,
   deriveKeys,
   encryptRow,
+  rowVersion,
   generateSyncKey,
   keyToMnemonic,
   keyToQrPayload,
@@ -356,7 +357,7 @@ async function pushChanged(db: KilnDB, rawKey: string, keys: SyncKeys, post: Pos
   const blockedAt: Partial<Record<TableName, number>> = {}
   for (const { table, row } of changed) {
     if (row.updatedAt <= (seen.get(`${table}:${row.id}`) ?? -1)) continue
-    const wire = await encryptRow(keys, table, row)
+    const wire = await encryptRow(keys, table, row, rowVersion(table, row))
     if (wire.ciphertext.length > MAX_CIPHERTEXT) {
       s.tooLarge.push({ table, id: row.id })
       blockedAt[table] ??= row.updatedAt
