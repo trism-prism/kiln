@@ -233,12 +233,13 @@ export function coursePlan(course: string, rows: TaskRow[], startDate: string, t
   return { plan: res.plan, issues: res.issues.filter((i) => i.severity === 'error') }
 }
 
-/** Courses in first-seen order: their assignments and exams (`total`) and those due `today` or later (`due`). */
-export function courses(items: CalendarItem[], today: string): { course: string; total: number; due: number }[] {
-  const m = new Map<string, { course: string; total: number; due: number }>()
+/** Courses in first-seen order: their assignments and exams (`total`), those due `today` or later (`due`), and class times (`classes`). */
+export function courses(items: CalendarItem[], today: string): { course: string; total: number; due: number; classes: number }[] {
+  const m = new Map<string, { course: string; total: number; due: number; classes: number }>()
   for (const it of items) {
-    const c = m.get(it.course) ?? { course: it.course, total: 0, due: 0 }
-    if (it.kind !== 'event') {
+    const c = m.get(it.course) ?? { course: it.course, total: 0, due: 0, classes: 0 }
+    if (it.kind === 'event') c.classes++
+    else {
       c.total++
       if (dueOf(it) >= today) c.due++
     }

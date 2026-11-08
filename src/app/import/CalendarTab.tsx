@@ -296,7 +296,11 @@ function CalendarReview({ loaded, lms }: { loaded: Loaded; lms: Lms }) {
             isSelected={ticked.has(c.course)}
             onChange={(on) => setTicked((s) => (on ? new Set([...s, c.course]) : new Set([...s].filter((x) => x !== c.course))))}
           >
-            {shown(c.course)}: {plural(c.due, 'assignment')} still due ({c.total} in your calendar)
+            {c.total > 0
+              ? `${shown(c.course)}: ${plural(c.due, 'assignment')} still due (${c.total} in your calendar)`
+              : c.classes > 0
+                ? `${shown(c.course)}: ${plural(c.classes, 'class time')}`
+                : shown(c.course)}
           </Checkbox>
         ))}
         {lms === 'canvas' && <p className="text-sm text-text-muted">Canvas only lists assignments with a due date.</p>}

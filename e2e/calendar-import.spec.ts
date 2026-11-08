@@ -149,7 +149,7 @@ test('a course with only class meetings can be imported: its events count like t
   ]
   const text = ['BEGIN:VCALENDAR', 'VERSION:2.0', ...meeting(1, '20261111'), ...meeting(2, '20261113'), 'END:VCALENDAR'].join('\n')
   await panel.locator('input[type=file]').setInputFiles({ name: 'art.ics', mimeType: 'text/calendar', buffer: Buffer.from(text) })
-  await expect(panel.getByRole('checkbox', { name: 'ART-100: 0 assignments still due (0 in your calendar)' })).toBeChecked()
+  await expect(panel.getByRole('checkbox', { name: 'ART-100: 2 class times', exact: true })).toBeChecked()
   const button = panel.getByRole('button', { name: 'Import 2 items' })
   await expect(button).toBeEnabled()
   await expect(panel.getByText('Nothing new to import.')).toHaveCount(0)

@@ -118,9 +118,9 @@ describe('LMS mapping', () => {
       ['HIST-110', 'Field trip', 'event'],
     ])
     expect(courses(items, '2030-02-16')).toEqual([
-      { course: 'MATH-221-001', total: 3, due: 2 },
-      { course: 'HIST-110', total: 2, due: 1 },
-      { course: 'CS-150', total: 1, due: 1 },
+      { course: 'MATH-221-001', total: 3, due: 2, classes: 1 },
+      { course: 'HIST-110', total: 2, due: 1, classes: 1 },
+      { course: 'CS-150', total: 1, due: 1, classes: 0 },
     ])
   })
 
@@ -295,8 +295,8 @@ describe('LMS mapping', () => {
     expect(sessions(rows[0]!).map((s) => s.minutes)).toEqual([90, 90])
     expect(taskRows(real).find((r) => r.title === 'Final Paper')).toMatchObject({ minutes: 180, type: 'project' })
     expect(courses(real, '2026-11-09')).toEqual([
-      { course: 'COB300A (Section 02 Fall 2026)', total: 5, due: 2 },
-      { course: 'COB300D (Section 01 Fall 2026)', total: 2, due: 1 },
+      { course: 'COB300A (Section 02 Fall 2026)', total: 5, due: 2, classes: 0 },
+      { course: 'COB300D (Section 01 Fall 2026)', total: 2, due: 1, classes: 0 },
     ])
   })
 
