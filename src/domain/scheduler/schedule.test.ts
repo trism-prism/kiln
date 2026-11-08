@@ -521,3 +521,38 @@ describe('fixed minutes (personal to-dos)', () => {
     expect(out.days.find((d) => d.date === MON)).toBeUndefined()
   })
 })
+
+describe('study time plans', () => {
+  // Study plan "s": 7 h a week over 60-minute days is 60 min every day.
+  const s = plan('s', { studyMinutesPerWeek: 420 })
+
+  it('reserves study first, so tasks get the room after it', () => {
+    const out = run({ plans: [plan('p'), plan('s', { studyMinutesPerWeek: 210 })], tasks: tasks('p', [['a', 30], ['b', 30]]) })
+    // 30 min of study a day leaves room for one 30-minute task.
+    expect(dates(out, ['a', 'b'])).toEqual(['2026-11-02', '2026-11-03'])
+    expect(out.days.find((d) => d.date === MON)).toMatchObject({ studyMinutes: 30, taskMinutes: 30 })
+  })
+
+  it('still places the first task of a day that study fills', () => {
+    const out = run({ plans: [plan('p'), s], tasks: tasks('p', [['long', 90], ['b', 20]]) })
+    expect(dates(out, ['long', 'b'])).toEqual(['2026-11-02', '2026-11-03'])
+    expect(out.unplaceable).toEqual([])
+  })
+
+  it('gives reviews only the room left after study', () => {
+    const out = run({ plans: [plan('p'), plan('s', { studyMinutesPerWeek: 350 })], minutesPerWeekday: week(60), reviewsDue: { [MON]: { count: 9, minutes: 90 } }, tasks: tasks('p', [['a', 10]]) })
+    // 50 of 60 minutes are study; the review cap (15) is more than the 10 left.
+    expect(out.days.find((d) => d.date === MON)).toMatchObject({ studyMinutes: 50, reviewMinutes: 10 })
+  })
+
+  it('lists days that hold only study, and a study plan has no finish date or deadline miss', () => {
+    const out = run({ plans: [plan('s', { studyMinutesPerWeek: 420, deadline: '2026-11-03' })], tasks: [] })
+    expect(out.days.map((d) => [d.date, d.studyMinutes, d.taskMinutes])).toEqual([
+      ['2026-11-02', 60, 0],
+      ['2026-11-03', 60, 0],
+    ])
+    expect(out.study.map((x) => x.date)).toEqual(['2026-11-02', '2026-11-03'])
+    expect(out.projectedFinish).toEqual({})
+    expect(out.violations).toEqual([])
+  })
+})

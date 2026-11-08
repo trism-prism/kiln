@@ -19,6 +19,8 @@ export interface SchedPlan {
     startDifficulty: Difficulty
     topicFollowsLessons: boolean
   }
+  /** Study time plan: minutes per week, planned as daily sessions (study.ts). Such a plan has no tasks. */
+  studyMinutesPerWeek?: number
 }
 
 export interface SchedTask {
@@ -71,6 +73,17 @@ export interface ScheduleInput {
   solved?: Solved[]
   /** Default: the bundled NeetCode list. */
   pool?: readonly PoolProblem[]
+  /** First day of a week for study time plans' weekly minutes. Default monday. */
+  weekStartsOn?: 'monday' | 'sunday'
+  /** Finished study sessions (live ones), so a week's plan counts what is already done. */
+  studyDone?: { planId: string; date: string; minutes: number }[]
+}
+
+/** A study session of a study time plan on a day. */
+export interface GeneratedStudy {
+  planId: string
+  date: string
+  minutes: number
 }
 
 export const BACKLOG = 'backlog'
@@ -95,6 +108,8 @@ export interface DayLoad {
   practiceMinutes: number
   /** Plan tasks, including plan problems, pinned and already dated ones, plus `fixedMinutes` (personal to-dos). */
   taskMinutes: number
+  /** Study sessions of study time plans, reserved first. */
+  studyMinutes: number
 }
 
 export type Violation =
@@ -107,6 +122,8 @@ export interface ScheduleOutput {
   /** Open tasks to a date, or 'backlog'. Includes tasks that keep their date. Unplaceable tasks are absent. */
   assignments: Record<string, string>
   practice: GeneratedPractice[]
+  /** Study sessions of study time plans, from today to the horizon, by date. */
+  study: GeneratedStudy[]
   /** Days that have anything on them, in date order. */
   days: DayLoad[]
   /** Last date of a plan's open, dated tasks. */
