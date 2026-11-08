@@ -40,13 +40,13 @@ test('logged study time makes today count, and Undo takes it back', async ({ pag
   await expect(sheet.getByLabel('Subject')).toBeFocused()
   await expect(sheet.getByLabel('Day')).toHaveValue('Mon, Nov 9, 2026')
   // No example text in the boxes: the errors give the examples.
-  await expect(sheet.locator('input[placeholder]')).toHaveCount(0)
+  for (const label of ['Subject', 'Minutes']) await expect(sheet.getByLabel(label)).not.toHaveAttribute('placeholder')
 
   // Errors show on Save, in plain words; the sheet stays open.
   await sheet.getByRole('button', { name: 'Save' }).click()
   await expect(sheet.getByText('Add a subject')).toBeVisible()
   await expect(sheet.getByText('Enter the minutes, like 30')).toBeVisible()
-  await sheet.getByLabel('Day').fill('nov 12')
+  await sheet.getByLabel('Day').fill('tomorrow') // a date with no year would read as its latest past one
   await sheet.getByLabel('Day').blur()
   await expect(sheet.getByText('Pick today or earlier')).toBeVisible()
   await sheet.getByLabel('Day').fill('today')
@@ -86,16 +86,44 @@ test('the chip fills once today counts, and a past day logs to that day', async 
   await expect(chip).toBeVisible()
   await expect(chip).not.toHaveAttribute('data-counted')
 
-  // Finishing a task today flips it to done.
-  const lesson = page.getByRole('region', { name: 'Today' }).getByRole('listitem').filter({ hasText: '· Lesson ·' }).first()
-  await lesson.getByRole('checkbox').click({ force: true })
-  // Main still asks for a rating here; the optional-reviews branch drops it.
-  const rating = page.getByRole('dialog', { name: 'How did it go?' })
-  await expect(rating.or(lesson.getByText('Done', { exact: true })).first()).toBeVisible()
-  if (await rating.isVisible()) await page.keyboard.press('3')
+  const notDone = await chip.evaluate((el) => ({ weight: getComputedStyle(el).fontWeight, border: getComputedStyle(el).borderTopWidth }))
+  expect(notDone).toEqual({ weight: '500', border: '1px' })
+
+  // Logging time today flips it to done: filled, and heavier. (One path on purpose: ticking a lesson asks for a
+  // rating on main, which feat/optional-reviews removes.)
+  await chip.click()
+  await page.getByRole('button', { name: 'Log study time' }).click()
+  await sheet.getByLabel('Subject').fill('Spanish')
+  await sheet.getByLabel('Minutes').fill('1h30')
+  await sheet.getByRole('button', { name: 'Save' }).click()
+  await expect(sheet).toBeHidden()
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /^To Do/ }).click()
   const done = page.getByRole('link', { name: 'Streak: 2 days, done today' })
   await expect(done).toBeVisible()
   await expect(done).toHaveAttribute('data-counted', 'true')
+  expect(await done.evaluate((el) => getComputedStyle(el).fontWeight)).toBe('600')
+  await expect(done.locator('svg')).toHaveAttribute('fill', 'currentColor')
+})
+
+test.describe('on a phone', () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+
+  test('the chip is a 44px outlined target, and a day with no year reads as its latest past date', async ({ page }) => {
+    await openSeeded(page, '/todo')
+    const chip = page.getByRole('link', { name: /^Streak:/ })
+    const box = (await chip.boundingBox())!
+    expect(box.height).toBeGreaterThanOrEqual(44)
+    expect(await chip.evaluate((el) => getComputedStyle(el).borderTopWidth)).toBe('1px')
+    await chip.click()
+    await page.getByRole('button', { name: 'Log study time' }).click()
+    const day = page.getByRole('dialog', { name: 'Log Study Time', exact: true }).getByLabel('Day')
+    await day.fill('oct 5')
+    await day.blur()
+    await expect(day).toHaveValue('Mon, Oct 5, 2026')
+    await day.fill('yesterday')
+    await day.blur()
+    await expect(day).toHaveValue('Sun, Nov 8, 2026')
+  })
 })
 
 for (const colorScheme of ['light', 'dark'] as const) {
