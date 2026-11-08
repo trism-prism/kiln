@@ -89,8 +89,7 @@ test('the chip fills once today counts, and a past day logs to that day', async 
   const notDone = await chip.evaluate((el) => ({ weight: getComputedStyle(el).fontWeight, border: getComputedStyle(el).borderTopWidth }))
   expect(notDone).toEqual({ weight: '500', border: '1px' })
 
-  // Logging time today flips it to done: filled, and heavier. (One path on purpose: ticking a lesson asks for a
-  // rating on main, which feat/optional-reviews removes.)
+  // Logging time today flips it to done: filled, and heavier.
   await chip.click()
   await page.getByRole('button', { name: 'Log study time' }).click()
   await sheet.getByLabel('Subject').fill('Spanish')
