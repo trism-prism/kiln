@@ -1,8 +1,8 @@
-<p align="center"><img src="public/kiln-arch.svg" width="52" alt=""></p>
-<h1 align="center">Kiln</h1>
-<p align="center"><b>Any study plan in. A dated to-do list that fits your week out.</b><br>
-Local-first PWA · no account · optional end-to-end encrypted sync and push reminders</p>
-<p align="center"><img src="public/og-image.png" width="820" alt="Kiln dashboard: two plan cards with progress, expected finish dates and a To Do badge"></p>
+Kiln is a PMA app I built to help keep myself on task with my DSA and System Design independent study plans. I already had the plans, but no way to order the tasks and keep myself accountable aside from manual tracking and reminders which sounded annoying. I figured that as long as I was making an app, I might as well deploy it so other people can use it. 
+
+Feel free to install it and use it for yourself on mobile or desktop through the live site, or run it locally using the info at the bottom of the README. Kiln is free to use and open source, with only the worker's responsibilities (sync, push reminders, pairing, and calendar-link syncing) relying on my live site's CRON job to function. 
+
+If you have any questions or inquiries please reach out, and if you wanna see how it works under the hood check out the rest of the README!
 
 | | |
 |---|---|
@@ -235,7 +235,7 @@ flowchart TB
   TR(["runs on: import · edit · Reschedule · daily top-up"]) -.-> DAY
 ```
 
-Pure and deterministic: same input, same dates. Dates stay put until one of those triggers.
+Fully deterministic: same input, same dates. Dates stay put until one of those triggers.
 
 ### Task lifecycle
 
@@ -494,4 +494,4 @@ Baked into the public bundle at build time: use `https://`, never a secret, rebu
 | `VITE_API_URL` | Worker address, no trailing slash. Old name `VITE_SYNC_URL` still read for one release | Reminders, sync, ping off |
 | `VITE_VAPID_PUBLIC_KEY` | VAPID public key from `npm run vapid` in `worker/`; same as `worker/wrangler.toml` | Reminders off |
 
-More: [`worker/README.md`](worker/README.md) · [`src/sync/README.md`](src/sync/README.md) · [`src/domain/README.md`](src/domain/README.md) · [`docs/design`](docs/design/README.md)
+More stuff if you're weird like that: [`worker/README.md`](worker/README.md) · [`src/sync/README.md`](src/sync/README.md) · [`src/domain/README.md`](src/domain/README.md) · [`docs/design`](docs/design/README.md)
