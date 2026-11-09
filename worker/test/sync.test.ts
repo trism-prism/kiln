@@ -316,7 +316,8 @@ describe('http', () => {
 })
 
 describe('POST /sync/close', () => {
-  const close = (spaceId: string, token: string) => call('/sync/close', { spaceId, token })
+  const allow = { limit: async () => ({ success: true }) } as unknown as RateLimit
+  const close = (spaceId: string, token: string, over: Partial<Env> = { PAIR_LIMITER: allow }) => call('/sync/close', { spaceId, token }, {}, over)
 
   it('deletes the records, closes the space and keeps only hash and counters', async () => {
     const s = space()
@@ -373,10 +374,18 @@ describe('POST /sync/close', () => {
   })
 
   it('validates the body (400) and needs POST', async () => {
-    expect((await call('/sync/close', { spaceId: 'x', token: id() })).status).toBe(400)
-    expect((await call('/sync/close', { spaceId: id(), token: 'x' })).status).toBe(400)
-    expect((await call('/sync/close', { spaceId: id(), token: id(), extra: 1 })).status).toBe(400)
+    expect((await call('/sync/close', { spaceId: 'x', token: id() }, {}, { PAIR_LIMITER: allow })).status).toBe(400)
+    expect((await call('/sync/close', { spaceId: id(), token: 'x' }, {}, { PAIR_LIMITER: allow })).status).toBe(400)
+    expect((await call('/sync/close', { spaceId: id(), token: id(), extra: 1 }, {}, { PAIR_LIMITER: allow })).status).toBe(400)
     expect((await call('/sync/close', {}, {}, {}, 'GET')).status).toBe(405)
+  })
+
+  it('is rate limited like pairing: 503 without the limiter, 429 over the limit, nothing written', async () => {
+    const s = space()
+    const deny = { limit: async () => ({ success: false }) } as unknown as RateLimit
+    expect((await close(s.spaceId, s.token, { PAIR_LIMITER: undefined })).status).toBe(503)
+    expect((await close(s.spaceId, s.token, { PAIR_LIMITER: deny })).status).toBe(429)
+    expect(await count('sync_spaces')).toBe(0)
   })
 
   it('cleanup keeps closed rows, and closed rows do not count toward the space cap', async () => {

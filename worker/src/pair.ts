@@ -1,7 +1,7 @@
 // Pairing relay for "join with a code". The two devices run CPace (a password-authenticated key
 // exchange) with the 4 password digits of the code, which never reach this server; the server only
 // passes their opaque messages along and counts wrong tries. See README.md and src/sync/README.md.
-import { b64uDecode } from './b64'
+import { isCanonicalB64u } from './b64'
 import { rateKey } from './feed'
 import { HttpError, json, safeEqual, sha256Hex } from './http'
 import { isId, object } from './sync'
@@ -23,8 +23,8 @@ const GRACE_MS = 60_000
 const SLOTS = 100
 const MAX_WRONG = 3
 
-const isSid = (v: unknown): v is string => typeof v === 'string' && v.length === 22 && b64uDecode(v)?.length === 16
-const isBox = (v: unknown): v is string => typeof v === 'string' && v.length === 80 && b64uDecode(v)?.length === 60
+const isSid = (v: unknown): v is string => typeof v === 'string' && v.length === 22 && isCanonicalB64u(v, 16)
+const isBox = (v: unknown): v is string => typeof v === 'string' && v.length === 80 && isCanonicalB64u(v, 60)
 
 const sid = (v: unknown): string => {
   if (!isSid(v)) throw new HttpError(400, 'sid must be 16 base64url bytes')
@@ -126,29 +126,32 @@ export async function handlePair(op: PairOp, body: unknown, deps: PairDeps): Pro
   }
 
   if (op === 'reply') {
-    const b = object(body, ['sid', 'hostToken', 'box'])
+    const b = object(body, ['sid', 'hostToken', 'box', 'msgB'])
     const s = sid(b.sid)
     const tokenHash = await sha256Hex(id32(b.hostToken, 'hostToken'))
+    // The host says which answer it is deciding on, so a newer answer is never judged by an older check.
+    const msgB = id32(b.msgB, 'msgB')
     if (b.box !== null && !isBox(b.box)) throw new HttpError(400, 'box must be null or 60 base64url bytes')
     const p = await find(db, s)
     if (!p || p.expires_at <= now) throw gone()
     if (!safeEqual(p.host_hash, tokenHash)) throw new HttpError(403, 'wrong token')
-    // Only an answer that is waiting can be replied to, once.
+    // Only the answer that is waiting can be replied to, once, and only while the code lives (checked again at write time).
+    const fresh = Date.now()
     const r =
       b.box === null
         ? await db
             .prepare(
               `UPDATE sync_pairings SET wrong = wrong + 1, msg_b = NULL, tag_b = NULL
-               WHERE sid = ? AND msg_b IS NOT NULL AND box IS NULL AND fetched = 0`,
+               WHERE sid = ?1 AND msg_b = ?2 AND box IS NULL AND fetched = 0 AND expires_at > ?3`,
             )
-            .bind(s)
+            .bind(s, msgB, fresh)
             .run()
         : await db
             .prepare(
               `UPDATE sync_pairings SET box = ?2, msg_b = NULL, tag_b = NULL, expires_at = MAX(expires_at, ?3)
-               WHERE sid = ?1 AND msg_b IS NOT NULL AND box IS NULL AND fetched = 0`,
+               WHERE sid = ?1 AND msg_b = ?4 AND box IS NULL AND fetched = 0 AND expires_at > ?5`,
             )
-            .bind(s, b.box, now + GRACE_MS)
+            .bind(s, b.box, fresh + GRACE_MS, msgB, fresh)
             .run()
     if (r.meta.changes !== 1) throw new HttpError(409, 'no answer is waiting')
     return new Response(null, { status: 204 })
@@ -159,12 +162,12 @@ export async function handlePair(op: PairOp, body: unknown, deps: PairDeps): Pro
   const s = sid(b.sid)
   const tokenHash = await sha256Hex(id32(b.guestToken, 'guestToken'))
   const p = await find(db, s)
-  if (!p || p.expires_at <= now || p.fetched === 1) throw gone()
+  if (!p || p.expires_at <= now) throw gone()
   if (p.guest_hash === null || !safeEqual(p.guest_hash, tokenHash)) throw new HttpError(403, 'wrong token')
   if (p.box !== null) {
-    // The box is handed out once: the UPDATE only wins for one caller.
-    const r = await db.prepare('UPDATE sync_pairings SET box = NULL, fetched = 1 WHERE sid = ? AND box IS NOT NULL').bind(s).run()
-    if (r.meta.changes !== 1) throw gone()
+    // The box stays until the code expires, so a lost response can be fetched again. It is ciphertext only the guest can open,
+    // and the code is still used once: join and answer refuse a code that holds a box. `fetched` tells the host it arrived.
+    await db.prepare('UPDATE sync_pairings SET fetched = 1 WHERE sid = ? AND box IS NOT NULL AND expires_at > ?').bind(s, Date.now()).run()
     return json({ box: p.box }, 200)
   }
   // No answer is waiting although this guest answered: the host rejected it.

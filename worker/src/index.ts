@@ -19,7 +19,7 @@ export interface Env {
   MAX_SYNC_BYTES?: string
   /** Rate limit for /feed/fetch (wrangler.toml [[ratelimits]]); the route is off without it. */
   FEED_LIMITER?: RateLimit
-  /** Rate limit for /pair/start, /pair/join and /pair/answer; those routes are off without it. */
+  /** Rate limit for /pair/start, /pair/join, /pair/answer and /sync/close; those routes are off without it. */
   PAIR_LIMITER?: RateLimit
 }
 
@@ -116,7 +116,7 @@ async function route(req: Request, env: Env, url: URL): Promise<Response> {
 
   if (pathname === '/sync/close') {
     if (m !== 'POST') throw new HttpError(405, 'method not allowed')
-    return handleClose(await readJson(req, MAX_BODY), env)
+    return handleClose(await readJson(req, MAX_BODY), env, env.PAIR_LIMITER, req.headers.get('cf-connecting-ip') ?? 'unknown')
   }
 
   if (pathname.startsWith('/pair/')) {

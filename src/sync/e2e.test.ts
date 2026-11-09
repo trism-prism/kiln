@@ -705,9 +705,9 @@ describe('pairing with a code', () => {
     ok(await sync(a))
     ok(await sync(b))
     expect(await slugs(b)).toEqual(['from-a'])
-    // The server holds no password and no key; the box is gone once fetched.
+    // The server holds no password and no key (the sealed box stays until the code expires, so a lost response can be fetched again).
     const row = pairingRow()!
-    expect(row.box).toBeNull()
+    expect(row.box).toEqual(expect.any(String))
     expect(JSON.stringify(row)).not.toContain(code.slice(2))
     expect(JSON.stringify(row)).not.toContain(Buffer.from(key).toString('base64url'))
     // The code works once.
@@ -776,6 +776,24 @@ describe('pairing with a code', () => {
     await done
     expect(states.at(-1)).toEqual({ kind: 'done' })
     expect(saved).toBe(1)
+  })
+
+  it('a lost response to the guest\'s fetch does not strand the pairing', async () => {
+    const key = generateSyncKey()
+    const h = host(key)
+    const code = await h.code()
+    const real = worldFetch()
+    let dropped = 0
+    const lossy: typeof fetch = async (i, init) => {
+      const res = await real(i, init)
+      if (String(i).endsWith('/pair/fetch') && res.status === 200 && (await res.clone().json()).box && dropped++ === 0) throw new TypeError('lost')
+      return res
+    }
+    const states: JoinState[] = []
+    await joinPairing({ code, net: { fetch: lossy, baseUrl: BASE }, signal: new AbortController().signal, onState: (s) => states.push(s), pollMs: 10 })
+    expect(dropped).toBe(2)
+    expect(states.at(-1)).toEqual({ kind: 'done', key })
+    await h.done
   })
 
   it('cancelling stops the host without a result', async () => {

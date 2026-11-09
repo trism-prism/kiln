@@ -4,6 +4,12 @@ export function b64uEncode(bytes: Uint8Array): string {
   return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
+/** True when `s` decodes to `bytes` bytes and is the canonical encoding (no stray bits in the last character). */
+export function isCanonicalB64u(s: string, bytes: number): boolean {
+  const d = b64uDecode(s)
+  return d !== null && d.length === bytes && b64uEncode(d) === s
+}
+
 /** Decodes base64url (no padding). Returns null on bad input. */
 export function b64uDecode(s: string): Uint8Array | null {
   if (!/^[A-Za-z0-9_-]*$/.test(s) || s.length % 4 === 1) return null

@@ -1,6 +1,7 @@
 // End-to-end encrypted sync: /sync/push and /sync/pull. The server stores opaque ciphertext keyed by
 // opaque identifiers; it cannot read records and does not know their tables or ids. See README.md.
-import { b64uDecode } from './b64'
+import { b64uDecode, isCanonicalB64u } from './b64'
+import { rateKey } from './feed'
 import { HttpError, json, safeEqual, sha256Hex } from './http'
 
 export interface SyncEnv {
@@ -26,7 +27,7 @@ const DAY_MS = 86_400_000
 const B64U = /^[A-Za-z0-9_-]+$/
 
 /** 32 bytes as 43 base64url characters: space id, token and record key. */
-export const isId = (v: unknown): v is string => typeof v === 'string' && v.length === 43 && b64uDecode(v)?.length === 32
+export const isId = (v: unknown): v is string => typeof v === 'string' && v.length === 43 && isCanonicalB64u(v, 32)
 
 interface Row {
   recordKey: string
@@ -206,7 +207,10 @@ export async function handleSync(kind: 'push' | 'pull', body: unknown, env: Sync
  * is closed too (a row is made), so a device that was offline when its peer disconnected still learns of it.
  * The row stays (token hash and counters only); cleanup keeps closed rows.
  */
-export async function handleClose(body: unknown, env: SyncEnv): Promise<Response> {
+export async function handleClose(body: unknown, env: SyncEnv, limiter: RateLimit | undefined, clientKey: string): Promise<Response> {
+  // Fail closed like pairing: a closed row can be made for any space id, so this route is rate limited per IP.
+  if (!limiter) throw new HttpError(503, 'disconnect is not available')
+  if (!(await limiter.limit({ key: rateKey(clientKey) })).success) throw new HttpError(429, 'too many tries, wait a minute')
   const b = object(body, ['spaceId', 'token'])
   if (!isId(b.spaceId)) throw new HttpError(400, 'spaceId must be 32 base64url bytes')
   if (!isId(b.token)) throw new HttpError(400, 'token must be 32 base64url bytes')

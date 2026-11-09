@@ -24,7 +24,7 @@ All bodies are JSON (`Content-Type: application/json`), max 4096 bytes (1 MB for
 | `POST /push/subscription` | `{endpoint, p256dh, auth, reminderTime, nudgeTime|null, timezone, token}` | `204`. Upsert by endpoint; 403 if the endpoint exists with a different token; 503 when the table holds 50,000 rows (`MAX_SUBSCRIPTIONS` var overrides) |
 | `DELETE /push/subscription` | `{endpoint, token}` | `204` (idempotent); 403 on a wrong token |
 | `POST /ping` | `{deviceId}` 16-128 chars of `A-Za-z0-9_-`, random, made by the client | `204`. Stores `sha256(deviceId)` once per device per UTC day |
-| `POST /sync/close` | `{spaceId, token}` | `204` (idempotent); 403 on a wrong token. Disconnects sync (see Sync) |
+| `POST /sync/close` | `{spaceId, token}` | `204` (idempotent); 403 on a wrong token; rate limited by `PAIR_LIMITER` (503 without it, 429 over). Disconnects sync (see Sync) |
 | `POST /pair/start`, `/pair/join`, `/pair/answer`, `/pair/poll`, `/pair/reply`, `/pair/fetch` | see Pairing codes | |
 | `POST /feed/fetch` | `{url}` | `200 text/calendar` (the feed, `Cache-Control: no-store`). See Calendar feeds |
 
@@ -67,7 +67,7 @@ Leaks that follow from the design: `updatedAt` is in the clear (the server must 
 
 A device joins sync by typing a 6-digit code shown on a device that already syncs. The code is `SS PPPP`: `SS` is a 2-digit slot the server hands out (100 slots), `PPPP` is a 4-digit password made on the host device that never reaches the server. The devices run CPace (ristretto255) over this relay with `PPPP`, and the host sends the sync key encrypted under the result; the design is in `src/sync/README.md`. The server only stores and forwards opaque strings, so it cannot work out the key or the code, and a server that cheats gets at most 3 guesses at `PPPP`.
 
-All routes are `POST` JSON, max 4096 bytes, unknown fields rejected. `sid` is 16 random bytes (22 base64url characters); tokens, `msgA`, `msgB` and `tagB` are 32 bytes (43 characters); `box` is 60 bytes (80 characters); `slot` is two digits. Tokens are stored as SHA-256 and compared in constant time.
+All routes are `POST` JSON, max 4096 bytes, unknown fields rejected. `sid` is 16 random bytes (22 base64url characters); tokens, `msgA`, `msgB` and `tagB` are 32 bytes (43 characters); `box` is 60 bytes (80 characters); `slot` is two digits. Base64url must be the canonical encoding (re-encoding the decoded bytes gives the same text); this applies to the sync ids and tokens too. Tokens are stored as SHA-256 and compared in constant time.
 
 | Route | Body | Result |
 |---|---|---|
@@ -75,12 +75,12 @@ All routes are `POST` JSON, max 4096 bytes, unknown fields rejected. `sid` is 16
 | `/pair/join` | `{slot}` | `200 {sid, msgA, expiresIn}`; 404 if there is no live code (missing, expired, 3 wrong tries, delivered) |
 | `/pair/answer` | `{sid, guestToken, msgB, tagB}` | `202`; 404 when the code is dead; 409 when another answer is waiting |
 | `/pair/poll` | `{sid, hostToken}` | `200 {state: waiting or answer or delivered or done, msgB?, tagB?, wrong}`; 403 wrong token, 404 expired |
-| `/pair/reply` | `{sid, hostToken, box: string or null}` | `204`. `null` rejects the answer: `wrong` goes up and the slot is free for the next try. A box is stored and its code stays alive for at least 60 more seconds. 409 when no answer is waiting |
-| `/pair/fetch` | `{sid, guestToken}` | `200 {box}` exactly once (then the box is deleted); `{state: waiting}`; `{state: wrong, left}` after a rejection; 403 wrong token, 404 expired or already fetched |
+| `/pair/reply` | `{sid, hostToken, box: string or null, msgB}` | `204`. `msgB` names the answer being decided and must equal the waiting one. `null` rejects the answer: `wrong` goes up and the slot is free for the next try. A box is stored and its code stays alive for at least 60 more seconds. 409 when no answer is waiting, the waiting answer is another one, or the code expired since the request began (the expiry is checked again in the UPDATE) |
+| `/pair/fetch` | `{sid, guestToken}` | `200 {box}` (it stays until the code expires, so a lost response can be fetched again; the box is ciphertext only the guest can open); `{state: waiting}`; `{state: wrong, left}` after a rejection; 403 wrong token, 404 expired |
 
-A code expires 180 seconds after `start`. The third wrong try kills it (join and answer give 404). `start`, `join` and `answer` are rate limited per IP (IPv6 by /64) by the `PAIR_LIMITER` binding (`[[ratelimits]]` in `wrangler.toml`, 20 a minute); without the binding they answer 503 (fail closed), over the limit 429. The cron deletes expired rows (`cleanupPairings`), and `start` does too.
+A code is used once: join and answer refuse a code that holds a box. It expires 180 seconds after `start`. The third wrong try kills it (join and answer give 404). `start`, `join`, `answer` and `/sync/close` are rate limited per IP (IPv6 by /64) by the `PAIR_LIMITER` binding (`[[ratelimits]]` in `wrangler.toml`, 20 a minute); without the binding they answer 503 (fail closed), over the limit 429. The cron deletes expired rows (`cleanupPairings`), and `start` does too.
 
-Known limits: the slot is public (`/pair/join` hands out `sid` and `msgA` to anyone), so each live code allows 3 guesses at the 4 password digits, about 1 in 3,300 per code; the per-IP limit does not cap guesses across codes. `/sync/close` on a space that nobody pushed to makes a small permanent closed row, uncapped (cap it with the WAF rule on `/sync/`).
+Known limits: the slot is public (`/pair/join` hands out `sid` and `msgA` to anyone), so each live code allows 3 guesses at the 4 password digits, about 1 in 3,300 per code; the per-IP limit does not cap guesses across codes. `/sync/close` on a space that nobody pushed to makes a small permanent closed row; it is rate limited per IP, but the number of closed rows is not capped (the WAF rule on `/sync/` adds a second limit).
 
 ## Calendar feeds
 

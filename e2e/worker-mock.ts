@@ -75,7 +75,7 @@ function relayRoute(relay: Relay, path: string, b: Record<string, string | null>
       const p = byId()
       if (!p) return no(404)
       if (p.hostToken !== b.hostToken) return no(403)
-      if (p.msgB === undefined || p.box !== undefined || p.fetched) return no(409)
+      if (p.msgB === undefined || p.msgB !== b.msgB || p.box !== undefined) return no(409)
       p.msgB = undefined
       p.tagB = undefined
       if (b.box === null) p.wrong++
@@ -84,13 +84,11 @@ function relayRoute(relay: Relay, path: string, b: Record<string, string | null>
     }
     case '/pair/fetch': {
       const p = byId()
-      if (!p || p.fetched) return no(404)
+      if (!p) return no(404)
       if (p.guestToken !== b.guestToken) return no(403)
       if (p.box !== undefined) {
-        const box = p.box
-        p.box = undefined
         p.fetched = true
-        return ok({ box })
+        return ok({ box: p.box })
       }
       return p.msgB === undefined ? ok({ state: 'wrong', left: Math.max(0, MAX_WRONG - p.wrong) }) : ok({ state: 'waiting' })
     }

@@ -275,6 +275,7 @@ export async function hostPairing(o: HostOptions): Promise<void> {
     onState({ kind: 'connecting' })
     const msgB = b64uDecode(str(r.data.msgB) ?? '')
     const tagB = b64uDecode(str(r.data.tagB) ?? '')
+    const answered = str(r.data.msgB) ?? ''
     let box: string | null = null
     if (msgB && tagB) {
       const K = await scalarMultVfy(ya, msgB)
@@ -283,7 +284,7 @@ export async function hostPairing(o: HostOptions): Promise<void> {
         if (await tagMatches(keys, Ya, msgB, tagB)) box = b64uEncode(await sealKey(keys, sid, o.key))
       }
     }
-    const sent = await post(net, '/pair/reply', { sid: sidText, hostToken, box }, signal)
+    const sent = await post(net, '/pair/reply', { sid: sidText, hostToken, box, msgB: answered }, signal)
     // The other device has the key now: save it even if the panel was closed a moment ago.
     if (sent !== 'network' && sent.status === 204 && box !== null) return deliver()
     if (signal.aborted) return

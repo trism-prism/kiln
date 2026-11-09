@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { b64uEncode } from '../src/b64'
 import worker, { type Env } from '../src/index'
 import { cleanupPairings } from '../src/pair'
@@ -32,7 +32,7 @@ async function start() {
   const join = () => call('/pair/join', { slot })
   const answer = (guestToken = p.guestToken) => call('/pair/answer', { sid: p.sid, guestToken, msgB: p.msgB, tagB: p.tagB })
   const poll = (hostToken = p.hostToken) => call('/pair/poll', { sid: p.sid, hostToken })
-  const reply = (box: string | null, hostToken = p.hostToken) => call('/pair/reply', { sid: p.sid, hostToken, box })
+  const reply = (box: string | null, hostToken = p.hostToken, msgB = p.msgB) => call('/pair/reply', { sid: p.sid, hostToken, box, msgB })
   const fetchBox = (guestToken = p.guestToken) => call('/pair/fetch', { sid: p.sid, guestToken })
   const expire = () => env.DB.prepare('UPDATE sync_pairings SET expires_at = 1 WHERE sid = ?').bind(p.sid).run()
   const row = () => env.DB.prepare('SELECT * FROM sync_pairings WHERE sid = ?').bind(p.sid).first<Record<string, unknown>>()
@@ -68,10 +68,60 @@ describe('pairing relay', () => {
     expect((await a.join()).status).toBe(404)
     expect((await a.answer()).status).toBe(404)
 
+    // The box stays until the code expires, so a lost response can be fetched again.
     expect(await (await a.fetchBox()).json()).toEqual({ box })
-    expect((await a.fetchBox()).status).toBe(404)
-    expect((await a.row())!.box).toBeNull()
+    expect(await (await a.fetchBox()).json()).toEqual({ box })
+    expect((await a.row())!.box).toBe(box)
     expect(await (await a.poll()).json()).toEqual({ state: 'done', wrong: 0 })
+    // Still one device per code: a second guest cannot join or answer, and cannot fetch.
+    expect((await a.join()).status).toBe(404)
+    expect((await a.answer(id())).status).toBe(404)
+    expect((await a.fetchBox(id())).status).toBe(403)
+    // After the code expires the box is gone for everyone.
+    await a.expire()
+    expect((await a.fetchBox()).status).toBe(404)
+  })
+
+  it('a reply must name the answer it decides on', async () => {
+    const a = await start()
+    await a.answer()
+    expect((await a.reply(boxOf(), a.hostToken, id())).status).toBe(409)
+    expect((await a.reply(null, a.hostToken, id())).status).toBe(409)
+    expect(await (await a.poll()).json()).toMatchObject({ state: 'answer', wrong: 0 })
+    expect((await a.reply(boxOf())).status).toBe(204)
+  })
+
+  it('a reply is refused when the code expired between the read and the write', async () => {
+    for (const box of [boxOf(), null]) {
+      const a = await start()
+      await a.answer()
+      const t = Date.now()
+      await env.DB.prepare('UPDATE sync_pairings SET expires_at = ? WHERE sid = ?').bind(t + 1_000, a.sid).run()
+      // The first clock read (the check at the start of the request) is before the expiry, the next one is after it.
+      const spy = vi.spyOn(Date, 'now').mockReturnValueOnce(t).mockReturnValue(t + 5_000)
+      try {
+        expect((await a.reply(box)).status).toBe(409)
+      } finally {
+        spy.mockRestore()
+      }
+      const row = await a.row()
+      expect(row!.box).toBeNull()
+      expect(row!.wrong).toBe(0)
+    }
+  })
+
+  it('refuses base64url text that is not the canonical encoding', async () => {
+    const good = { sid: sidOf(), hostToken: id(), msgA: id() }
+    // Flip the lowest bit of the last character: a spare bit that decodes to the same bytes.
+    const alt = (v: string) => {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+      const i = chars.indexOf(v[v.length - 1]!)
+      return v.slice(0, -1) + chars[i ^ 1]
+    }
+    expect((await call('/pair/start', { ...good, msgA: alt(good.msgA) })).status).toBe(400)
+    expect((await call('/pair/start', { ...good, hostToken: alt(good.hostToken) })).status).toBe(400)
+    expect((await call('/pair/poll', { sid: alt(good.sid), hostToken: good.hostToken })).status).toBe(400)
+    expect((await call('/pair/start', good)).status).toBe(201)
   })
 
   it('a rejected answer counts a wrong try, frees the slot and tells the guest', async () => {
@@ -156,9 +206,9 @@ describe('pairing relay', () => {
     const s = sidOf()
     expect((await call('/pair/answer', { sid: s, guestToken: id(), msgB: id() })).status).toBe(400)
     expect((await call('/pair/poll', { sid: s, hostToken: 'x' })).status).toBe(400)
-    expect((await call('/pair/reply', { sid: s, hostToken: id(), box: 'short' })).status).toBe(400)
-    expect((await call('/pair/reply', { sid: s, hostToken: id(), box: boxOf() + 'A' })).status).toBe(400)
-    expect((await call('/pair/reply', { sid: s, hostToken: id() })).status).toBe(400)
+    expect((await call('/pair/reply', { sid: s, hostToken: id(), box: 'short', msgB: id() })).status).toBe(400)
+    expect((await call('/pair/reply', { sid: s, hostToken: id(), box: boxOf() + 'A', msgB: id() })).status).toBe(400)
+    expect((await call('/pair/reply', { sid: s, hostToken: id(), msgB: id() })).status).toBe(400)
     expect((await call('/pair/fetch', { sid: s })).status).toBe(400)
     expect((await call('/pair/start', 'x'.repeat(5000))).status).toBe(413)
     expect((await call('/pair/nope', {})).status).toBe(404)
