@@ -710,7 +710,10 @@ describe('pairing with a code', () => {
     const row = pairingRow()!
     expect(row.box).toEqual(expect.any(String))
     expect(row.slot).toBe(code.slice(0, 2))
-    for (const v of Object.values(row)) expect(String(v)).not.toBe(code.slice(2))
+    for (const v of Object.values(row)) {
+      expect(String(v)).not.toBe(code)
+      expect(String(v)).not.toBe(code.slice(2))
+    }
     expect(JSON.stringify(row)).not.toContain(Buffer.from(key).toString('base64url'))
     // The code works once.
     expect((await join(code)).kind).toBe('expired')
