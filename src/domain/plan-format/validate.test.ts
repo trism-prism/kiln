@@ -101,7 +101,7 @@ describe('validatePlan', () => {
       p.sources = [{ id: 'course', title: 'Course', kind: 'course', url: 'https://example.com/c' }, { id: 'book', title: 'Book', kind: 'book' }]
       p.tasks[0]!.resources = [video(), video({ url: 'https://example.com/v' }), video({ sourceId: 'course' }), video({ sourceId: 'book' })]
     })
-    expect(out.filter((m) => m.includes('without a link'))).toEqual(['warning: plan "Demo plan": 2 videos without a link'])
+    expect(out.filter((m) => m.includes('have no link'))).toEqual(['warning: plan "Demo plan": 2 videos have no link, so there is nothing to open for them. You can add links later by editing the plan.'])
   })
 
   it('treats null and empty strings as absent and trims text', () => {
