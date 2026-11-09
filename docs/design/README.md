@@ -33,6 +33,8 @@ Source of truth: `src/index.css`. Each color is `light-dark(<light>, <dark>)` on
 | surface | #f7f4ee | #161513 | Page background | |
 | surface-raised | #fdfbf7 | #1e1c19 | Cards, nav rail, inputs | |
 | surface-muted | #efe9df | #2a2723 | Hover, selected nav row, tracks, tags | |
+| surface-overlay | #ffffff | #282521 | Select lists, menus, date picker (one step above cards, `border-strong` outline) | |
+| surface-overlay-hover | #efe9df | #302c27 | Highlighted row inside a popover | |
 | border | #e2dbcf | #34302b | Hairlines (decorative) | |
 | border-strong | #8c8377 | #7d7569 | Control outlines | 3:1 on all surfaces |
 | text | #1f1b16 | #efe9de | Primary text | 4.5:1 on all surfaces |

@@ -22,7 +22,7 @@ import {
 import { formatDay, isRealISODate, toLocalISODate } from '../lib/date'
 import { parseDateText } from '../lib/date-parse'
 import { IconButton } from './button'
-import { controlClass, popoverClass } from './classes'
+import { controlClass, popoverClass, popoverOffset } from './classes'
 
 export interface DateFieldProps {
   /** Visible label. Without one, pass `aria-label`. */
@@ -195,7 +195,7 @@ export function DateField({
           <IconButton aria-label="Choose a date" className="absolute top-1/2 right-1 h-8 w-8 -translate-y-1/2 text-text-muted data-hovered:text-text">
             <CalendarDays size={16} />
           </IconButton>
-          <Popover placement="bottom end" className={popoverClass}>
+          <Popover placement="bottom end" offset={popoverOffset} className={popoverClass}>
             <Dialog aria-label="Choose a date" className="outline-none">
               <Calendar
                 // Focus starts on the chosen day (or today), so the arrow keys pick a day straight away.
@@ -226,7 +226,7 @@ export function DateField({
                     {(date) => (
                       <CalendarCell
                         date={date}
-                        className="flex size-9 cursor-default items-center justify-center rounded-md text-sm tabular-nums outline-none data-disabled:text-text-muted data-disabled:opacity-50 data-focus-visible:outline-2 data-focus-visible:outline-focus data-hovered:bg-surface-muted data-outside-month:invisible data-selected:bg-accent data-selected:text-accent-contrast data-today:font-semibold data-today:underline data-today:underline-offset-4"
+                        className="flex size-9 cursor-default items-center justify-center rounded-md text-sm tabular-nums outline-none data-disabled:text-text-muted data-disabled:opacity-50 data-focus-visible:outline-2 data-focus-visible:outline-focus data-hovered:bg-surface-overlay-hover data-outside-month:invisible data-selected:bg-accent data-selected:text-accent-contrast data-today:font-semibold data-today:underline data-today:underline-offset-4"
                       />
                     )}
                   </CalendarGridBody>
