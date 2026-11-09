@@ -12,14 +12,6 @@
     "index": 2,
     "total": 3
   },
-  "sources": [
-    {
-      "id": "fiset-graph-course",
-      "title": "Graph Theory Algorithms Course (William Fiset)",
-      "url": "https://www.youtube.com/watch?v=09_LlHjoEiY",
-      "kind": "video"
-    }
-  ],
   "modules": [
     {
       "id": "heaps-backtracking",

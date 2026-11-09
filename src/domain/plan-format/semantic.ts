@@ -43,6 +43,7 @@ export function checkMeaning(root: Obj, opts: SemanticOptions = {}): RawIssue[] 
   const partIndex = int(partObj.index)
   const partTotal = int(partObj.total)
   const laterPart = partIndex !== undefined && partIndex > 1
+  if (laterPart && sources.length > 0) warn(['sources'], '', 'is ignored in a part after part 1; put every source in part 1')
 
   // Parts
   if (partIndex !== undefined && partTotal !== undefined && partTotal < partIndex) {

@@ -20,6 +20,12 @@
       "kind": "video"
     },
     {
+      "id": "fiset-graph-course",
+      "title": "Graph Theory Algorithms Course (William Fiset)",
+      "url": "https://www.youtube.com/watch?v=09_LlHjoEiY",
+      "kind": "video"
+    },
+    {
       "id": "neetcode-roadmap",
       "title": "NeetCode DSA Roadmap & Practice",
       "url": "https://neetcode.io/roadmap",
