@@ -356,7 +356,7 @@ export function checkMeaning(root: Obj, opts: SemanticOptions = {}): RawIssue[] 
   }
 
   if (videosWithoutLink > 0) {
-    warn([], '', `${videosWithoutLink} ${videosWithoutLink === 1 ? 'video' : 'videos'} without a link`)
+    warn([], '', videosWithoutLink === 1 ? '1 video has no link, so there is nothing to open for it. You can add a link later by editing the plan.' : `${videosWithoutLink} videos have no link, so there is nothing to open for them. You can add links later by editing the plan.`)
   }
 
   return out

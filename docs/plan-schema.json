@@ -350,7 +350,7 @@
                   "maxLength": 200
                 },
                 "url": {
-                  "description": "only if you are certain the page exists; never guess",
+                  "description": "a working link to the exact page; omit only if it cannot be verified",
                   "type": "string",
                   "maxLength": 2000,
                   "format": "uri"

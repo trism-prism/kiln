@@ -70,7 +70,7 @@ export const sourceSchema = obj({
 
 export const resourceSchema = obj({
   title: text(200),
-  url: url.optional().meta({ description: 'only if you are certain the page exists; never guess' }),
+  url: url.optional().meta({ description: 'a working link to the exact page; omit only if it cannot be verified' }),
   kind: oneOf(RESOURCE_KINDS),
   minutes: int(0, 600).optional().meta({ description: 'time this resource alone takes' }),
   required: z.boolean({ error: msg('must be true or false') }).default(true).meta({ description: 'false marks extra reading' }),

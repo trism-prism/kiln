@@ -31,6 +31,14 @@ describe.each(Object.entries(files))('prompt file %s', (_name, markdown) => {
     expect(prompt.startsWith('You are helping me create a study plan')).toBe(true)
   })
 
+  it('tells the AI to look up links, verify them, and omit only what it cannot verify', () => {
+    const prompt = buildPrompt(markdown)
+    expect(prompt).toContain('Look each link up')
+    expect(prompt).toContain('Check that each link opens the right page')
+    expect(prompt).toContain('Only if you cannot verify a link, never guess it: omit `url`')
+    expect(prompt).not.toContain('never invent a link')
+  })
+
   it('asks for a class calendar and keeps the questions plain', () => {
     const prompt = buildPrompt(markdown)
     expect(prompt).toContain('Do you have a class calendar link? Paste it here, or say no.')

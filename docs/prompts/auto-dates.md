@@ -36,7 +36,7 @@ Rules:
 - Fill every task completely. `description` says exactly what to do (which chapter, which video section, which exercises). Lessons get 2-4 `objectives`, `keyConcepts`, 2-4 `verificationQuestions`, `topics` and at least one resource. Add `tradeoffs` wherever the topic involves real choices. Every resource gets `minutes`.
 - One problem per practice task, in `practice`, and it `dependsOn` the lesson that teaches it. Use a LeetCode slug only if you are sure it is the official one; otherwise omit `practice` and name the problem in `description`.
 - Priority: `core` for what the goal needs, `recommended` for useful but skippable work, `optional` for extra depth. Kiln drops optional work first, then recommended, when time runs short. A task may only depend on tasks of the same or higher priority.
-- Links: give every video, problem set, flashcard deck (for example Quizlet) and documentation page a `url`, in any subject. Include a `url` only when you are confident the page exists at that address; never invent a link. When you are not sure, ask me for the link in your first message, before you write the plan, instead of leaving it out. If I cannot give one, omit `url` and give the title, author or channel, and `section` so I can find it.
+- Links: give every resource of kind video, article, course, docs, book, tool or visualizer, and every problem with a provider URL, a working `url`, in any subject. Look each link up (use web search or browsing if you have it) instead of writing it from memory. For a chapter of a longer video, link the video with a start time, such as `?t=3720` on YouTube. Check that each link opens the right page. Only if you cannot verify a link, never guess it: omit `url`, still give the title, author or channel, and `section`, and after the JSON list those items in a short note so I know which links are missing.
 - Ids: lowercase slugs, unique across modules, tasks and sources, descriptive (`hash-map-basics`, not `t7`). `order` starts at 1 in each module.
 - Topics: short kebab-case strings, reused exactly across tasks. For data structures and algorithms use these where they fit: arrays-hashing, two-pointers, sliding-window, stack, binary-search, linked-list, trees, tries, heap, backtracking, graphs, advanced-graphs, dp-1d, dp-2d, greedy, intervals, math-geometry, bit-manipulation.
 - Long plans: if the plan has more than 40 tasks, split it into parts of whole modules, at most 40 tasks each. Every part is a complete JSON block with the same `id`, `title`, `schedulingMode` and `"part": {"index": n, "total": N}`; `sources` and `dailyPractice` go in part 1 only; `dependsOn` may point to earlier parts. Write part 1, then stop; after its block write only: "Copy this whole reply and paste it into Kiln. Then reply next for the rest of the plan."
@@ -167,7 +167,7 @@ The top level of the file.
 
 ### Resource
 - `title` (required): text, at most 200 characters.
-- `url` (optional): absolute http(s) URL. only if you are certain the page exists; never guess
+- `url` (optional): absolute http(s) URL. a working link to the exact page; omit only if it cannot be verified
 - `kind` (required): one of video | article | book | course | docs | tool | visualizer | problem | other.
 - `minutes` (optional): integer 0-600. time this resource alone takes
 - `required` (optional): true or false, default true. false marks extra reading
