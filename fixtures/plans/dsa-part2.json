@@ -12,6 +12,14 @@
     "index": 2,
     "total": 3
   },
+  "sources": [
+    {
+      "id": "fiset-graph-course",
+      "title": "Graph Theory Algorithms Course (William Fiset)",
+      "url": "https://www.youtube.com/watch?v=09_LlHjoEiY",
+      "kind": "video"
+    }
+  ],
   "modules": [
     {
       "id": "heaps-backtracking",
@@ -80,6 +88,7 @@
       "resources": [
         {
           "title": "Binary Heap & Priority Queue Chapter",
+          "url": "https://www.youtube.com/watch?v=RBSGKlAvoiM&t=5492s",
           "kind": "video",
           "minutes": 40,
           "sourceId": "fiset-course",
@@ -329,6 +338,7 @@
       "resources": [
         {
           "title": "Union Find Data Structure Chapter",
+          "url": "https://www.youtube.com/watch?v=RBSGKlAvoiM&t=8906s",
           "kind": "video",
           "minutes": 40,
           "sourceId": "fiset-course",
@@ -403,9 +413,10 @@
       "resources": [
         {
           "title": "Graph Theory Introduction",
+          "url": "https://www.youtube.com/watch?v=09_LlHjoEiY",
           "kind": "video",
           "minutes": 40,
-          "sourceId": "fiset-course",
+          "sourceId": "fiset-graph-course",
           "section": "Graph Theory Basics"
         },
         {
@@ -521,9 +532,10 @@
       "resources": [
         {
           "title": "Topological Sort Chapter",
+          "url": "https://www.youtube.com/watch?v=09_LlHjoEiY&t=3383s",
           "kind": "video",
           "minutes": 35,
-          "sourceId": "fiset-course",
+          "sourceId": "fiset-graph-course",
           "section": "Topological Sort"
         }
       ]
@@ -609,9 +621,10 @@
       "resources": [
         {
           "title": "Dijkstra's Shortest Path Chapter",
+          "url": "https://www.youtube.com/watch?v=09_LlHjoEiY&t=4774s",
           "kind": "video",
           "minutes": 40,
-          "sourceId": "fiset-course",
+          "sourceId": "fiset-graph-course",
           "section": "Dijkstra Shortest Path"
         },
         {
