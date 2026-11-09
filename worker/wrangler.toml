@@ -7,17 +7,17 @@ crons = ["*/15 * * * *"]
 
 [vars]
 # Browsers allowed to call the Worker (comma separated). Add the production origin at deploy time.
-ALLOWED_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173"
+ALLOWED_ORIGINS = "https://kilnstudy.com"
 # Public VAPID key (base64url, 65 bytes). Generate a pair with `npm run vapid`; the private half is a secret.
-VAPID_PUBLIC_KEY = "REPLACE_WITH_OUTPUT_OF_npm_run_vapid"
-VAPID_SUBJECT = "mailto:REPLACE_ME@example.com"
+VAPID_PUBLIC_KEY = "BDRxzaqCD4KXkhoI7WFUvbQsVVtVY88QLMt0s_ZotD-88rnYVrJutCvL9KLfhNVRKPq2mbbZoD03OLV3Ddbe-Kc"
+VAPID_SUBJECT = "mailto:tristanjmorton@gmail.com"
 # Secret (not stored here): `npx wrangler secret put VAPID_PRIVATE_KEY`
 
 [[d1_databases]]
 binding = "DB"
 database_name = "kiln"
 # Placeholder: set after `npx wrangler d1 create kiln` prints the real id.
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "6ee71ea6-687b-4ea5-b092-83837045f1ca"
 migrations_dir = "migrations"
 
 # Per-IP limit for POST /feed/fetch (calendar sync). The route answers 503 without this binding.
@@ -31,3 +31,7 @@ simple = { limit = 10, period = 60 }
 name = "PAIR_LIMITER"
 namespace_id = "1002"
 simple = { limit = 20, period = 60 }
+
+[[routes]]
+pattern = "api.kilnstudy.com"
+custom_domain = true
