@@ -34,8 +34,10 @@ describe.each(Object.entries(files))('prompt file %s', (_name, markdown) => {
   it('tells the AI to look up links, verify them, and omit only what it cannot verify', () => {
     const prompt = buildPrompt(markdown)
     expect(prompt).toContain('Look each link up')
-    expect(prompt).toContain('Check that each link opens the right page')
-    expect(prompt).toContain('Only if you cannot verify a link, never guess it: omit `url`')
+    expect(prompt).toContain('If you can browse, check that each link opens the right page')
+    expect(prompt).toContain('placed before the JSON block')
+    expect(prompt).toContain('&t=<seconds>s')
+    expect(prompt).toContain('Never guess a link: for an unverified link, omit `url`')
     expect(prompt).not.toContain('never invent a link')
   })
 
