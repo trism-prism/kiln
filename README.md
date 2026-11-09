@@ -1,8 +1,8 @@
-Kiln is a PMA app I built to help keep myself on task with my DSA and System Design independent study plans. I already had the plans, but no way to order the tasks and keep myself accountable aside from manual tracking and reminders which sounded annoying. I figured that as long as I was making an app, I might as well deploy it so other people can use it. 
+Kiln is a PWA I built to help keep myself on task with my DSA and System Design independent study plans. I already had the plans, but no way to order the tasks and keep myself accountable aside from manual tracking and reminders which sounded annoying. I figured that as long as I was making an app, I might as well deploy it so other people can use it. 
 
 Feel free to install it and use it for yourself on mobile or desktop through the live site, or run it locally using the info at the bottom of the README. Kiln is free to use and open source, with only the worker's responsibilities (sync, push reminders, pairing, and calendar-link syncing) relying on my live site's CRON job to function. 
 
-If you have any questions or inquiries please reach out, and if you wanna see how it works under the hood check out the rest of the README!
+If you have any questions or inquiries please reach out, and if you wanna see how it works under the hood check out the rest of the README :)
 
 | | |
 |---|---|
