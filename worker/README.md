@@ -80,6 +80,8 @@ All routes are `POST` JSON, max 4096 bytes, unknown fields rejected. `sid` is 16
 
 A code expires 180 seconds after `start`. The third wrong try kills it (join and answer give 404). `start`, `join` and `answer` are rate limited per IP (IPv6 by /64) by the `PAIR_LIMITER` binding (`[[ratelimits]]` in `wrangler.toml`, 20 a minute); without the binding they answer 503 (fail closed), over the limit 429. The cron deletes expired rows (`cleanupPairings`), and `start` does too.
 
+Known limits: the slot is public (`/pair/join` hands out `sid` and `msgA` to anyone), so each live code allows 3 guesses at the 4 password digits, about 1 in 3,300 per code; the per-IP limit does not cap guesses across codes. `/sync/close` on a space that nobody pushed to makes a small permanent closed row, uncapped (cap it with the WAF rule on `/sync/`).
+
 ## Calendar feeds
 
 `POST /feed/fetch {url}` lets the app's "Keep in sync" re-read an LMS calendar link (`src/feed.ts`): LMS feeds send no CORS headers, so the browser cannot fetch them itself. A feed link is a login token, so the Worker never logs, stores or echoes the URL or the body; error messages are fixed strings. Guards, each with a test in `test/feed.test.ts`:

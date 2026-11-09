@@ -175,7 +175,7 @@ export async function handleSync(kind: 'push' | 'pull', body: unknown, env: Sync
       db
         .prepare(
           `UPDATE sync_spaces SET seq = seq + ?2, record_count = record_count + ?3, bytes = bytes + ?4
-           WHERE space_id = ?1 AND (?3 <= 0 OR record_count + ?3 <= ?5) AND (?4 <= 0 OR bytes + ?4 <= ?6)`,
+           WHERE space_id = ?1 AND closed_at IS NULL AND (?3 <= 0 OR record_count + ?3 <= ?5) AND (?4 <= 0 OR bytes + ?4 <= ?6)`,
         )
         .bind(spaceId, n, newRecords, deltaBytes, maxRecords, maxBytes),
       db
@@ -191,7 +191,11 @@ export async function handleSync(kind: 'push' | 'pull', body: unknown, env: Sync
         )
         .bind(spaceId, n, JSON.stringify(accepted.map((r) => [r.recordKey, r.updatedAt, r.iv, r.ciphertext]))),
     ])
-    if (claim?.meta.changes !== 1) throw new HttpError(507, 'sync space is full')
+    if (claim?.meta.changes !== 1) {
+      // A disconnect can land between the read above and the claim: nothing was written, and the answer is 410.
+      if ((await find())?.closed_at) throw new HttpError(410, 'sync was disconnected')
+      throw new HttpError(507, 'sync space is full')
+    }
   }
   return json({ accepted: accepted.length, stale: sent.length - accepted.length }, 200)
 }

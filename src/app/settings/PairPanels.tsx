@@ -33,7 +33,8 @@ export function HostPanel({ mode, onClose }: { mode: 'setup' | 'device'; onClose
     const ctl = new AbortController()
     void (async () => {
       const key = mode === 'setup' ? generateSyncKey() : await getSyncKey(db)
-      if (!key || ctl.signal.aborted) return close.current()
+      if (ctl.signal.aborted) return
+      if (!key) return close.current()
       await hostPairing({
         key,
         net: { fetch: (...a) => fetch(...a), baseUrl: API_URL },
@@ -134,11 +135,14 @@ export function JoinPanel({ onDone, onCancel }: { onDone: () => void; onCancel: 
         setView(s)
         if (s.kind === 'wrong' || s.kind === 'dead' || s.kind === 'expired') setText('')
         if (s.kind === 'done') {
-          void enableSyncKey(db, s.key).then(() => {
-            toasts.add({ title: 'Sync is on', description: 'Getting your data from your other device. Anything already here is kept.' }, { timeout: 5000 })
-            scheduleSync(0)
-            onDone()
-          })
+          void enableSyncKey(db, s.key).then(
+            () => {
+              toasts.add({ title: 'Sync is on', description: 'Getting your data from your other device. Anything already here is kept.' }, { timeout: 5000 })
+              scheduleSync(0)
+              onDone()
+            },
+            () => setView({ kind: 'error', reason: 'server' }),
+          )
         }
       },
     })

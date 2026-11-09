@@ -242,6 +242,15 @@ export async function hostPairing(o: HostOptions): Promise<void> {
 
   let wrong = 0
   let failures = 0
+  /** Saves a key that was made here (setup), then reports done. A failed save is reported, never thrown. */
+  const deliver = async () => {
+    try {
+      await o.onDelivered?.()
+    } catch {
+      return onState({ kind: 'error', reason: 'server' })
+    }
+    onState({ kind: 'done' })
+  }
   while (!signal.aborted) {
     await sleep(poll, signal)
     if (signal.aborted) return
@@ -256,7 +265,8 @@ export async function hostPairing(o: HostOptions): Promise<void> {
     if (r.status === 404) return onState({ kind: 'expired' })
     if (r.status !== 200) return onState({ kind: 'error', reason: 'server' })
     wrong = Math.max(wrong, num(r.data.wrong) ?? 0)
-    if (r.data.state === 'done' || r.data.state === 'delivered') return onState({ kind: 'done' })
+    // The reply got through but its answer was lost: the key is out, so save it now.
+    if (r.data.state === 'done' || r.data.state === 'delivered') return deliver()
     if (r.data.state !== 'answer') {
       if (wrong >= MAX_WRONG) return onState({ kind: 'dead' })
       continue
@@ -274,6 +284,8 @@ export async function hostPairing(o: HostOptions): Promise<void> {
       }
     }
     const sent = await post(net, '/pair/reply', { sid: sidText, hostToken, box }, signal)
+    // The other device has the key now: save it even if the panel was closed a moment ago.
+    if (sent !== 'network' && sent.status === 204 && box !== null) return deliver()
     if (signal.aborted) return
     if (sent === 'network' || sent.status >= 500) {
       // The answer is still waiting on the server: the next poll gives it to us again.
@@ -284,10 +296,6 @@ export async function hostPairing(o: HostOptions): Promise<void> {
     if (sent.status !== 204) {
       // 409: no answer waiting any more (a repeated reply); look again.
       continue
-    }
-    if (box !== null) {
-      await o.onDelivered?.()
-      return onState({ kind: 'done' })
     }
     wrong++
     if (wrong >= MAX_WRONG) return onState({ kind: 'dead' })

@@ -753,6 +753,31 @@ describe('pairing with a code', () => {
     }
   })
 
+  it('a key that cannot be saved on the host is reported, not thrown; a lost reply still saves it', async () => {
+    const h = host(generateSyncKey(), { onDelivered: () => Promise.reject(new Error('disk')) })
+    const g = await join(await h.code())
+    expect(g.kind).toBe('done')
+    await h.done
+    expect(h.last()).toEqual({ kind: 'error', reason: 'server' })
+
+    // The reply reaches the server but its answer is lost: the next poll sees "delivered" and saves the key.
+    let saved = 0
+    const real = worldFetch()
+    const flaky: typeof fetch = async (i, init) => {
+      const res = await real(i, init)
+      if (String(i).endsWith('/pair/reply')) throw new TypeError('lost')
+      return res
+    }
+    const states: HostState[] = []
+    const done = hostPairing({ key: generateSyncKey(), net: { fetch: flaky, baseUrl: BASE }, signal: new AbortController().signal, onState: (s) => states.push(s), pollMs: 10, onDelivered: async () => void saved++ })
+    await vi.waitFor(() => expect(states.some((s) => s.kind === 'code')).toBe(true))
+    const code = (states.find((s) => s.kind === 'code') as Extract<HostState, { kind: 'code' }>).code
+    expect((await join(code)).kind).toBe('done')
+    await done
+    expect(states.at(-1)).toEqual({ kind: 'done' })
+    expect(saved).toBe(1)
+  })
+
   it('cancelling stops the host without a result', async () => {
     const h = host(generateSyncKey())
     await h.code()
