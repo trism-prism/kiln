@@ -12,11 +12,6 @@ import {
   deriveKeys,
   encryptRow,
   rowVersion,
-  generateSyncKey,
-  keyToMnemonic,
-  keyToQrPayload,
-  mnemonicToKey,
-  qrPayloadToKey,
   SYNC_VERSION,
   type SyncKeys,
   type WireRow,
@@ -28,7 +23,9 @@ const META_CURSOR = 'syncCursor'
 const META_PUSHED = 'syncPushed'
 const META_LAST = 'syncLastSynced'
 const META_RETRY = 'syncRetry'
-const META_ALL = [META_KEY, META_CURSOR, META_PUSHED, META_LAST, META_RETRY]
+/** Set when another device disconnected sync, so Settings can say why it is off. Cleared when sync is turned on again. */
+const META_PEER = 'syncDisconnected'
+const META_ALL = [META_KEY, META_CURSOR, META_PUSHED, META_LAST, META_RETRY, META_PEER]
 
 const PULL_LIMIT = 500
 const PUSH_ROWS = 200
@@ -53,6 +50,8 @@ export type SyncErrorKind =
   | 'server'
   /** Other devices wrote data in a newer format; update the app. */
   | 'update-required'
+  /** Another device disconnected sync: the server copy is gone and this device turned sync off (its data is kept). */
+  | 'disconnected'
   /** The local database failed. */
   | 'local'
 
@@ -117,86 +116,70 @@ function guarded<T>(db: KilnDB, rawKey: string, tables: Table[], fn: () => Promi
 
 // ---- enable, disable, status ----
 
-/** What the Settings screen shows so the user can add another device. */
-export interface SyncSecret {
-  /** 24 words. */
-  mnemonic: string
-  /** Text for the QR code. */
-  qr: string
-}
-
-/** Where to reach the server, to check a new key before it replaces the current one. */
+/** Where to reach the server. */
 export interface SyncNet {
   fetch: typeof fetch
   baseUrl: string
 }
 
-export type EnableResult = ({ ok: true } & SyncSecret) | { ok: false; error: { kind: SyncErrorKind; message: string } }
-
 /**
- * Turns sync on. Without `mnemonic` it makes a new random key (create); with the 24 words of
- * another device's key it joins that space. Throws on an invalid phrase. Starts from scratch:
- * the next sync pulls everything and pushes every local record. Waits for a running sync first.
- *
- * Replacing a key that is already set: pass `net` to check the new key with the server first. If
- * the server refuses it (or cannot be reached) the old key stays and the result says why.
+ * Turns sync on with this key (32 bytes: made on this device, or received from another through a pairing code).
+ * Starts from scratch: the next sync pulls everything and pushes every local record. Waits for a running sync first.
  */
-export function enableSync(db: KilnDB, mnemonic?: string): Promise<SyncSecret>
-export function enableSync(db: KilnDB, mnemonic: string | undefined, net: SyncNet): Promise<EnableResult>
-export function enableSync(db: KilnDB, mnemonic?: string, net?: SyncNet): Promise<SyncSecret | EnableResult> {
-  const key = mnemonic === undefined ? generateSyncKey() : mnemonicToKey(mnemonic)
-  return setKey(db, key, net)
-}
-
-/** Joins from a scanned QR payload (`kiln-sync:...`); same as enableSync with the words. */
-export function enableSyncFromQr(db: KilnDB, payload: string): Promise<SyncSecret>
-export function enableSyncFromQr(db: KilnDB, payload: string, net: SyncNet): Promise<EnableResult>
-export function enableSyncFromQr(db: KilnDB, payload: string, net?: SyncNet): Promise<SyncSecret | EnableResult> {
-  return setKey(db, qrPayloadToKey(payload), net)
-}
-
-function setKey(db: KilnDB, key: Uint8Array, net?: SyncNet): Promise<SyncSecret | EnableResult> {
-  return exclusive(db, async () => {
-    const secret = { mnemonic: keyToMnemonic(key), qr: keyToQrPayload(key) }
-    if (net) {
-      if ((await getMeta(db, META_KEY)) !== undefined) {
-        try {
-          const keys = await deriveKeys(key)
-          await makePost(net.fetch, net.baseUrl, keys)('/sync/pull', { cursor: 0, limit: 1 }, pullResponse)
-        } catch (e) {
-          return { ok: false, error: toError(e) }
-        }
-      }
-    }
-    await db.transaction('rw', db.meta, async () => {
+export function enableSyncKey(db: KilnDB, key: Uint8Array): Promise<void> {
+  return exclusive(db, () =>
+    db.transaction('rw', db.meta, async () => {
       await db.meta.bulkDelete(META_ALL)
       await db.meta.put({ key: META_KEY, value: b64uEncode(key) })
-    })
-    return net ? { ok: true, ...secret } : secret
-  })
+    }),
+  )
 }
 
-/** Turns sync off on this device. Local data stays; so does the data on the server. Waits for a running sync. */
+/** Turns sync off on this device only. Local data stays; so does the data on the server. Waits for a running sync. */
 export function disableSync(db: KilnDB): Promise<void> {
   return exclusive(db, () => db.meta.bulkDelete(META_ALL))
+}
+
+export type DisconnectResult = { ok: true } | { ok: false; error: { kind: SyncErrorKind; message: string } }
+
+/**
+ * Disconnects sync everywhere: the server deletes the synced copy and marks the space closed, so every other
+ * device finds out on its next run. This device turns sync off and keeps its data. If the server cannot be
+ * reached (or refuses), nothing changes and sync stays on. Waits for a running sync.
+ */
+export function disconnectSync(db: KilnDB, net: SyncNet): Promise<DisconnectResult> {
+  return exclusive(db, async () => {
+    const raw = await getMeta(db, META_KEY)
+    const key = raw === undefined ? null : b64uDecode(raw)
+    if (!key) return { ok: true }
+    try {
+      await makePost(net.fetch, net.baseUrl, await deriveKeys(key))('/sync/close', {}, z.undefined())
+    } catch (e) {
+      // 410: someone else already closed it, which is what was asked for.
+      if (!(e instanceof SyncFail && e.kind === 'disconnected')) return { ok: false, error: toError(e) }
+    }
+    await db.meta.bulkDelete(META_ALL)
+    return { ok: true }
+  })
 }
 
 export interface SyncStatus {
   enabled: boolean
   /** ms epoch of the last run that finished without an error. */
   lastSyncedAt?: number
+  /** Sync is off because another device disconnected it. */
+  disconnectedByPeer?: boolean
 }
 
 export async function getSyncStatus(db: KilnDB): Promise<SyncStatus> {
-  const [key, last] = await Promise.all([getMeta(db, META_KEY), getMeta(db, META_LAST)])
-  return { enabled: key !== undefined, lastSyncedAt: last === undefined ? undefined : Number(last) }
+  const [key, last, peer] = await Promise.all([getMeta(db, META_KEY), getMeta(db, META_LAST), getMeta(db, META_PEER)])
+  return { enabled: key !== undefined, lastSyncedAt: last === undefined ? undefined : Number(last), disconnectedByPeer: peer !== undefined }
 }
 
-/** The words and QR text of this device's key, or undefined when sync is off. Treat as a password. */
-export async function getSyncSecret(db: KilnDB): Promise<SyncSecret | undefined> {
+/** This device's sync key, or undefined when sync is off. Treat as a password. */
+export async function getSyncKey(db: KilnDB): Promise<Uint8Array<ArrayBuffer> | undefined> {
   const raw = await getMeta(db, META_KEY)
-  const key = raw === undefined ? null : b64uDecode(raw)
-  return key ? { mnemonic: keyToMnemonic(key), qr: keyToQrPayload(key) } : undefined
+  return (raw === undefined ? null : b64uDecode(raw)) ?? undefined
 }
 
 // ---- network ----
@@ -223,10 +206,11 @@ function makePost(fetchImpl: typeof fetch, baseUrl: string, keys: SyncKeys): Pos
     } catch {
       throw new SyncFail('network', 'Could not reach the sync server')
     }
+    if (res.status === 410) throw new SyncFail('disconnected', 'Sync was disconnected from another device')
     if (res.status === 401 || res.status === 403) throw new SyncFail('wrong-key', 'The server did not accept this sync key')
     if (res.status === 413 || res.status === 507) throw new SyncFail('quota', 'The sync space is full or the data is too large')
     if (!res.ok) throw new SyncFail('server', `The sync server answered ${res.status}`)
-    const parsed = schema.safeParse(await res.json().catch(() => undefined))
+    const parsed = schema.safeParse(res.status === 204 ? undefined : await res.json().catch(() => undefined))
     if (!parsed.success) throw new SyncFail('server', 'The sync server sent an unexpected answer')
     return parsed.data
   }
@@ -428,8 +412,9 @@ export function syncNow(db: KilnDB, fetchImpl: typeof fetch, baseUrl: string): P
 
 async function run(db: KilnDB, fetchImpl: typeof fetch, baseUrl: string): Promise<SyncSummary> {
   const s: SyncSummary = { pulled: 0, applied: 0, pushed: 0, rejectedStale: 0, invalid: 0, retrying: 0, tooLarge: [] }
+  let rawKey: string | undefined
   try {
-    const rawKey = await getMeta(db, META_KEY)
+    rawKey = await getMeta(db, META_KEY)
     const key = rawKey === undefined ? null : b64uDecode(rawKey)
     if (rawKey === undefined || !key) throw new SyncFail('not-enabled', 'Sync is not turned on')
     const keys = await deriveKeys(key)
@@ -443,6 +428,14 @@ async function run(db: KilnDB, fetchImpl: typeof fetch, baseUrl: string): Promis
     await guarded(db, rawKey, [], () => db.meta.put({ key: META_LAST, value: String(Date.now()) }))
   } catch (e) {
     s.error = toError(e)
+    if (s.error.kind === 'disconnected' && rawKey !== undefined) {
+      // Another device disconnected sync: turn it off here (only if the key is still the one this run used) and keep every row.
+      const key = rawKey
+      await guarded(db, key, [], async () => {
+        await db.meta.bulkDelete(META_ALL)
+        await db.meta.put({ key: META_PEER, value: '1' })
+      }).catch(() => undefined)
+    }
   }
   return s
 }

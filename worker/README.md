@@ -8,8 +8,9 @@ Cloudflare Worker with D1: anonymous Web Push reminders and the anonymous daily 
 |---|---|---|
 | `push_subscriptions` | `endpoint` (unique), `token_hash`, `p256dh`, `auth`, `reminder_time` (HH:MM), `nudge_time` (HH:MM or null), `timezone` (IANA), `last_reminder_date`, `last_nudge_date`, `last_attempt_at`, timestamps | Who to push, and when |
 | `active_devices` | `device_hash`, `day` (UTC), unique together | Count of active devices per day |
-| `sync_spaces` | `space_id`, `token_hash`, `seq`, `record_count`, `bytes`, `created_at` | One row per sync key |
+| `sync_spaces` | `space_id`, `token_hash`, `seq`, `record_count`, `bytes`, `created_at`, `closed_at` | One row per sync key (`closed_at` set once sync was disconnected) |
 | `sync_records` | `space_id`, `record_key`, `updated_at`, `seq`, `iv`, `ciphertext` | Newest encrypted version of each record |
+| `sync_pairings` | `sid`, `slot` (unique), `host_hash`, `msg_a`, `guest_hash`, `msg_b`, `tag_b`, `wrong`, `box`, `fetched`, `expires_at` | One row per pairing code, 3 minutes (see Pairing codes) |
 
 It never stores: names, emails, accounts, IP addresses, user agents, task or plan content, study data, or the raw device id (only its SHA-256). The task count shown in a notification is computed on the device.
 
@@ -23,6 +24,8 @@ All bodies are JSON (`Content-Type: application/json`), max 4096 bytes (1 MB for
 | `POST /push/subscription` | `{endpoint, p256dh, auth, reminderTime, nudgeTime|null, timezone, token}` | `204`. Upsert by endpoint; 403 if the endpoint exists with a different token; 503 when the table holds 50,000 rows (`MAX_SUBSCRIPTIONS` var overrides) |
 | `DELETE /push/subscription` | `{endpoint, token}` | `204` (idempotent); 403 on a wrong token |
 | `POST /ping` | `{deviceId}` 16-128 chars of `A-Za-z0-9_-`, random, made by the client | `204`. Stores `sha256(deviceId)` once per device per UTC day |
+| `POST /sync/close` | `{spaceId, token}` | `204` (idempotent); 403 on a wrong token; rate limited by `PAIR_LIMITER` (503 without it, 429 over). Disconnects sync (see Sync) |
+| `POST /pair/start`, `/pair/join`, `/pair/answer`, `/pair/poll`, `/pair/reply`, `/pair/fetch` | see Pairing codes | |
 | `POST /feed/fetch` | `{url}` | `200 text/calendar` (the feed, `Cache-Control: no-store`). See Calendar feeds |
 
 Validation is strict: unknown fields are rejected; `endpoint` must be an `https` URL on a known push service (`fcm.googleapis.com`, `push.services.mozilla.com`, `push.apple.com`, `notify.windows.com`), so the cron cannot be pointed at arbitrary hosts; `p256dh` is a base64url 65-byte uncompressed P-256 key, `auth` is 16 base64url bytes; times are `HH:MM`; `timezone` must be accepted by `Intl.DateTimeFormat`.
@@ -43,9 +46,10 @@ Rules:
 - **Newest wins.** A row is stored only if its `updatedAt` is greater than the stored one. A tie keeps the stored row: the server is the tie arbiter (first stored wins), and clients take the server's row on a pull when the timestamps are equal, so devices that wrote in the same millisecond converge. Stale rows are counted in `stale`, not an error. Duplicates inside one push keep the newest.
 - **seq.** Each accepted write gets the next number of a per-space counter, assigned inside one D1 batch together with the quota counters, so pull order is write order and an updated record moves to the end. Gaps are normal.
 - **Quotas per space.** 20,000 records and 25,000,000 ciphertext characters; a push that would exceed either is refused whole with `507` (updates that do not grow the space still work). The caps are checked in the same D1 batch statement that updates the counters, so simultaneous pushes cannot both pass; only rows that are actually accepted count (new records, or the size change of a replacement). The number of spaces is capped at 5,000 (`503`). `MAX_SYNC_RECORDS`, `MAX_SYNC_BYTES` and `MAX_SYNC_SPACES` override these.
-- **Errors.** 400 invalid, 403 wrong token or origin, 413 body over 1 MB, 415, 503, 507.
+- **Errors.** 400 invalid, 403 wrong token or origin, 410 sync was disconnected, 413 body over 1 MB, 415, 503, 507.
+- **Disconnect.** `POST /sync/close {spaceId, token}` (max 4096 bytes) deletes the space's records, sets `closed_at`, zeroes the counters and answers 204; calling it again is fine, a wrong token is 403. A space nobody pushed to gets a closed row (with the token hash) so a device that was offline still learns of it. From then on push and pull with the right token answer `410 sync was disconnected`, so a device that missed the disconnect stops instead of recreating the space. Closed spaces do not count toward the 5,000-space cap and the cleanup keeps them (a row holds a hash and counters only).
 - **CORS** is the same as for the other routes. Rate limiting is a Cloudflare rule (see Deploy, step 7); the Worker has no per-IP limit.
-- **Cleanup.** The cron deletes spaces that hold no records and were created more than a day ago, so abandoned first pushes and probes do not pile up.
+- **Cleanup.** The cron deletes open spaces that hold no records and were created more than a day ago, so abandoned first pushes and probes do not pile up.
 - **Deletes.** A delete is an ordinary update: the client pushes the record again with `deleted: true` inside the ciphertext, so the server cannot tell a delete from an edit. Storage does not shrink when records are deleted, and there is no compaction in v1; the quotas still apply to the tombstones.
 - **Clock skew.** `updatedAt` comes from the writing device's clock. The server refuses rows dated more than 24 hours ahead (400), and clients drop received rows dated more than 24 hours ahead. Because the newest `updatedAt` wins, a device whose clock runs ahead (but within a day) overrides other devices' later real edits until real time catches up; a clock behind loses its edits to older versions. Keep device clocks automatic.
 
@@ -53,11 +57,30 @@ Rules:
 
 The server sees: the space id (a hash derived from the key, not the key), the SHA-256 of the write token, one opaque record key per record (an HMAC, so it learns neither the table nor the id), each record's `updatedAt`, the ciphertext length, the IV, the sequence number, record counts per space, and when each space was created. It also sees the usual network metadata (IP address, request times) as any host does, though the Worker does not store it.
 
-The server never sees: the sync key or its 24 words, the encryption key, the plaintext of any record, table names, record ids, plan or task titles, or how records relate.
+The server never sees: the sync key, the pairing code's password digits, the encryption key, the plaintext of any record, table names, record ids, plan or task titles, or how records relate.
 
 Leaks that follow from the design: `updatedAt` is in the clear (the server must compare it to keep only the newest), so the server can tell when a space was edited and how often; ciphertext length roughly reveals record size; the number of records per space reveals roughly how much is stored. Anyone holding a space id and token (which means the key) can read and overwrite everything; there is no other account.
 
-There is no route to delete a space. Turning sync off on the device leaves the encrypted rows on the server; a delete route is a later addition.
+`POST /sync/close` deletes the encrypted rows of a space; turning sync off from the app calls it ("Disconnect device").
+
+## Pairing codes
+
+A device joins sync by typing a 6-digit code shown on a device that already syncs. The code is `SS PPPP`: `SS` is a 2-digit slot the server hands out (100 slots), `PPPP` is a 4-digit password made on the host device that never reaches the server. The devices run CPace (ristretto255) over this relay with `PPPP`, and the host sends the sync key encrypted under the result; the design is in `src/sync/README.md`. The server only stores and forwards opaque strings, so it cannot work out the key or the code, and a server that cheats gets at most 3 guesses at `PPPP`.
+
+All routes are `POST` JSON, max 4096 bytes, unknown fields rejected. `sid` is 16 random bytes (22 base64url characters); tokens, `msgA`, `msgB` and `tagB` are 32 bytes (43 characters); `box` is 60 bytes (80 characters); `slot` is two digits. Base64url must be the canonical encoding (re-encoding the decoded bytes gives the same text); this applies to the sync ids and tokens too. Tokens are stored as SHA-256 and compared in constant time.
+
+| Route | Body | Result |
+|---|---|---|
+| `/pair/start` | `{sid, hostToken, msgA}` | `201 {slot, expiresIn: 180}`; picks a random free slot; 503 when all 100 are taken |
+| `/pair/join` | `{slot}` | `200 {sid, msgA, expiresIn}`; 404 if there is no live code (missing, expired, 3 wrong tries, delivered) |
+| `/pair/answer` | `{sid, guestToken, msgB, tagB}` | `202`; 404 when the code is dead; 409 when another answer is waiting |
+| `/pair/poll` | `{sid, hostToken}` | `200 {state: waiting or answer or delivered or done, msgB?, tagB?, wrong}`; 403 wrong token, 404 expired |
+| `/pair/reply` | `{sid, hostToken, box: string or null, msgB}` | `204`. `msgB` names the answer being decided and must equal the waiting one. `null` rejects the answer: `wrong` goes up and the slot is free for the next try. A box is stored and its code stays alive for at least 60 more seconds. 409 when no answer is waiting, the waiting answer is another one, or the code expired since the request began (the expiry is checked again in the UPDATE) |
+| `/pair/fetch` | `{sid, guestToken}` | `200 {box}` (it stays until the code expires, so a lost response can be fetched again; the box is ciphertext only the guest can open); `{state: waiting}`; `{state: wrong, left}` after a rejection; 403 wrong token, 404 expired |
+
+A code is used once: join and answer refuse a code that holds a box. It expires 180 seconds after `start`. The third wrong try kills it (join and answer give 404). `start`, `join`, `answer` and `/sync/close` are rate limited per IP (IPv6 by /64) by the `PAIR_LIMITER` binding (`[[ratelimits]]` in `wrangler.toml`, 20 a minute); without the binding they answer 503 (fail closed), over the limit 429. The cron deletes expired rows (`cleanupPairings`), and `start` does too.
+
+Known limits: the slot is public (`/pair/join` hands out `sid` and `msgA` to anyone), so each live code allows 3 guesses at the 4 password digits, about 1 in 3,300 per code; the per-IP limit does not cap guesses across codes. `/sync/close` on a space that nobody pushed to makes a small permanent closed row; it is rate limited per IP, but the number of closed rows is not capped (the WAF rule on `/sync/` adds a second limit).
 
 ## Calendar feeds
 
@@ -151,7 +174,7 @@ and the matching public key in `wrangler.toml`. `npm run vapid` prints a new pai
 4. Add the production site origin to `ALLOWED_ORIGINS`.
 5. `npx wrangler d1 migrations apply kiln --remote`.
 6. `npx wrangler deploy`.
-7. Rate limiting: in the Cloudflare dashboard (Security > WAF > Rate limiting rules) add a rule for URI path starting with `/push/` or equal to `/ping`, for example 30 requests per minute per IP, action Block. Add a second rule for URI path starting with `/sync/`, for example 60 requests per minute per IP, action Block (a sync run is a few requests; the Worker enforces quotas but not request rates). The 50,000-row cap in the Worker is only a backstop.
+7. Rate limiting: in the Cloudflare dashboard (Security > WAF > Rate limiting rules) add a rule for URI path starting with `/push/` or equal to `/ping`, for example 30 requests per minute per IP, action Block. Add a second rule for URI path starting with `/sync/`, for example 60 requests per minute per IP, action Block (a sync run is a few requests; the Worker enforces quotas but not request rates). Add a third for URI path starting with `/pair/`, for example 120 requests per minute per IP (a pairing polls every 2 seconds; the free plan allows one rule, so a rule on the whole API host covers all three). The 50,000-row cap in the Worker is only a backstop.
 8. Verify: `curl https://<worker-url>/health`, then subscribe from the installed PWA.
 
 ## Web Analytics

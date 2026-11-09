@@ -26,6 +26,12 @@ name = "FEED_LIMITER"
 namespace_id = "1001"
 simple = { limit = 10, period = 60 }
 
+# Per-IP limit for POST /pair/start, /pair/join and /pair/answer (pairing codes). Those routes answer 503 without this binding.
+[[ratelimits]]
+name = "PAIR_LIMITER"
+namespace_id = "1002"
+simple = { limit = 20, period = 60 }
+
 [[routes]]
 pattern = "api.kilnstudy.com"
 custom_domain = true

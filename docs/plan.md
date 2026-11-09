@@ -10,7 +10,7 @@ Source material: a 16-week DSA study-plan doc (day topics + ~60 LC problems) and
 |---|---|
 | Platform | Installable PWA first (phone + desktop). App stores via Capacitor later, not v1 |
 | Storage | Local-first IndexedDB; works fully with no account |
-| Sync | Optional. "Sync key" (random 256-bit key as QR / word phrase), end-to-end encrypted, Cloudflare D1. No email, no registration |
+| Sync | Optional. Random 256-bit sync key handed to a new device with a 6-digit pairing code (CPace), end-to-end encrypted, Cloudflare D1. No email, no registration |
 | Reminders | Anonymous Web Push from a Cloudflare Worker cron (runs in Cloudflare's cloud, so the device can sleep). The server knows only the push subscription, reminder time and timezone. The service worker computes the task count locally and sets the badge |
 | Budget | Free tiers + ~$10-12/yr domain |
 | Time budget | Minutes per weekday, set by the user |
@@ -38,7 +38,7 @@ Not in v1 (logged as later): Capacitor store build, per-task notes and time log,
 - **Domain modules** (pure TS, no React, unit-tested): `plan-format` (Zod schema; JSON Schema exported for prompts and docs), `import` (extract the JSON block from any pasted text, validate, map CSV/XLSX), `scheduler`, `practice` (LC ramp), `mastery` (ts-fsrs wrapper), `badge` (count = today's open + overdue).
 - **Worker** (`/worker`, Cloudflare Workers + D1, plain fetch handler, no framework): `POST/DELETE /push/subscription`, cron every 15 min sends VAPID Web Push to subscriptions due now, `POST /ping` (active devices), `/sync/push` + `/sync/pull` (ciphertext blobs keyed by hash of the sync key; cursor-based). The server never sees plaintext.
 - **Push flow**: cron sends a payload-less or generic push. The SW `push` handler reads IndexedDB, builds "3 tasks today (1 overdue)", shows the notification and calls `setAppBadge`. The app also updates the badge on open and on every completion.
-- **Sync**: per-record last-write-wins on `updatedAt` with tombstones. AES-GCM via WebCrypto, keys derived from the sync key with HKDF. One derived token gates both reading and writing a space: every holder of the key is trusted. Ties on `updatedAt` are settled by the server (first stored wins). See `src/sync/README.md`. QR shown via a small QR lib; join by scanning or typing the phrase.
+- **Sync**: per-record last-write-wins on `updatedAt` with tombstones. AES-GCM via WebCrypto, keys derived from the sync key with HKDF. One derived token gates both reading and writing a space: every holder of the key is trusted. Ties on `updatedAt` are settled by the server (first stored wins). See `src/sync/README.md`. A new device joins with a 6-digit code shown on a device that already syncs (CPace password-authenticated key exchange over the Worker, 3 minutes, 3 tries); "Disconnect device" deletes the server copy and ends sync on every device.
 
 ### Plan JSON (core fields)
 `schemaVersion, title, description, goal, level, schedulingMode ('auto'|'fixed'), sources[], modules[]{id,title,order,summary}, tasks[]{id, moduleId, order, title, type (lesson|practice|review|project|milestone), estimatedMinutes, priority, topics[], description, objectives[], keyConcepts[], tradeoffs[], verificationQuestions[], resources[]{title,url,kind,minutes}, practice?{provider:'leetcode',slug,difficulty}, dependsOn[], notBeforeDay?, fixedDate?, deadline?}, dailyPractice?{pool:'neetcode'|'plan', perDay, startDifficulty, ramp}`. Topic and source study time are derived from task and resource minutes.
@@ -62,7 +62,7 @@ Every stage: read `PROGRESS.md` → feature branch `feat/<slug>` → implement �
 | 9 | Import + create | Paste/clipboard/file, preview + validation report + schedule preview, manual builder with date pinning, copy-prompt buttons (2) |
 | 10 | PWA | Manifest, SW, offline, install prompt, Badging API, onboarding (budget, start date, reminder time, load plan) |
 | 11 | Worker: push + analytics | D1 schema, VAPID push (verify a Workers-compatible Web Push lib; else WebCrypto VAPID), 15-min cron, SW push handler, ping, Web Analytics |
-| 12 | Sync | Sync key/QR, E2E crypto, push/pull, LWW + tombstones, multi-device conflict tests |
+| 12 | Sync | Pairing code, E2E crypto, push/pull, LWW + tombstones, multi-device conflict tests |
 | 13 | Production | Pages + Worker deploy, domain, privacy page, Lighthouse + axe audit, e2e against the real deployment. **User checkpoint: install on iPhone, confirm push + badge while asleep** |
 
 User-only actions: create the Cloudflare account + `wrangler login`; buy the domain; regenerate plans in Gemini; the phone install test.
@@ -70,5 +70,5 @@ User-only actions: create the Cloudflare account + `wrangler login`; buy the dom
 ## Verification
 - Unit: Vitest on plan-format, import, scheduler, practice ramp, mastery, sync merge (CI-gated).
 - E2E: Playwright on import → schedule → complete → grey-out → rate → review appears → badge count; calendar drag; offline reload.
-- Real deployment: Worker cron delivers a push to an installed iPhone PWA with the app closed and the device locked; the badge updates; sync between phone and laptop via QR; export/import round trip.
+- Real deployment: Worker cron delivers a push to an installed iPhone PWA with the app closed and the device locked; the badge updates; sync between phone and laptop via a pairing code; export/import round trip.
 - Accessibility: axe in Playwright, keyboard-only pass, contrast AA in both themes.
